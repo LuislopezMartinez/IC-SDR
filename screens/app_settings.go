@@ -109,7 +109,7 @@ func loadAppSettings(path string, screen *MainScreen) {
 	if validTool(settings.ActiveTool) {
 		screen.activeTool = settings.ActiveTool
 	}
-	if settings.ViewMode >= 1 && settings.ViewMode <= 3 {
+	if settings.ViewMode >= 1 && settings.ViewMode <= 2 {
 		screen.viewMode = settings.ViewMode
 	}
 	if settings.ScanCenterToMemory != nil {

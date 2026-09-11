@@ -231,18 +231,62 @@ func (v *tetraViewer) drawMessages() {
 		simpleui.DrawText("Esperando señalización CMCE sin cifrar…", 48, 235, 14, colors.muted)
 		return
 	}
+	columns := []struct {
+		x    float32
+		text string
+	}{{48, "HORA"}, {150, "TIPO"}, {315, "SSI"}, {425, "PARTY SSI"}, {550, "TS"}, {590, "PROTOCOLO"}, {755, "CIF."}, {805, "CONTENIDO / DIAGNÓSTICO"}}
+	for _, column := range columns {
+		simpleui.DrawTextStyled(column.text, column.x, 210, 11, simpleui.FontSemiBold, colors.cyan)
+	}
 	for i, m := range v.snapshot.Messages {
-		if i >= 17 {
+		if i >= 16 {
 			break
 		}
-		y := 218 + float32(i)*28
+		y := 239 + float32(i)*29
 		if i%2 == 0 {
 			rl.DrawRectangle(38, int32(y-3), 1300, 26, colors.panel)
 		}
-		simpleui.DrawText(viewerTime(m.Time), 48, y, 13, colors.muted)
-		simpleui.DrawTextStyled(m.Kind, 190, y, 13, simpleui.FontSemiBold, colors.cyan)
-		simpleui.DrawText(sondeClip(m.Text, 105), 390, y, 13, colors.text)
+		kindColor := colors.cyan
+		if m.SDS && !m.Recognized {
+			kindColor = colors.orange
+		}
+		protocol := "CMCE"
+		if m.SDS {
+			protocol = m.ProtocolName
+			if protocol == "" {
+				protocol = fmt.Sprintf("SDS %d", m.SDSProtocol)
+			}
+			protocol = fmt.Sprintf("T%d · %s", m.SDSDataType, protocol)
+		}
+		detail := m.Text
+		if m.RawHex != "" && !m.Recognized {
+			detail += " · RAW " + m.RawHex
+		}
+		slot := "—"
+		if m.Slot > 0 {
+			slot = fmt.Sprintf("%d", m.Slot)
+		}
+		simpleui.DrawText(viewerTime(m.Time), 48, y, 12, colors.muted)
+		cipher, cipherColor := "NO", colors.green
+		if m.Encrypted {
+			cipher, cipherColor = "SÍ", colors.red
+		}
+		simpleui.DrawTextStyled(sondeClip(m.Kind, 21), 150, y, 12, simpleui.FontSemiBold, kindColor)
+		simpleui.DrawTextStyled(viewerSSI(m.AddressSSI), 315, y, 12, simpleui.FontMono, colors.text)
+		simpleui.DrawTextStyled(viewerSSI(m.PartySSI), 425, y, 12, simpleui.FontMono, colors.text)
+		simpleui.DrawText(slot, 550, y, 12, colors.text)
+		simpleui.DrawText(sondeClip(protocol, 20), 590, y, 12, kindColor)
+		simpleui.DrawText(cipher, 755, y, 12, cipherColor)
+		simpleui.DrawText(sondeClip(detail, 68), 805, y, 12, colors.text)
 	}
+	simpleui.DrawText(fmt.Sprintf("%d eventos conservados · naranja = SDS pendiente de interpretar", len(v.snapshot.Messages)), 48, 716, 12, colors.muted)
+}
+
+func viewerSSI(ssi uint32) string {
+	if ssi == 0 {
+		return "—"
+	}
+	return fmt.Sprintf("%08d", ssi)
 }
 func (v *tetraViewer) drawUsers() {
 	simpleui.DrawTextStyled("USUARIOS DETECTADOS · MAC-RESOURCE", 48, 175, 18, simpleui.FontSemiBold, colors.cyan)

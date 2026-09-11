@@ -98,7 +98,7 @@ func (screen *MainScreen) applyTheme(name string) {
 		return remapThemeColor(color, colors)
 	})
 	if screen.themeButton != nil {
-		screen.themeButton.SetLabel("ESTILO  " + themeDisplayName(name))
+		screen.themeButton.SetLabel("ESTILO")
 	}
 }
 

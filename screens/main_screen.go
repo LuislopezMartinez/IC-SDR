@@ -17,7 +17,7 @@ const (
 	waterfallY   = float32(450)
 	waterfallH   = float32(170)
 	toolY        = float32(630)
-	toolH        = float32(196)
+	toolH        = designHeight - toolY - 8
 	// New panels must not introduce text below this readable baseline.
 	uiMinimumFontSize = int32(13)
 	uiControlFontSize = int32(14)
@@ -83,6 +83,8 @@ type MainScreen struct {
 	mode                   *simpleui.Dropdown
 	filter, band           *simpleui.Button
 	step                   *simpleui.Button
+	stepDown, stepUp       *simpleui.Button
+	menuButton             *simpleui.Button
 	viewButton             *simpleui.Button
 	themeButton            *simpleui.Button
 	themeName              string
@@ -369,10 +371,12 @@ func (screen *MainScreen) CreateControls() {
 	screen.memViewSwitch.OnChange(screen.setMemoryView)
 	spanDown := simpleui.NewButton("spanDown", frequencyPanelX+16, frequencyPanelY+36, 36, 32, "-", 16)
 	spanUp := simpleui.NewButton("spanUp", frequencyPanelX+58, frequencyPanelY+36, 36, 32, "+", 16)
-	menu := simpleui.NewButton("menu", toolContentX, 842, 130, 40, "MENU", 15)
-	screen.viewButton = simpleui.NewButton("view", toolContentX+140, 842, 115, 40, "VIEW 1", 14)
-	screen.step = simpleui.NewButton("step", toolContentX+265, 842, 250, 40, "STEP  "+formatStep(screen.tuningStepHz), 15)
-	screen.themeButton = simpleui.NewButton("theme", toolContentX+525, 842, 190, 40, "ESTILO  "+themeDisplayName(screen.themeName), 13)
+	screen.menuButton = simpleui.NewButton("menu", frequencyDialX+9, frequencyPanelY+7, 78, 24, "MENU", 10)
+	screen.viewButton = simpleui.NewButton("view", frequencyDialX+93, frequencyPanelY+7, 84, 24, "VIEW 1", 10)
+	screen.step = simpleui.NewButton("step", frequencyDialX+9, frequencyPanelY+frequencyPanelH-23, 43, 19, "STEP", 10)
+	screen.stepDown = simpleui.NewButton("stepDown", frequencyDialX+57, frequencyPanelY+frequencyPanelH-23, 27, 19, "-", 13)
+	screen.stepUp = simpleui.NewButton("stepUp", frequencyDialX+197, frequencyPanelY+frequencyPanelH-23, 27, 19, "+", 13)
+	screen.themeButton = simpleui.NewButton("theme", frequencyDialX+183, frequencyPanelY+7, 119, 24, "ESTILO", 10)
 	spanDown.OnClick(func() { screen.changeSpan(-1) })
 	spanUp.OnClick(func() { screen.changeSpan(1) })
 	screen.toolMenu = NewToolMenu(screen.activeTool, screen.selectTool)
@@ -383,9 +387,11 @@ func (screen *MainScreen) CreateControls() {
 	}
 	screen.sdrHeader = NewSDRHeaderPanel(screen.receiver, screen.markSettingsDirty)
 	screen.stepSelector = NewStepSelector(screen.tuningStepHz, screen.selectTuningStep)
-	menu.OnClick(screen.toolMenu.Open)
+	screen.menuButton.OnClick(screen.toolMenu.Open)
 	screen.viewButton.OnClick(screen.cycleViewMode)
 	screen.step.OnClick(screen.stepSelector.Open)
+	screen.stepDown.OnClick(func() { screen.changeTuningStep(-1) })
+	screen.stepUp.OnClick(func() { screen.changeTuningStep(1) })
 	screen.themeButton.OnClick(screen.cycleTheme)
 
 	screen.createWaterfallControls()
@@ -444,7 +450,7 @@ func (screen *MainScreen) CreateControls() {
 		screen.mode, screen.filter, screen.band,
 		squelch, screen.squelchLabel, screen.squelchSlider, holdLabel, holdSlider, closeLabel, closeSlider,
 		mute, screen.volumeLabel, screen.volumeSlider, screen.vfoModeSwitch, screen.memViewSwitch,
-		spanDown, spanUp, menu, screen.viewButton, screen.step, screen.themeButton,
+		spanDown, spanUp, screen.menuButton, screen.viewButton, screen.step, screen.stepDown, screen.stepUp, screen.themeButton,
 	} {
 		simpleui.Add(element)
 	}
@@ -625,7 +631,6 @@ func (screen *MainScreen) Draw() {
 	if screen.viewMode == 1 {
 		screen.drawLowerWorkspace()
 	}
-	screen.drawFooterBackground()
 	screen.utilitiesSidebar.Draw()
 }
 
@@ -730,7 +735,6 @@ func (screen *MainScreen) drawFrequencyDisplay() {
 	drawPanel(frequencyPanelX, frequencyPanelY, frequencyPanelW, frequencyPanelH)
 	rl.DrawLineEx(rl.Vector2{X: frequencyDividerX, Y: frequencyPanelY + 7}, rl.Vector2{X: frequencyDividerX, Y: frequencyPanelY + frequencyPanelH - 7}, 1, colors.border)
 	simpleui.DrawTextStyled("SPAN", frequencyPanelX+16, frequencyPanelY+9, 11, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawTextStyled("VFO A  ·  "+screen.mode.SelectedText(), frequencyDialX+15, frequencyPanelY+8, 12, simpleui.FontSemiBold, colors.cyan)
 
 	formatted := formatDialFrequency(screen.frequencyHz)
 	totalWidth := simpleui.MeasureTextStyled(formatted, frequencyFontSize, simpleui.FontMono).X
@@ -763,15 +767,9 @@ func (screen *MainScreen) drawFrequencyDisplay() {
 	spanValue := fmt.Sprintf("%.3f MHz", float64(screen.spanHz)/1_000_000)
 	spanWidth := simpleui.MeasureTextStyled(spanValue, 11, simpleui.FontSemiBold).X
 	simpleui.DrawTextStyled(spanValue, frequencyPanelX+(108-spanWidth)*.5, footerY, 11, simpleui.FontSemiBold, colors.muted)
-	if screen.frequencyDigitExponent >= 0 {
-		label := "DIGIT STEP  " + formatStep(screen.digitStepHz())
-		width := simpleui.MeasureTextStyled(label, 14, simpleui.FontSemiBold).X
-		simpleui.DrawTextStyled(label, frequencyDialX+(frequencyDialW-width)*.5, footerY-1, 14, simpleui.FontSemiBold, rl.Color{R: 125, G: 205, B: 255, A: 255})
-	} else {
-		label := "STEP  " + formatStep(screen.tuningStepHz)
-		width := simpleui.MeasureTextStyled(label, 12, simpleui.FontSemiBold).X
-		simpleui.DrawTextStyled(label, frequencyDialX+frequencyDialW*.47-width*.5, footerY, 12, simpleui.FontSemiBold, colors.orange)
-	}
+	label := formatStep(screen.tuningStepHz)
+	width := simpleui.MeasureTextStyled(label, 12, simpleui.FontSemiBold).X
+	simpleui.DrawTextStyled(label, frequencyDialX+140-width*.5, footerY, 12, simpleui.FontSemiBold, colors.orange)
 	centerLabel, centerColor := "FIX", colors.orange
 	if screen.centerMode {
 		centerLabel, centerColor = "CENTER", colors.green
@@ -1107,11 +1105,6 @@ func (screen *MainScreen) drawWaterfall() {
 	screen.waterfall.Draw(x, y, width, height, tuningFraction)
 }
 
-func (screen *MainScreen) drawFooterBackground() {
-	rl.DrawRectangle(int32(toolContentX), 830, int32(designWidth-toolContentX), 70, colors.background)
-	rl.DrawLine(int32(toolContentX), 830, int32(designWidth), 830, colors.border)
-}
-
 func (screen *MainScreen) createWaterfallControls() {
 	screen.wfOffsetLabel = simpleui.NewLabel("wfOffsetLabel", 40, 650, 175, 18, "COLOR OFFSET  0 dB", 12)
 	screen.wfOffsetLabel.SetAlignment(simpleui.AlignCenter)
@@ -1374,14 +1367,14 @@ func (screen *MainScreen) selectTool(tool string) {
 
 func (screen *MainScreen) cycleViewMode() {
 	next := screen.viewMode + 1
-	if next > 3 {
+	if next > 2 {
 		next = 1
 	}
 	screen.setViewMode(next)
 }
 
 func (screen *MainScreen) setViewMode(mode int) {
-	if mode < 1 || mode > 3 {
+	if mode < 1 || mode > 2 {
 		mode = 1
 	}
 	screen.viewMode = mode
@@ -1456,9 +1449,6 @@ func (screen *MainScreen) waterfallGeometry() (x, y, width, height float32) {
 	if screen.viewMode == 2 {
 		y, height = 685, 141
 	}
-	if screen.viewMode == 3 {
-		height = 340
-	}
 	return
 }
 
@@ -1512,9 +1502,6 @@ func (screen *MainScreen) selectBand(band BandDefinition) {
 	screen.centerFrequencyHz = band.FrequencyHz
 	screen.spanHz = band.SpanHz
 	screen.tuningStepHz = recommendedStepForBand(band)
-	if screen.step != nil {
-		screen.step.SetLabel("STEP  " + formatStep(screen.tuningStepHz))
-	}
 	if screen.stepSelector != nil {
 		screen.stepSelector.SetSelected(screen.tuningStepHz)
 	}
@@ -1541,8 +1528,8 @@ func (screen *MainScreen) selectTuningStep(stepHz int64) {
 		halfSpan := screen.spanHz / 2
 		screen.frequencyHz = min(max(screen.frequencyHz, screen.centerFrequencyHz-halfSpan), screen.centerFrequencyHz+halfSpan)
 	}
-	if screen.step != nil {
-		screen.step.SetLabel("STEP  " + formatStep(stepHz))
+	if screen.stepSelector != nil {
+		screen.stepSelector.SetSelected(stepHz)
 	}
 	if screen.receiver != nil {
 		if centerChanged {
@@ -1551,6 +1538,23 @@ func (screen *MainScreen) selectTuningStep(stepHz int64) {
 		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 	}
 	screen.markSettingsDirty()
+}
+
+func (screen *MainScreen) changeTuningStep(direction int) {
+	if direction == 0 || len(tuningStepsHz) == 0 {
+		return
+	}
+	index := 0
+	for i, stepHz := range tuningStepsHz {
+		if stepHz <= screen.tuningStepHz {
+			index = i
+		}
+		if stepHz == screen.tuningStepHz {
+			break
+		}
+	}
+	index = min(max(index+direction, 0), len(tuningStepsHz)-1)
+	screen.selectTuningStep(tuningStepsHz[index])
 }
 
 func (screen *MainScreen) digitStepHz() int64 {
@@ -1582,13 +1586,6 @@ func (screen *MainScreen) setFrequencyDigitExponent(exponent int) {
 		if screen.vfoModeSwitch != nil {
 			screen.vfoModeSwitch.SetActive(true)
 		}
-		if screen.step != nil {
-			screen.step.SetLabel("DIGIT STEP\n" + formatStep(screen.digitStepHz()))
-			screen.step.SetColors(rl.Color{R: 25, G: 125, B: 190, A: 255}, rl.Color{R: 125, G: 205, B: 255, A: 255}, rl.White)
-		}
-	} else if screen.step != nil {
-		screen.step.SetLabel("STEP  " + formatStep(screen.tuningStepHz))
-		screen.step.ClearColors()
 	}
 	screen.markSettingsDirty()
 }
@@ -1633,16 +1630,6 @@ func (screen *MainScreen) setFrequencyDigitHover(exponent int) {
 		return
 	}
 	screen.frequencyDigitExponent = exponent
-	if screen.step == nil {
-		return
-	}
-	if exponent >= 0 {
-		screen.step.SetLabel("DIGIT STEP\n" + formatStep(screen.digitStepHz()))
-		screen.step.SetColors(rl.Color{R: 25, G: 125, B: 190, A: 255}, rl.Color{R: 125, G: 205, B: 255, A: 255}, rl.White)
-	} else {
-		screen.step.SetLabel("STEP  " + formatStep(screen.tuningStepHz))
-		screen.step.ClearColors()
-	}
 }
 
 func frequencyDigitExponentAt(mouseX float32, formatted string) (int, bool) {

@@ -151,7 +151,9 @@ func (v *satelliteMap) drawList(b rl.Rectangle) {
 		v.scroll = max(0, v.scroll)
 	}
 	rl.BeginScissorMode(int32(contentBounds.X), int32(contentBounds.Y), int32(contentBounds.Width), int32(contentBounds.Height))
-	y := b.Y + 82 - float32(v.scroll*24)
+	listTop := b.Y + 82
+	scrollOffset := float32(v.scroll * 24)
+	y := listTop - scrollOffset
 	for _, g := range order {
 		list := groups[g]
 		if len(list) == 0 {
@@ -198,9 +200,19 @@ func (v *satelliteMap) drawList(b rl.Rectangle) {
 		}
 	}
 	rl.EndScissorMode()
-	content := int((y - (b.Y + 82)) / 24)
-	maxRows := int((b.Height - 85) / 24)
-	v.scroll = min(v.scroll, max(0, content-maxRows))
+	// Restore the visual offset before measuring the content. Measuring `y`
+	// directly made the reported height shrink while scrolling, so the clamp
+	// stopped before the final satellites and any following groups.
+	contentHeight := y + scrollOffset - listTop
+	viewportHeight := contentBounds.Y + contentBounds.Height - listTop
+	v.scroll = min(v.scroll, catalogMaxScroll(contentHeight, viewportHeight))
+}
+
+func catalogMaxScroll(contentHeight, viewportHeight float32) int {
+	if contentHeight <= viewportHeight {
+		return 0
+	}
+	return int(math.Ceil(float64((contentHeight - viewportHeight) / 24)))
 }
 func (v *satelliteMap) drawMap(b rl.Rectangle) {
 	if v.mapTexture.ID == 0 {

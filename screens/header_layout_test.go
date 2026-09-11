@@ -1,6 +1,10 @@
 package screens
 
-import "testing"
+import (
+	"testing"
+
+	"go-zero/simpleui"
+)
 
 func TestSquelchAndHeaderSwitchLayout(t *testing.T) {
 	screen := NewMainScreen(nil)
@@ -18,5 +22,21 @@ func TestSquelchAndHeaderSwitchLayout(t *testing.T) {
 	}
 	if label := screen.vfoModeSwitch.Label(); label != "CENTER" && label != "FIX" {
 		t.Fatalf("unexpected VFO label: %q", screen.vfoModeSwitch.Label())
+	}
+	for name, control := range map[string]*simpleui.Button{"STEP": screen.step, "STEP −": screen.stepDown, "STEP +": screen.stepUp} {
+		bounds := control.Bounds()
+		if bounds.Y < frequencyPanelY || bounds.Y+bounds.Height > frequencyPanelY+frequencyPanelH {
+			t.Fatalf("%s control is outside frequency panel: %+v", name, bounds)
+		}
+	}
+	for name, control := range map[string]*simpleui.Button{"MENU": screen.menuButton, "VIEW": screen.viewButton, "ESTILO": screen.themeButton} {
+		bounds := control.Bounds()
+		if bounds.Y < frequencyPanelY || bounds.Y+bounds.Height > frequencyPanelY+frequencyPanelH ||
+			bounds.X < frequencyPanelX || bounds.X+bounds.Width > frequencyPanelX+frequencyPanelW {
+			t.Fatalf("%s control is outside frequency panel: %+v", name, bounds)
+		}
+		if bounds.Y >= 205 {
+			t.Fatalf("%s control remains in the window footer: %+v", name, bounds)
+		}
 	}
 }

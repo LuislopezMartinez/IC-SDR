@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.4.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.4.0)**
+**Versión actual: [v0.5.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.5.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -38,6 +38,23 @@ IC-SDR integra herramientas para recibir y visualizar:
   D-STAR, YSF, dPMR, ProVoice, M17 y X2-TDMA mediante DSD-neo.
 
 ![Decodificación RTL_433 en IC-SDR](docs/images/ic-sdr-rtl433.png)
+
+## Novedades de v0.5.0
+
+- Visor TETRA/SDS ampliado con SSI de origen y destino, slot, cifrado,
+  protocolo, tipo de datos y diagnóstico del contenido recibido.
+- Conservación y visualización hexadecimal de mensajes SDS todavía no
+  interpretados, facilitando el análisis de protocolos adicionales.
+- Cabecera reorganizada con acceso directo a menú, vista, estilo y controles
+  para aumentar o reducir el paso de sintonía.
+- Área inferior aprovechada por completo y vistas simplificadas para mejorar
+  la legibilidad de los módulos y decodificadores.
+- El filtro NFM personalizado admite ahora anchos desde 500 Hz.
+- Corregido el desplazamiento del catálogo de satélites para poder alcanzar
+  todos los elementos y grupos de la lista.
+- Correcciones en la restauración de vistas, memorias y pasos de sintonía.
+- Nuevas pruebas para SDS/TETRA, disposición de la cabecera, sintonía, filtros
+  y desplazamiento del mapa de satélites.
 
 ## Novedades de v0.4.0
 

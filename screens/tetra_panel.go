@@ -105,9 +105,6 @@ func (p *TETRAPanel) tune(hz int64) {
 	s.tuningStepHz = 12_500
 	s.centerMode = true
 	s.updateBandForFrequency(hz)
-	if s.step != nil {
-		s.step.SetLabel("STEP  " + formatStep(s.tuningStepHz))
-	}
 	if s.stepSelector != nil {
 		s.stepSelector.SetSelected(s.tuningStepHz)
 	}
@@ -136,8 +133,8 @@ func (p *TETRAPanel) Enter() {
 		s.demodBandwidthHz = 25_000
 	}
 	s.tuningStepHz = 12_500
-	if s.step != nil {
-		s.step.SetLabel("STEP  " + formatStep(s.tuningStepHz))
+	if s.stepSelector != nil {
+		s.stepSelector.SetSelected(s.tuningStepHz)
 	}
 }
 func (p *TETRAPanel) Leave() {

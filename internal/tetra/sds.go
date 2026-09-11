@@ -15,22 +15,58 @@ func parseSDS(bits []byte, ssi uint32, now time.Time) (Message, *Position, bool)
 	}
 	protocol := uint8(bitsToUint(bits, 0, 8))
 	payload := bits[8:]
+	message := Message{Time: now, PartySSI: ssi, SDS: true, SDSProtocol: protocol, ProtocolName: sdsProtocolName(protocol), RawHex: bitsToHex(bits), RawBits: len(bits)}
 	switch protocol {
 	case 2, 9: // simple text / simple immediate text
 		text, ok := parseSDSText(payload)
 		if !ok {
 			return Message{}, nil, false
 		}
-		return Message{Time: now, Kind: "SDS TEXTO", Text: fmt.Sprintf("SSI %08d · %s", ssi, text)}, nil, true
+		message.Kind, message.Text, message.Recognized = "SDS TEXTO", text, true
+		return message, nil, true
 	case 10: // Location Information Protocol
 		position, ok := parseShortLIP(payload, ssi, now)
 		if !ok {
 			return Message{}, nil, false
 		}
-		text := fmt.Sprintf("SSI %08d · %.6f, %.6f · %.1f km/h · rumbo %.1f° · precisión %.0f m", position.SSI, position.Latitude, position.Longitude, position.SpeedKmh, position.Heading, position.AccuracyM)
-		return Message{Time: now, Kind: "GPS / LIP", Text: text}, &position, true
+		text := fmt.Sprintf("%.6f, %.6f · %.1f km/h · rumbo %.1f° · precisión %.0f m", position.Latitude, position.Longitude, position.SpeedKmh, position.Heading, position.AccuracyM)
+		message.Kind, message.Text, message.Recognized = "GPS / LIP", text, true
+		return message, &position, true
 	}
 	return Message{}, nil, false
+}
+
+func sdsProtocolName(protocol uint8) string {
+	switch protocol {
+	case 2:
+		return "TEXTO SIMPLE"
+	case 9:
+		return "TEXTO INMEDIATO"
+	case 10:
+		return "SIMPLE LOCATION SYSTEM / LIP"
+	default:
+		return fmt.Sprintf("PROTOCOLO %d", protocol)
+	}
+}
+
+func bitsToHex(bits []byte) string {
+	if len(bits) == 0 {
+		return ""
+	}
+	const digits = "0123456789ABCDEF"
+	out := make([]byte, (len(bits)+3)/4)
+	for i := range out {
+		var nibble byte
+		for bit := 0; bit < 4; bit++ {
+			index := i*4 + bit
+			nibble <<= 1
+			if index < len(bits) {
+				nibble |= bits[index] & 1
+			}
+		}
+		out[i] = digits[nibble]
+	}
+	return string(out)
 }
 
 func parseSDSText(bits []byte) (string, bool) {

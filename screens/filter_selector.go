@@ -143,9 +143,10 @@ func (selector *FilterSelector) DrawOverlay() {
 			name = "FIL 4"
 		}
 		labelColor := simpleui.EnsureTextContrast(colors.text, fill)
+		bandwidthColor := simpleui.EnsureTextContrast(colors.cyan, fill)
 		drawCentered(name, rl.Rectangle{X: bounds.X, Y: bounds.Y + 12, Width: bounds.Width, Height: 20}, 17, labelColor)
 		drawCentered(preset.Description, rl.Rectangle{X: bounds.X, Y: bounds.Y + 36, Width: bounds.Width, Height: 18}, 11, labelColor)
-		drawCentered(formatFilterBandwidth(preset.BandwidthHz), rl.Rectangle{X: bounds.X, Y: bounds.Y + 58, Width: bounds.Width, Height: 18}, 14, colors.cyan)
+		drawCentered(formatFilterBandwidth(preset.BandwidthHz), rl.Rectangle{X: bounds.X, Y: bounds.Y + 58, Width: bounds.Width, Height: 18}, 14, bandwidthColor)
 	}
 	drawCentered("CUSTOM permite ajustar y recordar un ancho para cada modo.", rl.Rectangle{X: 460, Y: 420, Width: 680, Height: 36}, 15, colors.text)
 	if selector.selected[selector.mode] == 3 {
@@ -185,7 +186,7 @@ func customFilterRange(mode string) (int, int, int) {
 	case "AM":
 		return 2000, 15000, 250
 	case "NFM":
-		return 5000, 25000, 500
+		return 500, 25000, 500
 	case "WFM":
 		return 100000, 300000, 5000
 	case "DMR BETA":

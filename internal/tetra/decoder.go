@@ -80,8 +80,20 @@ type User struct {
 	Seen        uint64    `json:"seen"`
 }
 type Message struct {
-	Time       time.Time `json:"time"`
-	Kind, Text string    `json:"kind"`
+	Time         time.Time `json:"time"`
+	Kind         string    `json:"kind"`
+	Text         string    `json:"text"`
+	AddressSSI   uint32    `json:"addressSSI,omitempty"`
+	PartySSI     uint32    `json:"partySSI,omitempty"`
+	Slot         uint8     `json:"slot,omitempty"`
+	Encrypted    bool      `json:"encrypted,omitempty"`
+	SDS          bool      `json:"sds,omitempty"`
+	SDSDataType  uint8     `json:"sdsDataType,omitempty"`
+	SDSProtocol  uint8     `json:"sdsProtocol,omitempty"`
+	ProtocolName string    `json:"protocolName,omitempty"`
+	RawHex       string    `json:"rawHex,omitempty"`
+	RawBits      int       `json:"rawBits,omitempty"`
+	Recognized   bool      `json:"recognized,omitempty"`
 }
 type Position struct {
 	SSI       uint32    `json:"ssi"`
@@ -898,10 +910,7 @@ func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
 		if cmce.CallID != 0 {
 			text += fmt.Sprintf(" · CALL %d", cmce.CallID)
 		}
-		d.messages = append([]Message{{Time: now, Kind: cmce.Kind, Text: fmt.Sprintf("SSI %08d · TS%d · %s", address.SSI, slot+1, text)}}, d.messages...)
-		if len(d.messages) > 200 {
-			d.messages = d.messages[:200]
-		}
+		event := Message{Time: now, Kind: cmce.Kind, Text: text, AddressSSI: address.SSI, Slot: uint8(slot + 1), Encrypted: address.Encrypted, Recognized: true}
 		if cmce.Code == 0 || cmce.Code == 1 || cmce.Code == 2 || cmce.Code == 7 || cmce.Code == 11 {
 			g := d.groups[address.SSI]
 			g.ID = address.SSI
@@ -918,14 +927,27 @@ func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
 				caller = address.SSI
 			}
 			if message, position, ok := parseSDS(cmce.SDS, caller, now); ok {
+				message.AddressSSI = address.SSI
+				message.PartySSI = caller
+				message.Slot = uint8(slot + 1)
+				message.Encrypted = address.Encrypted
+				message.SDSDataType = cmce.SDSDataType
 				d.messages = append([]Message{message}, d.messages...)
 				if position != nil {
 					d.positions[position.SSI] = *position
 				}
-				if len(d.messages) > 200 {
-					d.messages = d.messages[:200]
+			} else {
+				protocol := uint8(0)
+				if len(cmce.SDS) >= 8 {
+					protocol = uint8(bitsToUint(cmce.SDS, 0, 8))
 				}
+				d.messages = append([]Message{{Time: now, Kind: "SDS NO INTERPRETADO", Text: fmt.Sprintf("Protocolo %d · %d bits", protocol, len(cmce.SDS)), AddressSSI: address.SSI, PartySSI: caller, Slot: uint8(slot + 1), Encrypted: address.Encrypted, SDS: true, SDSDataType: cmce.SDSDataType, SDSProtocol: protocol, ProtocolName: sdsProtocolName(protocol), RawHex: bitsToHex(cmce.SDS), RawBits: len(cmce.SDS)}}, d.messages...)
 			}
+		} else {
+			d.messages = append([]Message{event}, d.messages...)
+		}
+		if len(d.messages) > 200 {
+			d.messages = d.messages[:200]
 		}
 		d.state = "CMCE " + cmce.Kind
 	} else {
