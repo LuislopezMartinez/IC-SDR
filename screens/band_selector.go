@@ -45,7 +45,7 @@ var bandsByCategory = map[string][]BandDefinition{
 		{Category: "COMMERCIAL", Name: "MARINE", FrequencyHz: 156_800_000, SpanHz: 1_000_000},
 		{Category: "COMMERCIAL", Name: "MARINE AIS", FrequencyHz: 162_000_000, SpanHz: 250_000},
 		{Category: "COMMERCIAL", Name: "DAB", FrequencyHz: 220_352_000, SpanHz: 2_000_000},
-		{Category: "COMMERCIAL", Name: "SONDAS", FrequencyHz: 403_000_000, SpanHz: 250_000},
+		{Category: "COMMERCIAL", Name: "RADIOSONDES", FrequencyHz: 403_000_000, SpanHz: 250_000},
 		{Category: "COMMERCIAL", Name: "UAT 978", FrequencyHz: 978_000_000, SpanHz: 2_000_000},
 		{Category: "COMMERCIAL", Name: "ADS-B 1090", FrequencyHz: 1_090_000_000, SpanHz: 2_000_000},
 	},
@@ -142,7 +142,7 @@ func (selector *BandSelector) DrawOverlay() {
 	rl.DrawRectangleRounded(modal, .022, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(modal, .022, 8, 2, colors.border)
 	rl.DrawRectangleRounded(rl.Rectangle{X: 130, Y: 70, Width: 10, Height: 530}, .5, 8, accent)
-	simpleui.DrawTextStyled("SELECCIÓN DE BANDA", 170, 91, 27, simpleui.FontRegular, colors.text)
+	simpleui.DrawTextStyled("BAND SELECTION", 170, 91, 27, simpleui.FontRegular, colors.text)
 
 	labels := []string{"RADIOAFICIONADO / HAM", "COMERCIALES", "ISM / LIBRE"}
 	for index, label := range labels {
@@ -173,12 +173,12 @@ func (selector *BandSelector) DrawOverlay() {
 		drawCentered(formatBandFrequency(band.FrequencyHz), rl.Rectangle{X: bounds.X, Y: bounds.Y + 28, Width: bounds.Width, Height: 20}, 14, labelColor)
 	}
 
-	simpleui.DrawText("Selecciona una banda para cambiar la frecuencia y el span.", 170, 540, 15, colors.text)
+	simpleui.DrawText("Select a band to change frequency and span.", 170, 540, 15, colors.text)
 	cancel := selector.cancelBounds()
 	cancelFill := colors.panelAlt
 	rl.DrawRectangleRounded(cancel, .16, 8, cancelFill)
 	rl.DrawRectangleRoundedLinesEx(cancel, .16, 8, 2, rl.Color{R: 135, G: 140, B: 145, A: 255})
-	drawCentered("CANCELAR", cancel, 16, simpleui.EnsureTextContrast(colors.text, cancelFill))
+	drawCentered("CANCEL", cancel, 16, simpleui.EnsureTextContrast(colors.text, cancelFill))
 }
 
 func (selector *BandSelector) categoryAt(point rl.Vector2) int {

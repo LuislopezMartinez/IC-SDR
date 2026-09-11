@@ -24,7 +24,7 @@ func NewSubtonePanel(screen *MainScreen) *SubtonePanel {
 		p.mode = "AUTO"
 	}
 	p.modeButton = simpleui.NewButton("subtoneMode", 538, 43, 88, 34, p.mode, 12)
-	p.save = simpleui.NewButton("subtoneSave", 840, 43, 106, 34, "A MEMORIA", 12)
+	p.save = simpleui.NewButton("subtoneSave", 840, 43, 106, 34, "TO MEMORY", 12)
 	p.modeButton.SetColors(colors.panelAlt, colors.cyan, colors.text)
 	p.save.SetColors(colors.panelAlt, colors.green, colors.text)
 	p.modeButton.OnClick(p.cycleMode)
@@ -61,13 +61,13 @@ func (p *SubtonePanel) cycleMode() {
 func (p *SubtonePanel) saveMemory() {
 	s := p.status()
 	if !s.Detected {
-		p.feedback = "TODAVÍA NO HAY SUBTONO"
+		p.feedback = "NO SUBTONE YET"
 		p.feedbackUntil = time.Now().Add(2 * time.Second)
 		return
 	}
 	if p.screen.memoryPanel != nil {
 		p.screen.memoryPanel.openSaveModal()
-		p.feedback = "SUBTONO AÑADIDO A MEMORIA"
+		p.feedback = "SUBTONE ADDED TO MEMORY"
 		p.feedbackUntil = time.Now().Add(2 * time.Second)
 	}
 }
@@ -75,12 +75,12 @@ func (p *SubtonePanel) Draw() {
 	drawPanel(526, 16, 430, 72)
 	simpleui.DrawTextStyled("DETECTOR DE TONOS", 538, 20, 12, simpleui.FontSemiBold, colors.cyan)
 	s := p.status()
-	result := "BUSCANDO…"
+	result := "SEARCHING…"
 	color := colors.muted
 	if p.mode == "OFF" {
 		result = "DESACTIVADO"
 	} else if p.screen.mode.SelectedText() != "NFM" {
-		result = "SOLO DISPONIBLE EN NFM"
+		result = "ONLY AVAILABLE IN NFM"
 	} else if s.Detected {
 		result = s.Kind + "  " + s.Value
 		color = colors.green

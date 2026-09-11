@@ -25,7 +25,7 @@ var bandPlan = []bandRange{
 	{"COMMERCIAL", "SW 31 m", 9_400_000, 9_900_000}, {"COMMERCIAL", "FM", 87_500_000, 108_000_000},
 	{"COMMERCIAL", "AIR", 118_000_000, 136_975_000}, {"COMMERCIAL", "MARINE", 156_000_000, 162_000_000},
 	{"COMMERCIAL", "DAB", 174_928_000, 239_200_000},
-	{"COMMERCIAL", "SONDAS", 400_000_000, 406_000_000},
+	{"COMMERCIAL", "RADIOSONDES", 400_000_000, 406_000_000},
 	{"ISM", "CB 27", 26_965_000, 27_405_000}, {"ISM", "PMR446", 446_000_000, 446_200_000},
 	{"ISM", "433 MHz", 433_050_000, 434_790_000}, {"ISM", "868 MHz", 863_000_000, 870_000_000},
 	{"ISM", "915 MHz", 902_000_000, 928_000_000}, {"ISM", "2.4 GHz", 2_400_000_000, 2_483_500_000},
@@ -53,7 +53,7 @@ func findBandRange(frequencyHz int64, preferredCategory string) (bandRange, bool
 func (screen *MainScreen) updateBandForFrequency(frequencyHz int64) {
 	band, found := findBandRange(frequencyHz, screen.bandCategory)
 	if !found {
-		screen.bandCategory, screen.bandName = "NONE", "FUERA DE BANDA"
+		screen.bandCategory, screen.bandName = "NONE", "OUT OF BAND"
 	} else {
 		screen.bandCategory, screen.bandName = band.category, band.name
 	}

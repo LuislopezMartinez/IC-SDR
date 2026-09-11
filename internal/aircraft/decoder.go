@@ -70,7 +70,7 @@ type Decoder struct {
 }
 
 func New(rate float64, exe1090, exe978, exeUATText string) *Decoder {
-	return &Decoder{rate: rate, exe1090: exe1090, exe978: exe978, exeUATText: exeUATText, state: "DETENIDO", tracks: make(map[string]*trackState)}
+	return &Decoder{rate: rate, exe1090: exe1090, exe978: exe978, exeUATText: exeUATText, state: "STOPPED", tracks: make(map[string]*trackState)}
 }
 func (d *Decoder) Configure(enabled bool, mode string) {
 	d.lifecycle.Lock()
@@ -90,7 +90,7 @@ func (d *Decoder) Configure(enabled bool, mode string) {
 	var err error
 	if mode == Mode1090 {
 		if d.exe1090 == "" {
-			d.fail(errors.New("dump1090 no configurado"))
+			d.fail(errors.New("dump1090 not configured"))
 			return
 		}
 		d.cmd = exec.Command(d.exe1090, "--ifile", "-", "--raw")
@@ -104,7 +104,7 @@ func (d *Decoder) Configure(enabled bool, mode string) {
 		}
 	} else {
 		if d.exe978 == "" || d.exeUATText == "" {
-			d.fail(errors.New("dump978 no configurado"))
+			d.fail(errors.New("dump978 not configured"))
 			return
 		}
 		d.cmd = exec.Command(d.exe978)
@@ -135,7 +135,7 @@ func (d *Decoder) Configure(enabled bool, mode string) {
 		return
 	}
 	d.running = true
-	d.state = "ESPERANDO AERONAVES"
+	d.state = "WAITING AERONAVES"
 	d.lastError = ""
 	go d.writeIQ()
 	if mode == Mode1090 {
@@ -182,7 +182,7 @@ func (d *Decoder) stopProcess() {
 	d.mu.Unlock()
 	if !active {
 		d.mu.Lock()
-		d.state = "DETENIDO"
+		d.state = "STOPPED"
 		d.mu.Unlock()
 		return
 	}
@@ -196,7 +196,7 @@ func (d *Decoder) stopProcess() {
 	}
 	<-done
 	d.mu.Lock()
-	d.state = "DETENIDO"
+	d.state = "STOPPED"
 	d.mu.Unlock()
 }
 func (d *Decoder) Close() { d.lifecycle.Lock(); defer d.lifecycle.Unlock(); d.stopProcess() }

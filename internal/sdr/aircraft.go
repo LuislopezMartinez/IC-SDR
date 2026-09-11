@@ -9,7 +9,7 @@ func (r *Receiver) ConfigureAircraft(enabled bool, mode string) {
 }
 func (r *Receiver) AircraftStatus() aircraft.Status {
 	if r.aircraft == nil {
-		return aircraft.Status{State: "NO DISPONIBLE"}
+		return aircraft.Status{State: "UNAVAILABLE"}
 	}
 	return r.aircraft.Snapshot()
 }

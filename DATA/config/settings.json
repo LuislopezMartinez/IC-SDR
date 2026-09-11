@@ -42,7 +42,7 @@
   "dmrAudioSlot": "AUTO",
   "rtl433FrequencyHz": 433920000,
   "rtl433BandwidthHz": 500000,
-  "aprsView": "PAQUETES",
+  "aprsView": "PACKETS",
   "subtoneMode": "CTCSS",
   "sstvAutomatic": true,
   "sstvMode": "R36",

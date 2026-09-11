@@ -25,11 +25,11 @@ var toolMenuItems = []toolMenuItem{
 	{id: "SSTV", label: "SSTV", icon: "menu-sstv.png", row: 1},
 	{id: "APRS", label: "APRS", icon: "menu-aprs.png", row: 1},
 	{id: "RTL_433", label: "RTL_433", icon: "menu-rtl433.png", row: 1},
-	{id: "RADIOSONDE", label: "SONDAS", icon: "menu-radiosonde.png", row: 1},
+	{id: "RADIOSONDE", label: "RADIOSONDES", icon: "menu-radiosonde.png", row: 1},
 	{id: "AIS", label: "AIS", icon: "menu-ais.png", row: 1},
 	{id: "AIRCRAFT", label: "ADS-B", icon: "menu-aircraft.png", row: 1},
 	{id: "TETRA", label: "TETRA", icon: "menu-tetra.png", row: 1},
-	{id: "SATELLITES", label: "SATÉLITES", row: 2},
+	{id: "SATELLITES", label: "SATELLITES", row: 2},
 }
 
 type ToolMenu struct {
@@ -110,7 +110,7 @@ func (menu *ToolMenu) DrawOverlay() {
 
 	menu.drawCategory(0, "VIEWS", colors.cyan)
 	menu.drawCategory(1, "DECODERS", rl.Color{R: 155, G: 115, B: 225, A: 255})
-	menu.drawCategory(2, "UTILES", rl.Color{R: 235, G: 165, B: 45, A: 255})
+	menu.drawCategory(2, "TOOLS", rl.Color{R: 235, G: 165, B: 45, A: 255})
 	for index := range toolMenuItems {
 		menu.drawItem(index)
 	}
@@ -121,7 +121,7 @@ func (menu *ToolMenu) DrawOverlay() {
 	}
 	rl.DrawRectangleRounded(back, .2, 8, backColor)
 	rl.DrawRectangleRoundedLinesEx(back, .2, 8, 2, rl.Color{R: 130, G: 145, B: 160, A: 255})
-	drawCenteredStyled("VOLVER", back, 17, simpleui.FontSemiBold, simpleui.EnsureTextContrast(colors.text, backColor))
+	drawCenteredStyled("BACK", back, 17, simpleui.FontSemiBold, simpleui.EnsureTextContrast(colors.text, backColor))
 }
 
 func (menu *ToolMenu) drawCategory(row int, label string, accent rl.Color) {

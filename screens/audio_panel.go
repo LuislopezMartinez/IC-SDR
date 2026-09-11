@@ -151,12 +151,12 @@ func (p *AudioPanel) apply() {
 
 func (p *AudioPanel) cycleProfile() {
 	switch p.profile {
-	case "SUAVE":
+	case "SOFT":
 		p.profile = "NORMAL"
 	case "NORMAL":
-		p.profile = "FUERTE"
+		p.profile = "STRONG"
 	default:
-		p.profile = "SUAVE"
+		p.profile = "SOFT"
 	}
 	p.apply()
 }
@@ -200,7 +200,7 @@ func (p *AudioPanel) drawPBT(enabled bool, mode string) {
 	center := x + w/2
 	rl.DrawLineEx(rl.Vector2{X: center, Y: y}, rl.Vector2{X: center, Y: y + h}, 1.5, colors.green)
 	if !enabled {
-		drawCentered("DISPONIBLE EN USB / LSB", rl.Rectangle{X: x, Y: y, Width: w, Height: h}, 10, colors.muted)
+		drawCentered("AVAILABLE IN USB / LSB", rl.Rectangle{X: x, Y: y, Width: w, Height: h}, 10, colors.muted)
 		return
 	}
 	sign := float32(1)

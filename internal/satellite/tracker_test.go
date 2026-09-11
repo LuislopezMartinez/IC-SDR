@@ -11,7 +11,7 @@ func TestParseTLEAndVisibilitySnapshot(t *testing.T) {
 	const tle = `ISS (ZARYA)
 1 25544U 98067A   25250.50000000  .00010000  00000-0  18000-3 0  9999
 2 25544  51.6400 120.0000 0005000  40.0000 320.0000 15.50000000123456`
-	list, err := parseTLE(strings.NewReader(tle), "Estaciones espaciales")
+	list, err := parseTLE(strings.NewReader(tle), "Space stations")
 	if err != nil || len(list) != 1 {
 		t.Fatalf("parseTLE() = %d satellites, %v", len(list), err)
 	}

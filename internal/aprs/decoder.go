@@ -57,7 +57,7 @@ func New(inputRate float64, executable, configPath, workingDirectory string) *De
 	if absolute, err := filepath.Abs(workingDirectory); err == nil {
 		workingDirectory = absolute
 	}
-	return &Decoder{inputRate: inputRate, executable: executable, configTemplate: configPath, workingDirectory: workingDirectory, state: "DETENIDO", audioLevel: -1, recentPackets: make(map[string]time.Time)}
+	return &Decoder{inputRate: inputRate, executable: executable, configTemplate: configPath, workingDirectory: workingDirectory, state: "STOPPED", audioLevel: -1, recentPackets: make(map[string]time.Time)}
 }
 func (d *Decoder) Configure(enabled bool, tuned, center int64, bandwidth int) {
 	if !enabled {
@@ -79,7 +79,7 @@ func (d *Decoder) Configure(enabled bool, tuned, center int64, bandwidth int) {
 }
 func (d *Decoder) start() {
 	if d.executable == "" {
-		d.setError(fmt.Errorf("Dire Wolf no configurado"))
+		d.setError(fmt.Errorf("Dire Wolf not configured"))
 		return
 	}
 	port, err := freePort()
@@ -113,7 +113,7 @@ func (d *Decoder) start() {
 	session := d.session.Add(1)
 	d.running.Store(true)
 	d.mu.Lock()
-	d.state, d.detail, d.audioLevel = "BUSCANDO", "Conectando KISS local", -1
+	d.state, d.detail, d.audioLevel = "SEARCHING", "Connecting local KISS", -1
 	d.mu.Unlock()
 	go d.writer()
 	go d.readLines(stdout)
@@ -345,8 +345,8 @@ func (d *Decoder) Clear() {
 	d.mu.Lock()
 	d.packets = nil
 	d.recentPackets = make(map[string]time.Time)
-	d.state = "BUSCANDO"
-	d.detail = "Esperando tramas AX.25"
+	d.state = "SEARCHING"
+	d.detail = "Waiting for AX.25 frames"
 	d.mu.Unlock()
 	d.packetCount.Store(0)
 }
@@ -380,7 +380,7 @@ func (d *Decoder) Stop() {
 		_ = os.Remove(d.configPath)
 	}
 	d.mu.Lock()
-	d.state, d.detail, d.audioLevel = "DETENIDO", "", -1
+	d.state, d.detail, d.audioLevel = "STOPPED", "", -1
 	d.kiss = nil
 	d.mu.Unlock()
 }

@@ -90,7 +90,7 @@ type Decoder struct {
 }
 
 func New(rate float64, directory string) *Decoder {
-	return &Decoder{rate: rate, directory: directory, status: Status{State: "DETENIDO"}}
+	return &Decoder{rate: rate, directory: directory, status: Status{State: "STOPPED"}}
 }
 
 // Arguments lets RS perform channel translation, filtering and decimation itself.
@@ -99,10 +99,10 @@ func Arguments(family string, rate float64, frequency, center int64) (string, []
 	names := map[string]string{"RS41": "rs41mod", "DFM": "dfm09mod", "M10/M20": "m10m20mod"}
 	name, ok := names[family]
 	if !ok {
-		return "", nil, fmt.Errorf("familia no válida: %s", family)
+		return "", nil, fmt.Errorf("invalid family: %s", family)
 	}
 	if math.IsNaN(rate) || math.IsInf(rate, 0) || rate < 96000 || rate > 20e6 || frequency <= 0 || math.Abs(float64(frequency-center))+24000 >= rate/2 {
-		return "", nil, fmt.Errorf("canal fuera de la captura IQ o tasa no válida")
+		return "", nil, fmt.Errorf("channel outside IQ capture or invalid rate")
 	}
 	if runtime.GOOS == "windows" {
 		name += ".exe"
@@ -178,7 +178,7 @@ func (d *Decoder) Configure(enabled bool, family string, frequency, center int64
 	d.mu.Lock()
 	d.current = s
 	d.status.Running = true
-	d.status.State = "ESPERANDO TRAMAS"
+	d.status.State = "WAITING TRAMAS"
 	d.mu.Unlock()
 	go func() {
 		defer close(s.writerDone)
@@ -269,7 +269,7 @@ func (d *Decoder) stop() {
 	d.detections = nil
 	d.current = nil
 	d.status.Running = false
-	d.status.State = "DETENIDO"
+	d.status.State = "STOPPED"
 	d.mu.Unlock()
 	for _, child := range children {
 		child.Close()
@@ -325,7 +325,7 @@ func (d *Decoder) Snapshot() Status {
 			}
 		}
 		s.Error = strings.Join(errors, "; ")
-		s.State = "AUTO · BUSCANDO"
+		s.State = "AUTO · SEARCHING"
 		if len(detected) > 0 {
 			s.State = "AUTO · " + strings.Join(detected, " + ")
 		}

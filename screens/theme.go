@@ -55,11 +55,11 @@ func validTheme(name string) bool {
 func themeDisplayName(name string) string {
 	switch strings.ToUpper(name) {
 	case themeLight:
-		return "CLARO"
+		return "LIGHT"
 	case themeBlue:
-		return "AZUL"
+		return "BLUE"
 	default:
-		return "OSCURO"
+		return "DARK"
 	}
 }
 
@@ -98,7 +98,7 @@ func (screen *MainScreen) applyTheme(name string) {
 		return remapThemeColor(color, colors)
 	})
 	if screen.themeButton != nil {
-		screen.themeButton.SetLabel("ESTILO  " + themeDisplayName(name))
+		screen.themeButton.SetLabel("THEME  " + themeDisplayName(name))
 	}
 }
 

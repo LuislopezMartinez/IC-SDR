@@ -40,23 +40,23 @@ func TestDeleteMemoryRequiresConfirmation(t *testing.T) {
 
 func TestEditMemoryUsesDialogAndCommitsExplicitValues(t *testing.T) {
 	panel := &MemoryPanel{
-		memories: []MemoryEntry{{Name: "ORIGINAL", Description: "Canal de control", FrequencyHz: 391_662_500, Mode: "TETRA", FilterBandwidthHz: 25_000, StepHz: 12_500, Group: "TETRA"}},
-		selected: 0, selectedGroup: "TODAS", pendingEditIndex: -1,
+		memories: []MemoryEntry{{Name: "ORIGINAL", Description: "Control channel", FrequencyHz: 391_662_500, Mode: "TETRA", FilterBandwidthHz: 25_000, StepHz: 12_500, Group: "TETRA"}},
+		selected: 0, selectedGroup: "ALL", pendingEditIndex: -1,
 		path: filepath.Join(t.TempDir(), "memories.json"),
 	}
 	panel.editSelection()
 	if panel.modal != "edit" || panel.memories[0].Name != "ORIGINAL" {
-		t.Fatal("EDITAR debe abrir el diálogo sin modificar la memoria")
+		t.Fatal("EDIT must open the dialog without changing the memory")
 	}
 	panel.pendingMemory.Name = "TETRA BCN"
-	panel.pendingMemory.Description = "Servicio TETRA de Barcelona"
+	panel.pendingMemory.Description = "Barcelona TETRA service"
 	panel.pendingMemory.FrequencyHz = 391_662_724
 	panel.editField = 5
 	panel.editBuffer = "6250"
 	panel.commitEdit()
 	got := panel.memories[0]
-	if panel.modal != "" || got.Name != "TETRA BCN" || got.Description != "Servicio TETRA de Barcelona" || got.FrequencyHz != 391_662_724 || got.StepHz != 6250 {
-		t.Fatalf("memoria editada incorrectamente: %#v", got)
+	if panel.modal != "" || got.Name != "TETRA BCN" || got.Description != "Barcelona TETRA service" || got.FrequencyHz != 391_662_724 || got.StepHz != 6250 {
+		t.Fatalf("memory edited incorrectly: %#v", got)
 	}
 }
 
@@ -69,10 +69,10 @@ func TestAddMemoryOpensEditableFormWithCurrentReceiverValues(t *testing.T) {
 	panel := &MemoryPanel{screen: screen, selectedGroup: "TETRA", pendingEditIndex: -1, path: filepath.Join(t.TempDir(), "memories.json")}
 	panel.openSaveModal()
 	if panel.modal != "create" || panel.editField != 0 {
-		t.Fatalf("+ MEMORIA abrió modal %q en campo %d", panel.modal, panel.editField)
+		t.Fatalf("+ MEMORY opened modal %q on field %d", panel.modal, panel.editField)
 	}
 	got := panel.pendingMemory
 	if got.FrequencyHz != 391_662_500 || got.Mode != "TETRA" || got.FilterBandwidthHz != 25_000 || got.StepHz != 12_500 || got.Group != "TETRA" || !got.ScanEnabled {
-		t.Fatalf("valores iniciales incorrectos: %#v", got)
+		t.Fatalf("incorrect initial values: %#v", got)
 	}
 }

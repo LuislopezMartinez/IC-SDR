@@ -35,10 +35,10 @@ func NewAircraftPanel(screen *MainScreen) *AircraftPanel {
 	}
 	p.mode1090 = button("air1090", "1090 ADS-B", 40, 160, func() { p.selectMode(aircraft.Mode1090) })
 	p.mode978 = button("air978", "978 UAT", 215, 140, func() { p.selectMode(aircraft.Mode978) })
-	p.start = button("airStart", "INICIAR", 375, 140, func() { p.enabled = !p.enabled; p.apply() })
-	mapButton := button("airMap", "ABRIR MAPA", 535, 175, p.openMap)
+	p.start = button("airStart", "START", 375, 140, func() { p.enabled = !p.enabled; p.apply() })
+	mapButton := button("airMap", "OPEN MAP", 535, 175, p.openMap)
 	mapButton.SetColors(colors.blue, colors.border, colors.text)
-	clearButton := button("airClear", "LIMPIAR", 730, 130, func() {
+	clearButton := button("airClear", "CLEAR", 730, 130, func() {
 		if screen.receiver != nil {
 			screen.receiver.ClearAircraft()
 		}
@@ -128,10 +128,10 @@ func (p *AircraftPanel) style() {
 		p.mode978.SetColors(colors.blue, colors.border, colors.text)
 	}
 	if p.enabled {
-		p.start.SetLabel("DETENER")
+		p.start.SetLabel("STOP")
 		p.start.SetColors(actionStopFill, colors.red, colors.text)
 	} else {
-		p.start.SetLabel("INICIAR")
+		p.start.SetLabel("START")
 		p.start.SetColors(actionStartFill, colors.green, colors.text)
 	}
 }
@@ -172,25 +172,25 @@ func (p *AircraftPanel) openMap() {
 	}
 	if p.viewer != nil && p.viewer.Process != nil {
 		focusRTL433Viewer(p.viewer.Process.Pid)
-		p.feedback = "MAPA YA ABIERTO"
+		p.feedback = "MAP ALREADY OPEN"
 		return
 	}
 	exe, err := os.Executable()
 	if err != nil {
-		p.feedback = "ERROR AL ABRIR MAPA"
+		p.feedback = "ERROR OPENING MAP"
 		return
 	}
 	cmd := exec.Command(exe, "--aircraft-map", p.snapshotPath)
 	cmd.SysProcAttr = rtl433ViewerProcessAttributes()
 	if err = cmd.Start(); err != nil {
-		p.feedback = "ERROR AL ABRIR MAPA"
+		p.feedback = "ERROR OPENING MAP"
 		return
 	}
 	p.viewer = cmd
 	p.viewerDone = make(chan struct{})
 	done := p.viewerDone
 	go func() { _ = cmd.Wait(); close(done) }()
-	p.feedback = "MAPA ABIERTO"
+	p.feedback = "MAP OPENED"
 }
 func (p *AircraftPanel) Close() {
 	p.enabled = false
@@ -200,13 +200,13 @@ func (p *AircraftPanel) Close() {
 	}
 }
 func (p *AircraftPanel) DrawPanel() {
-	status := aircraft.Status{State: "SIN RECEPTOR"}
+	status := aircraft.Status{State: "NO RECEIVER"}
 	var list []aircraft.Aircraft
 	if p.screen.receiver != nil {
 		status = p.screen.receiver.AircraftStatus()
 		list = p.screen.receiver.Aircraft()
 	}
-	simpleui.DrawText(fmt.Sprintf("VIGILANCIA AÉREA · %s · %.3f MHz · %s · %d aeronaves · %d mensajes", p.mode, float64(p.frequency())/1e6, status.State, len(list), status.Messages), 40, toolY+7, 12, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf("AIR SURVEILLANCE · %s · %.3f MHz · %s · %d aircraft · %d messages", p.mode, float64(p.frequency())/1e6, status.State, len(list), status.Messages), 40, toolY+7, 12, colors.cyan)
 	if status.Error != "" {
 		simpleui.DrawText(sondeClip(status.Error, 72), 880, toolY+38, 12, colors.red)
 	} else {
@@ -215,7 +215,7 @@ func (p *AircraftPanel) DrawPanel() {
 	cols := []struct {
 		x    float32
 		name string
-	}{{40, "VUELO / ICAO"}, {260, "FUENTE"}, {375, "ÚLTIMA"}, {480, "ALT ft"}, {590, "VEL kt"}, {700, "RUMBO"}, {810, "V/S fpm"}, {950, "LATITUD"}, {1080, "LONGITUD"}}
+	}{{40, "FLIGHT / ICAO"}, {260, "SOURCE"}, {375, "LAST"}, {480, "ALT ft"}, {590, "VEL kt"}, {700, "TRACK"}, {810, "V/S fpm"}, {950, "LATITUDE"}, {1080, "LONGITUDE"}}
 	for _, c := range cols {
 		simpleui.DrawText(c.name, c.x, toolY+78, 12, colors.muted)
 	}
@@ -243,7 +243,7 @@ func (p *AircraftPanel) DrawPanel() {
 		}
 	}
 	if len(list) == 0 {
-		simpleui.DrawText("Selecciona banda y pulsa INICIAR. ABRIR MAPA muestra posiciones, altitud y estelas en otra ventana.", 40, toolY+110, 13, colors.muted)
+		simpleui.DrawText("Select a band and press START. OPEN MAP shows positions, altitude and trails in another window.", 40, toolY+110, 13, colors.muted)
 	}
-	simpleui.DrawText(sondeClip(p.feedback+"  Recepción local desde el SDR · sin servicios de seguimiento externos", 150), 40, toolY+174, 12, colors.muted)
+	simpleui.DrawText(sondeClip(p.feedback+"  Local reception from the SDR · no external tracking services", 150), 40, toolY+174, 12, colors.muted)
 }

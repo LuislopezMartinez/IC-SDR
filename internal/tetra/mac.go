@@ -183,7 +183,7 @@ func parseMACResource(bits []byte) (resourceAddress, bool) {
 
 func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 	if len(bits) < 40 || bitsToUint(bits, 0, 2) != 0 {
-		return resourceAddress{}, "TIPO", false
+		return resourceAddress{}, "TYPE", false
 	}
 	encryption := bitsToUint(bits, 4, 2)
 	lengthField := bitsToUint(bits, 7, 6)
@@ -195,7 +195,7 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 	lengths := [8]int{0, 24, 10, 24, 24, 34, 30, 34}
 	need := 16 + lengths[addrType]
 	if len(bits) < need || addrType == 0 {
-		return resourceAddress{}, "DIRECCION", false
+		return resourceAddress{}, "ADDRESS", false
 	}
 	var ssi uint32
 	var usageMarker uint8
@@ -204,7 +204,7 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 	case 1, 3, 4, 5, 6, 7:
 		ssi = bitsToUint(bits, 16, 24)
 	default:
-		return resourceAddress{}, "DIRECCION", false
+		return resourceAddress{}, "ADDRESS", false
 	}
 	if addrType == 6 {
 		usageMarker = uint8(bitsToUint(bits, 40, 6))
@@ -215,7 +215,7 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 	}
 	cur := need
 	if cur >= len(bits) {
-		return resourceAddress{}, "CABECERA", false
+		return resourceAddress{}, "HEADER", false
 	}
 	if bits[cur] != 0 {
 		cur += 5
@@ -223,7 +223,7 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 		cur++
 	}
 	if cur >= len(bits) {
-		return resourceAddress{}, "CABECERA", false
+		return resourceAddress{}, "HEADER", false
 	}
 	if bits[cur] != 0 {
 		cur += 9
@@ -231,7 +231,7 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 		cur++
 	}
 	if cur >= len(bits) {
-		return resourceAddress{}, "CABECERA", false
+		return resourceAddress{}, "HEADER", false
 	}
 	hasAllocation := bits[cur] != 0
 	cur++
@@ -245,11 +245,11 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 		var ok bool
 		cur, ok = skipChannelAllocation(bits, cur)
 		if !ok {
-			return resourceAddress{}, "ASIGNACION", false
+			return resourceAddress{}, "ALLOCATION", false
 		}
 	}
 	if cur > len(bits) {
-		return resourceAddress{}, "CABECERA", false
+		return resourceAddress{}, "HEADER", false
 	}
 	return resourceAddress{Type: addrType, SSI: ssi, Encrypted: encryption > 0, UsageMarker: usageMarker, HasUsageMarker: hasUsageMarker, HeaderBits: cur, LengthBits: lengthBits, ChannelAllocation: hasAllocation}, "", true
 }

@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "GO-Zero: Ejecutar",
+      "label": "GO-Zero: Run",
       "type": "process",
       "command": "go",
       "args": ["run", "."],
@@ -21,7 +21,7 @@
       }
     },
     {
-      "label": "GO-Zero: Compilar Windows",
+      "label": "GO-Zero: Build Windows",
       "type": "process",
       "command": "powershell",
       "args": [
@@ -46,10 +46,10 @@
       }
     },
     {
-      "label": "GO-Zero: Ejecutar audio estable (sin depurador)",
+      "label": "GO-Zero: Run stable audio (no debugger)",
       "type": "process",
       "command": "${workspaceFolder}\\dist\\IC-SDR-Go\\IC-SDR-Go.exe",
-      "dependsOn": "GO-Zero: Compilar Windows",
+      "dependsOn": "GO-Zero: Build Windows",
       "dependsOrder": "sequence",
       "options": {
         "cwd": "${workspaceFolder}\\dist\\IC-SDR-Go"

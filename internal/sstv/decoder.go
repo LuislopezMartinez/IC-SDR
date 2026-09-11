@@ -206,7 +206,7 @@ func (d *Decoder) SavePartial() (string, error) {
 	frame.RGB = append([]byte(nil), frame.RGB...)
 	d.mu.RUnlock()
 	if frame.Width <= 0 || frame.Height <= 0 || len(frame.RGB) != frame.Width*frame.Height*3 {
-		return "", fmt.Errorf("todavía no hay una imagen SSTV")
+		return "", fmt.Errorf("no SSTV image yet")
 	}
 	if err := os.MkdirAll(d.outputFolder, 0o755); err != nil {
 		return "", err
@@ -291,7 +291,7 @@ func (d *Decoder) start(forceCandidates bool) error {
 	d.generation++
 	generation, stop := d.generation, d.stop
 	d.running.Store(true)
-	d.status.State, d.status.Detail = "SEARCH", "Esperando cabecera VIS"
+	d.status.State, d.status.Detail = "SEARCH", "Waiting for VIS header"
 	d.syncStatusLocked()
 	d.mu.Unlock()
 	go d.writer(generation, stop)
@@ -304,7 +304,7 @@ func (d *Decoder) start(forceCandidates bool) error {
 			d.running.Store(false)
 			if d.enabled && !d.restarting {
 				d.status.State = "ERROR"
-				d.status.Detail = "El decoder SSTV terminó"
+				d.status.Detail = "SSTV decoder exited"
 				if err != nil {
 					d.status.Detail += ": " + err.Error()
 				}
@@ -358,14 +358,14 @@ func (d *Decoder) readFrames(reader io.Reader, generation uint64) {
 			return
 		}
 		if string(header[:4]) != "SSTV" || header[4] != 1 {
-			d.fail(generation, fmt.Errorf("protocolo de imagen inválido"))
+			d.fail(generation, fmt.Errorf("invalid image protocol"))
 			return
 		}
 		typeID, channel := header[5], int(binary.LittleEndian.Uint16(header[6:8]))
 		payloadSize := int(binary.LittleEndian.Uint32(header[8:12]))
 		sequence := int(binary.LittleEndian.Uint32(header[12:16]))
 		if channel < 0 || channel > candidateCount || payloadSize < 0 || payloadSize > 2_000_000 {
-			d.fail(generation, fmt.Errorf("paquete SSTV fuera de rango"))
+			d.fail(generation, fmt.Errorf("SSTV packet out of range"))
 			return
 		}
 		payload := make([]byte, payloadSize)

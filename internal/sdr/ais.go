@@ -9,7 +9,7 @@ func (r *Receiver) ConfigureAIS(enabled bool) {
 }
 func (r *Receiver) AISStatus() ais.Status {
 	if r.ais == nil {
-		return ais.Status{State: "NO DISPONIBLE"}
+		return ais.Status{State: "UNAVAILABLE"}
 	}
 	return r.ais.Snapshot()
 }

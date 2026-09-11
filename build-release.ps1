@@ -9,7 +9,7 @@ $distRoot = [System.IO.Path]::GetFullPath((Join-Path $projectRoot 'dist\IC-SDR-G
 $expectedDist = [System.IO.Path]::GetFullPath((Join-Path $projectRoot 'dist\IC-SDR-Go'))
 
 if ($distRoot -ne $expectedDist -or -not $distRoot.StartsWith($projectRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw "Ruta de distribución no segura: $distRoot"
+    throw "Unsafe distribution path: $distRoot"
 }
 
 $mutableData = @('cache', 'captures', 'config', 'exports', 'logs', 'recordings')
@@ -29,12 +29,12 @@ New-Item -ItemType Directory -Path $distRoot -Force | Out-Null
 
 if (-not $SkipTests) {
     & go test ./...
-    if ($LASTEXITCODE -ne 0) { throw 'Los tests han fallado.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
 }
 
 $exePath = Join-Path $distRoot 'IC-SDR-Go.exe'
 & go build -trimpath -ldflags '-s -w -H=windowsgui' -o $exePath .
-if ($LASTEXITCODE -ne 0) { throw 'No se pudo compilar IC-SDR-Go.exe.' }
+if ($LASTEXITCODE -ne 0) { throw 'Could not compile IC-SDR-Go.exe.' }
 
 $copies = @(
     @{ Source = 'ORIGEN\IC_SDR\runtime\windows-x64'; Destination = 'DATA\runtime\windows-x64' },
@@ -53,7 +53,7 @@ $copies = @(
 foreach ($copy in $copies) {
     $source = Join-Path $projectRoot $copy.Source
     $destination = Join-Path $distRoot $copy.Destination
-    if (-not (Test-Path -LiteralPath $source)) { throw "Falta un recurso requerido: $source" }
+    if (-not (Test-Path -LiteralPath $source)) { throw "Missing required resource: $source" }
     $parent = if ((Get-Item -LiteralPath $source).PSIsContainer) { Split-Path $destination -Parent } else { Split-Path $destination -Parent }
     New-Item -ItemType Directory -Path $parent -Force | Out-Null
     Copy-Item -LiteralPath $source -Destination $destination -Recurse -Force
@@ -68,7 +68,7 @@ foreach ($name in $vcRuntimeFiles) {
     if (-not (Test-Path -LiteralPath $bundled)) {
         $systemCopy = Join-Path $env:SystemRoot (Join-Path 'System32' $name)
         if (-not (Test-Path -LiteralPath $systemCopy)) {
-            throw "Falta $name. Instale Microsoft Visual C++ Redistributable x64 antes de crear el portable."
+            throw "Missing $name. Install the Microsoft Visual C++ Redistributable x64 before creating the portable package."
         }
         Copy-Item -LiteralPath $systemCopy -Destination $bundled -Force
     }
@@ -84,7 +84,7 @@ foreach ($name in $mutableData) {
     }
 }
 
-Copy-Item -LiteralPath (Join-Path $projectRoot 'DISTRIBUTION.md') -Destination (Join-Path $distRoot 'LEEME.txt')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'DISTRIBUTION.md') -Destination (Join-Path $distRoot 'README.txt')
 
 $size = (Get-ChildItem -LiteralPath $distRoot -Recurse -File | Measure-Object Length -Sum).Sum
-Write-Host ("Distribución lista: {0} ({1:N1} MB)" -f $distRoot, ($size / 1MB)) -ForegroundColor Green
+Write-Host ("Distribution ready: {0} ({1:N1} MB)" -f $distRoot, ($size / 1MB)) -ForegroundColor Green

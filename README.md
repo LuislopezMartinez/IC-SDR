@@ -1,94 +1,96 @@
 # IC-SDR
 
-**SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
+**Multimode SDR for Windows, written in Go for maximum efficiency.**
 
-**Versión actual: [v0.3.1](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.3.1)**
+**Current version: [v0.3.1](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.3.1)**
 
-IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
+IC-SDR brings together reception, demodulation, spectrum analysis and digital signal decoding in a desktop interface designed for daily use.
 
 > [!IMPORTANT]
-> IC-SDR está diseñado específicamente para **Windows**. El binario y todos los componentes necesarios para su distribución portable se encuentran en la carpeta `dist/IC-SDR-Go` después de generar el paquete.
+> IC-SDR is designed specifically for **Windows**. The binary and all components required for portable distribution are located in the `dist/IC-SDR-Go` folder after generating the package.
 
-![Interfaz principal de IC-SDR](docs/images/ic-sdr-principal.png)
+![IC-SDR main interface](docs/images/ic-sdr-principal.png)
 
-## Características
+## Features
 
-- Demodulación en **AM, NFM, WFM, LSB y USB**.
-- Soporte para modos digitales.
-- Espectro y cascada en tiempo real.
-- Banco de memorias organizado por grupos.
-- Grabador de audio con eliminación automática de espacios en blanco.
-- Escáner de segmentos de frecuencia con disparo instantáneo.
-- Detector de tonos y control de squelch.
-- Ecualizador de cinco bandas y controles de procesamiento de audio.
+- Demodulation in **AM, NFM, WFM, LSB and USB**.
+- Support for digital modes.
+- Real-time spectrum and waterfall.
+- Memory bank organized by groups.
+- Audio recorder with automatic blank space removal.
+- Frequency segment scanner with instant trigger.
+- Tone detector and squelch control.
+- Five-band equalizer and audio processing controls.
 
-## Decodificadores
+## Decoders
 
-IC-SDR integra herramientas para recibir y visualizar:
+IC-SDR integrates tools to receive and display:
 
-- **AIS** — seguimiento de embarcaciones en los canales marítimos.
-- **ADS-B** — recepción de aeronaves en 1090 MHz y UAT 978 MHz.
-- **Radiosondas** — compatibilidad con RS41, DFM y M10/M20.
-- **APRS** — recepción y visualización de paquetes.
-- **RTL_433** — decodificación de sensores y dispositivos ISM, con exportación CSV.
-- **DMR** — recepción de radio digital.
-- **SSTV** — televisión de barrido lento.
-- **TETRA** — recepción y análisis de señales TETRA.
+- **AIS** — vessel tracking on maritime channels.
+- **ADS-B** — aircraft reception on 1090 MHz and UAT 978 MHz.
+- **Radiosondes** — compatibility with RS41, DFM and M10/M20.
+- **APRS** — packet reception and display.
+- **RTL_433** — decoding of sensors and ISM devices, with CSV export.
+- **DMR** — digital radio reception.
+- **SSTV** — slow-scan television.
+- **TETRA** — TETRA signal reception and analysis.
 
-![Decodificación RTL_433 en IC-SDR](docs/images/ic-sdr-rtl433.png)
+![RTL_433 decoding in IC-SDR](docs/images/ic-sdr-rtl433.png)
 
-## Novedades de v0.3.1
+## What's new in v0.3.1
 
-- Nuevo módulo de seguimiento de satélites con catálogo TLE actualizado desde CelesTrak.
-- Mapa mundial con posición, órbita, visibilidad y detalles de los satélites.
-- Búsqueda, agrupación y sintonización de las frecuencias asociadas a cada satélite.
-- Grabación de audio en **MP3 o WAV**, seleccionable desde la interfaz.
-- Grabador renovado con medidor de nivel, historial, reproducción y eliminación de archivos.
-- Mejoras en la omisión automática de silencios mediante squelch.
-- Ajustes visuales y de usabilidad en memorias, escáner y menú de herramientas.
-- Nuevas pruebas para satélites, grabación y marcadores de memoria.
+- New satellite tracking module with TLE catalog updated from CelesTrak.
+- World map with position, orbit, visibility and satellite details.
+- Search, grouping and tuning of frequencies associated with each satellite.
+- Audio recording in **MP3 or WAV**, selectable from the interface.
+- Redesigned recorder with level meter, history, playback and file deletion.
+- Improvements in automatic silence skipping via squelch.
+- Visual and usability adjustments in memories, scanner and tools menu.
+- New tests for satellites, recording and memory markers.
 
-## Novedades de v0.2.1
+## What's new in v0.2.1
 
-- Nuevos temas visuales y mejoras de contraste y legibilidad en toda la interfaz.
-- Gestión de memorias ampliada con descripciones, prioridades, colores y edición de grupos.
-- Nuevos presets para bandas aeronáuticas, marítimas e ISS/ARISS.
-- Mejoras en el modo SSTV automático y selección de modos candidatos.
-- Rediseño y ajustes de usabilidad en los paneles de audio, escáner, grabador y utilidades.
-- Nuevas pruebas para temas, contraste, memorias y SSTV.
+- New visual themes and improvements in contrast and readability throughout the interface.
+- Expanded memory management with descriptions, priorities, colors and group editing.
+- New presets for aeronautical, maritime and ISS/ARISS bands.
+- Improvements in automatic SSTV mode and candidate mode selection.
+- Redesign and usability adjustments in audio, scanner, recorder and utilities panels.
+- New tests for themes, contrast, memories and SSTV.
 
-## Windows y distribución portable
+## Windows and portable distribution
 
-IC-SDR está pensado para ejecutarse en Windows. La carpeta local `dist/IC-SDR-Go` contiene el binario distribuible `IC-SDR-Go.exe`, sus runtimes y las herramientas auxiliares necesarias. El directorio `DATA` debe permanecer junto al ejecutable.
+IC-SDR is intended to run on Windows. The local `dist/IC-SDR-Go` folder contains the distributable binary `IC-SDR-Go.exe`, its runtimes and the necessary auxiliary tools. The `DATA` directory must remain next to the executable.
 
-La carpeta `dist/` se genera localmente y no forma parte del código fuente versionado. Para reconstruirla se utiliza `build-release.ps1`.
+The `dist/` folder is generated locally and is not part of the versioned source code. To rebuild it, use `build-release.ps1`.
 
-## Requisitos
+## Requirements
 
 - Windows.
-- Go 1.27 o posterior para compilar desde el código fuente.
-- Un receptor compatible con RTL-SDR o SoapySDR/SDRplay.
+- Go 1.22 or later to compile from source (see `go.mod`).
+- A receiver compatible with RTL-SDR or SoapySDR/SDRplay.
 
-## Compilación
+## Compilation
 
-Desde la raíz del repositorio:
+From the repository root:
 
 ```powershell
 go build .
 ```
 
-Para generar la distribución portable de Windows:
+To generate the portable Windows distribution:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build-release.ps1
 ```
 
-La distribución se crea en `dist/IC-SDR-Go`. Consulta [DISTRIBUTION.md](DISTRIBUTION.md) para obtener más información sobre el paquete portable y los directorios de datos.
+The distribution is created in `dist/IC-SDR-Go`. See [DISTRIBUTION.md](DISTRIBUTION.md) for more information about the portable package and data directories.
 
-## Datos y configuración
+## Data and configuration
 
-Los ajustes, memorias, grabaciones, capturas, exportaciones y registros se almacenan bajo `DATA`. Los datos generados durante el uso no se incluyen en el repositorio.
+Settings, memories, recordings, captures, exports and logs are stored under `DATA`. Data generated during use is not included in the repository.
 
-## Estado del proyecto
+## Project status
 
-IC-SDR se encuentra en desarrollo activo. Las funciones disponibles pueden variar según el receptor, los controladores y las herramientas de decodificación instaladas.
+IC-SDR is under active development. Available features may vary depending on the receiver, drivers and installed decoding tools.
+
+This tree is an English-language fork of [LuislopezMartinez/IC-SDR](https://github.com/LuislopezMartinez/IC-SDR). The desktop UI, logs, and default memory labels are in English. Old Spanish settings files (`PAQUETES`, `SONDAS`, `SIN GRUPO`, and similar) are still accepted and mapped on load.

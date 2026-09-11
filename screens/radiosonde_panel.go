@@ -46,12 +46,12 @@ func NewRadiosondePanel(screen *MainScreen) *RadiosondePanel {
 		b := button("sondeModel"+strconv.Itoa(i), f, 40+float32(i)*110, 100, func() { p.family = f; p.apply(); p.save() })
 		p.models = append(p.models, b)
 	}
-	p.start = button("sondeStart", "INICIAR", 490, 135, func() { p.enabled = !p.enabled; p.apply() })
+	p.start = button("sondeStart", "START", 490, 135, func() { p.enabled = !p.enabled; p.apply() })
 	jsonButton := button("sondeJSON", "JSON", 640, 105, func() { p.export(false) })
 	csvButton := button("sondeCSV", "CSV", 755, 105, func() { p.export(true) })
 	jsonButton.SetColors(actionExportFill, colors.green, colors.text)
 	csvButton.SetColors(actionExportFill, colors.green, colors.text)
-	clearButton := button("sondeClear", "LIMPIAR", 870, 120, func() {
+	clearButton := button("sondeClear", "CLEAR", 870, 120, func() {
 		if screen.receiver != nil {
 			screen.receiver.ClearRadiosondeEvents()
 		}
@@ -107,10 +107,10 @@ func (p *RadiosondePanel) style() {
 		b.SetColors(c, colors.border, colors.text)
 	}
 	if p.enabled {
-		p.start.SetLabel("DETENER")
+		p.start.SetLabel("STOP")
 		p.start.SetColors(actionStopFill, colors.red, colors.text)
 	} else {
-		p.start.SetLabel("INICIAR")
+		p.start.SetLabel("START")
 		p.start.SetColors(actionStartFill, colors.green, colors.text)
 	}
 }
@@ -143,7 +143,7 @@ func sondeNumber(v *float64, format string) string {
 	return fmt.Sprintf(format, *v)
 }
 func (p *RadiosondePanel) DrawPanel() {
-	status := radiosonde.Status{State: "SIN RECEPTOR"}
+	status := radiosonde.Status{State: "NO RECEIVER"}
 	var events []radiosonde.Event
 	if p.screen.receiver != nil {
 		status = p.screen.receiver.RadiosondeStatus()
@@ -153,16 +153,16 @@ func (p *RadiosondePanel) DrawPanel() {
 }
 
 func (p *RadiosondePanel) drawTelemetry(status radiosonde.Status, events []radiosonde.Event) {
-	simpleui.DrawText(fmt.Sprintf("RADIOSONDAS · %.6f MHz · %s · %d tramas · %d bloques perdidos", float64(p.targetHz)/1e6, status.State, len(events), status.Dropped), 40, toolY+7, 12, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf("RADIOSONDES · %.6f MHz · %s · %d frames · %d dropped blocks", float64(p.targetHz)/1e6, status.State, len(events), status.Dropped), 40, toolY+7, 12, colors.cyan)
 	if status.Error != "" {
 		simpleui.DrawText(sondeClip(status.Error, 72), 1020, toolY+36, 12, colors.red)
 	} else {
-		simpleui.DrawText("Sintoniza con el dial / espectro", 1020, toolY+36, 12, colors.muted)
+		simpleui.DrawText("Tune with the dial / spectrum", 1020, toolY+36, 12, colors.muted)
 	}
 	columns := []struct {
 		x     float32
 		label string
-	}{{40, "SONDA"}, {240, "RECIBIDA UTC"}, {370, "LATITUD"}, {500, "LONGITUD"}, {640, "ALT m"}, {750, "Vh m/s"}, {860, "Vv m/s"}, {975, "T °C"}, {1080, "HR %"}, {1180, "P hPa"}, {1300, "REF. ALT"}}
+	}{{40, "SONDE"}, {240, "RECEIVED UTC"}, {370, "LATITUDE"}, {500, "LONGITUDE"}, {640, "ALT m"}, {750, "Vh m/s"}, {860, "Vv m/s"}, {975, "T °C"}, {1080, "HR %"}, {1180, "P hPa"}, {1300, "REF. ALT"}}
 	for _, c := range columns {
 		simpleui.DrawText(c.label, c.x, toolY+72, 12, colors.muted)
 	}
@@ -182,11 +182,11 @@ func (p *RadiosondePanel) drawTelemetry(status radiosonde.Status, events []radio
 		row++
 	}
 	if len(events) == 0 {
-		simpleui.DrawText("Selecciona familia, ajusta frecuencia y pulsa INICIAR. Una frecuencia activa; sin barrido automático.", 40, toolY+99, 13, colors.muted)
+		simpleui.DrawText("Select a family, set the frequency and press START. One active frequency; no automatic sweep.", 40, toolY+99, 13, colors.muted)
 	}
 	footer := p.feedback
 	if footer == "" {
-		footer = "Últimas sondas · -- = dato no disponible · Historial: últimas 2000 tramas · Altitud según referencia original (JSON/CSV)"
+		footer = "Latest sondes · -- = data not available · History: last 2000 frames · Altitude per original reference (JSON/CSV)"
 	}
 	simpleui.DrawText(sondeClip(footer, 180), 40, toolY+172, 12, colors.muted)
 }
@@ -203,7 +203,7 @@ func (p *RadiosondePanel) export(asCSV bool) {
 	}
 	events := p.screen.receiver.RadiosondeEvents()
 	if len(events) == 0 {
-		p.feedback = "No hay tramas para exportar"
+		p.feedback = "No frames to export"
 		return
 	}
 	dir := resources.WritablePath("exports", "radiosonde")

@@ -180,7 +180,7 @@
     "priority": false
   },
   {
-    "name": "APRS ESPAÑA",
+    "name": "APRS SPAIN",
     "frequencyHz": 144800000,
     "mode": "NFM",
     "filterBandwidthHz": 12500,
@@ -196,7 +196,7 @@
     "filterBandwidthHz": 25000,
     "stepHz": 12500,
     "scanEnabled": true,
-    "group": "SIN GRUPO",
+    "group": "UNGROUPED",
     "priority": false
   },
   {
@@ -207,7 +207,7 @@
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
@@ -218,51 +218,51 @@
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
     "name": "BCN ATIS ARR",
-    "description": "Información terminal automática de llegadas.",
+    "description": "Automatic terminal information for arrivals.",
     "frequencyHz": 118655000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
     "name": "BCN APP L",
-    "description": "Barcelona Aproximación, sector bajo.",
+    "description": "Barcelona Approach, low sector.",
     "frequencyHz": 119105000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
     "name": "BCN APP H1",
-    "description": "Barcelona Aproximación, sector alto.",
+    "description": "Barcelona Approach, high sector.",
     "frequencyHz": 121155000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
-    "name": "EMERG AEREA",
-    "description": "Frecuencia internacional de emergencia aeronáutica.",
+    "name": "AIR EMERG",
+    "description": "International aeronautical emergency frequency.",
     "frequencyHz": 121500000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": true
   },
   {
@@ -273,7 +273,7 @@
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
@@ -284,7 +284,7 @@
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
@@ -295,18 +295,18 @@
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
     "name": "BCN ATIS DEP",
-    "description": "Información terminal automática de salidas.",
+    "description": "Automatic terminal information for departures.",
     "frequencyHz": 121980000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
@@ -317,128 +317,128 @@
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
     "name": "BCN TWR BCK",
-    "description": "Frecuencia de respaldo de Barcelona Torre.",
+    "description": "Barcelona Tower backup frequency.",
     "frequencyHz": 122830000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
     "name": "BCN APP BCK",
-    "description": "Frecuencia de respaldo de Barcelona Aproximación.",
+    "description": "Barcelona Approach backup frequency.",
     "frequencyHz": 124705000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
     "name": "BCN APP H2",
-    "description": "Barcelona Aproximación alta y frecuencia TIBA publicada.",
+    "description": "Barcelona high approach and published TIBA frequency.",
     "frequencyHz": 125250000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
     "name": "BCN APP H3",
-    "description": "Barcelona Aproximación, sector alto.",
+    "description": "Barcelona Approach, high sector.",
     "frequencyHz": 126505000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
     "name": "BCN APP H4",
-    "description": "Barcelona Aproximación, sector alto.",
+    "description": "Barcelona Approach, high sector.",
     "frequencyHz": 127700000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
     "name": "BCN APP 131",
-    "description": "Barcelona Aproximación.",
+    "description": "Barcelona Approach.",
     "frequencyHz": 131125000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
     "name": "BCN APP 135",
-    "description": "Barcelona Aproximación.",
+    "description": "Barcelona Approach.",
     "frequencyHz": 135280000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "AEREA BCN",
+    "group": "AIR BCN",
     "priority": false
   },
   {
     "name": "MAR CH06",
-    "description": "Canal 6, seguridad, SAR y comunicaciones entre barcos.",
+    "description": "Channel 6, safety, SAR and ship-to-ship communications.",
     "frequencyHz": 156300000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "MAR CH67",
-    "description": "Canal 67 marítimo, operaciones entre barcos y seguridad.",
+    "description": "Maritime channel 67, ship operations and safety.",
     "frequencyHz": 156375000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "MAR CH08",
-    "description": "Canal 8, comunicaciones entre barcos.",
+    "description": "Channel 8, ship-to-ship communications.",
     "frequencyHz": 156400000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "MAR CH68",
-    "description": "Canal 68 marítimo.",
+    "description": "Maritime channel 68.",
     "frequencyHz": 156425000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
@@ -449,29 +449,29 @@
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "MAR CH69",
-    "description": "Canal 69 marítimo.",
+    "description": "Maritime channel 69.",
     "frequencyHz": 156475000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "MAR CH10",
-    "description": "Canal 10 marítimo.",
+    "description": "Maritime channel 10.",
     "frequencyHz": 156500000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
@@ -482,7 +482,7 @@
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": false,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": true
   },
   {
@@ -493,18 +493,18 @@
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "MAR CH71",
-    "description": "Canal 71 marítimo.",
+    "description": "Maritime channel 71.",
     "frequencyHz": 156575000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
@@ -515,40 +515,40 @@
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "MAR CH72",
-    "description": "Canal 72, comunicaciones entre barcos.",
+    "description": "Channel 72, ship-to-ship communications.",
     "frequencyHz": 156625000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "MAR CH13",
-    "description": "Canal 13, seguridad de navegación y puente a puente.",
+    "description": "Channel 13, navigation safety and bridge-to-bridge.",
     "frequencyHz": 156650000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": true
   },
   {
     "name": "MAR CH73",
-    "description": "Canal 73 marítimo.",
+    "description": "Maritime channel 73.",
     "frequencyHz": 156675000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
@@ -559,18 +559,18 @@
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "MAR CH74",
-    "description": "Canal 74 marítimo.",
+    "description": "Maritime channel 74.",
     "frequencyHz": 156725000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
@@ -581,84 +581,84 @@
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": true
   },
   {
     "name": "MAR CH17",
-    "description": "Canal 17 marítimo.",
+    "description": "Maritime channel 17.",
     "frequencyHz": 156850000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "MAR CH77",
-    "description": "Canal 77, comunicaciones entre barcos.",
+    "description": "Channel 77, ship-to-ship communications.",
     "frequencyHz": 156875000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "AIS 1",
-    "description": "Canal AIS 1 de datos de identificación y navegación.",
+    "description": "AIS channel 1 identification and navigation data.",
     "frequencyHz": 161975000,
     "mode": "NFM",
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": false,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "AIS 2",
-    "description": "Canal AIS 2 de datos de identificación y navegación.",
+    "description": "AIS channel 2 identification and navigation data.",
     "frequencyHz": 162025000,
     "mode": "NFM",
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": false,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "NAVTEX NAC",
-    "description": "NAVTEX nacional en 490 kHz; transmisión digital.",
+    "description": "National NAVTEX on 490 kHz; digital transmission.",
     "frequencyHz": 490000,
     "mode": "USB",
     "filterBandwidthHz": 3000,
     "stepHz": 1000,
     "scanEnabled": false,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "NAVTEX INT",
-    "description": "NAVTEX internacional en 518 kHz; transmisión digital.",
+    "description": "International NAVTEX on 518 kHz; digital transmission.",
     "frequencyHz": 518000,
     "mode": "USB",
     "filterBandwidthHz": 3000,
     "stepHz": 1000,
     "scanEnabled": false,
-    "group": "MARITIMA VHF",
+    "group": "MARINE VHF",
     "priority": false
   },
   {
     "name": "BCN MIL VHF",
-    "description": "Frecuencia militar publicada para Barcelona Torre.",
+    "description": "Published military frequency for Barcelona Tower.",
     "frequencyHz": 122100000,
     "mode": "AM",
     "filterBandwidthHz": 12000,
     "stepHz": 8330,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
@@ -669,7 +669,7 @@
     "filterBandwidthHz": 12000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
@@ -680,7 +680,7 @@
     "filterBandwidthHz": 12000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
@@ -691,7 +691,7 @@
     "filterBandwidthHz": 12000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
@@ -702,7 +702,7 @@
     "filterBandwidthHz": 12000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
@@ -713,18 +713,18 @@
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
     "name": "EMERG MIL",
-    "description": "Frecuencia internacional de emergencia aeronáutica militar.",
+    "description": "International military aeronautical emergency frequency.",
     "frequencyHz": 243000000,
     "mode": "AM",
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": true
   },
   {
@@ -735,18 +735,18 @@
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
     "name": "BCN MIL 257",
-    "description": "Frecuencia militar publicada para Barcelona.",
+    "description": "Published military frequency for Barcelona.",
     "frequencyHz": 257800000,
     "mode": "AM",
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
@@ -757,7 +757,7 @@
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
@@ -768,7 +768,7 @@
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
@@ -779,7 +779,7 @@
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
@@ -790,7 +790,7 @@
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
@@ -801,7 +801,7 @@
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
@@ -812,7 +812,7 @@
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
@@ -823,7 +823,7 @@
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
@@ -834,12 +834,12 @@
     "filterBandwidthHz": 25000,
     "stepHz": 25000,
     "scanEnabled": true,
-    "group": "MIL AEREA BCN",
+    "group": "MIL AIR BCN",
     "priority": false
   },
   {
     "name": "ISS VOZ SSTV",
-    "description": "Bajada de voz ARISS, contactos escolares y campañas SSTV.",
+    "description": "ARISS voice downlink, school contacts and SSTV campaigns.",
     "frequencyHz": 145800000,
     "mode": "NFM",
     "filterBandwidthHz": 25000,
@@ -850,7 +850,7 @@
   },
   {
     "name": "ISS PACKET VHF",
-    "description": "Frecuencia VHF alternativa o histórica de APRS y packet desde la ISS.",
+    "description": "Alternative or historical VHF frequency for APRS and packet from the ISS.",
     "frequencyHz": 145825000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,

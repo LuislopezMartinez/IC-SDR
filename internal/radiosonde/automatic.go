@@ -13,7 +13,7 @@ type autoDetection struct {
 // restarting or cycling away while a short transmission is being received.
 func (d *Decoder) startAutomatic(frequency, center int64) {
 	d.mu.Lock()
-	d.status = Status{Family: "AUTO", FrequencyHz: frequency, State: "AUTO · BUSCANDO"}
+	d.status = Status{Family: "AUTO", FrequencyHz: frequency, State: "AUTO · SEARCHING"}
 	d.center = center
 	d.detections = make(map[string]autoDetection)
 	generation := d.generation

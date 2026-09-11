@@ -62,7 +62,7 @@ type Decoder struct {
 }
 
 func New(inputRate float64, executable string) *Decoder {
-	return &Decoder{inputRate: inputRate, executable: executable, state: "DETENIDO"}
+	return &Decoder{inputRate: inputRate, executable: executable, state: "STOPPED"}
 }
 
 func (d *Decoder) Configure(enabled bool, frequencyHz, centerHz int64, bandwidthHz int) {
@@ -110,7 +110,7 @@ func (d *Decoder) configureMultichannel(frequencyHz, centerHz int64, bandwidthHz
 	d.children = children
 	d.frequencyHz, d.centerHz, d.bandwidthHz = frequencyHz, centerHz, bandwidthHz
 	d.outputRate = 256_000
-	d.state = fmt.Sprintf("MULTICANAL %d×250 kHz", len(centers))
+	d.state = fmt.Sprintf("MULTICHANNEL %d×250 kHz", len(centers))
 	d.lastError = ""
 	d.mu.Unlock()
 	d.running.Store(true)
@@ -128,7 +128,7 @@ func multichannelCenters(frequencyHz int64, bandwidthHz int) []int64 {
 
 func (d *Decoder) start() {
 	if d.executable == "" {
-		d.setError(errors.New("rtl_433 no configurado"))
+		d.setError(errors.New("rtl_433 not configured"))
 		return
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -154,7 +154,7 @@ func (d *Decoder) start() {
 	}
 	d.running.Store(true)
 	d.mu.Lock()
-	d.state, d.lastError = "ESPERANDO SEÑAL", ""
+	d.state, d.lastError = "WAITING FOR SIGNAL", ""
 	d.mu.Unlock()
 	go d.transport(listener)
 	go d.readEvents(stdout)
@@ -327,7 +327,7 @@ func (d *Decoder) Stop() {
 		children := d.children
 		d.children = nil
 		d.manager = false
-		d.state = "DETENIDO"
+		d.state = "STOPPED"
 		d.mu.Unlock()
 		for _, child := range children {
 			child.Stop()
@@ -348,6 +348,6 @@ func (d *Decoder) Stop() {
 	case <-time.After(time.Second):
 	}
 	d.mu.Lock()
-	d.state = "DETENIDO"
+	d.state = "STOPPED"
 	d.mu.Unlock()
 }

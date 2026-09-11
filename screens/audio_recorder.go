@@ -293,7 +293,7 @@ func (r *AudioRecorder) writeLoop() {
 					completedPath = fallback
 				}
 				r.mu.Lock()
-				r.lastError = "No se pudo crear el MP3; se conservó el WAV: " + err.Error()
+				r.lastError = "Could not create MP3; WAV was kept: " + err.Error()
 				r.mu.Unlock()
 			} else {
 				completedPath = finalPath

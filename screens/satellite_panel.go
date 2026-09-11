@@ -46,9 +46,9 @@ func NewSatellitePanel(screen *MainScreen) *SatellitePanel {
 	cache := resources.WritablePath("cache", "satellites-celestrak.json")
 	p := &SatellitePanel{screen: screen, tracker: satellite.NewTracker(cache), snapshotPath: resources.WritablePath("cache", "satellites-live.json"), stationPath: resources.WritablePath("config", "satellite-station.json")}
 	p.loadStation()
-	p.groupSelect = simpleui.NewDropdown("satelliteGroup", 470, toolY+30, 250, 34, "GRUPO", nil, uiControlFontSize)
-	p.satelliteSelect = simpleui.NewDropdown("satelliteObject", 730, toolY+30, 260, 34, "SATÉLITE", nil, uiControlFontSize)
-	p.signalSelect = simpleui.NewDropdown("satelliteSignal", 1000, toolY+30, 280, 34, "SEÑAL", nil, uiControlFontSize)
+	p.groupSelect = simpleui.NewDropdown("satelliteGroup", 470, toolY+30, 250, 34, "GROUP", nil, uiControlFontSize)
+	p.satelliteSelect = simpleui.NewDropdown("satelliteObject", 730, toolY+30, 260, 34, "SATELLITE", nil, uiControlFontSize)
+	p.signalSelect = simpleui.NewDropdown("satelliteSignal", 1000, toolY+30, 280, 34, "SIGNAL", nil, uiControlFontSize)
 	p.groupSelect.SetMaxVisibleItems(8)
 	p.satelliteSelect.SetMaxVisibleItems(8)
 	p.signalSelect.SetMaxVisibleItems(6)
@@ -71,27 +71,27 @@ func NewSatellitePanel(screen *MainScreen) *SatellitePanel {
 		p.controls = append(p.controls, b)
 		return b
 	}
-	tune := button("satelliteTune", "SINTONIZAR", 1290, 135, p.tune)
+	tune := button("satelliteTune", "TUNE", 1290, 135, p.tune)
 	tune.SetColors(actionStartFill, colors.green, colors.text)
-	update := button("satelliteUpdate", "ACTUALIZAR", 1435, 140, p.update)
+	update := button("satelliteUpdate", "UPDATE", 1435, 140, p.update)
 	update.SetColors(actionExportFill, colors.blue, colors.text)
 	mapButton := button("satelliteMap", "▦  MAPA", 1290, 285, p.openMap)
 	mapButton.SetBounds(rl.Rectangle{X: 1290, Y: toolY + 78, Width: 285, Height: 30})
 	mapButton.SetColors(colors.blue, colors.border, colors.text)
 	station := p.tracker.Station()
-	p.searchField = simpleui.NewTextField("satelliteSearch", 40, toolY+30, 390, 34, "BUSCAR NOMBRE, NORAD O GRUPO", 13)
+	p.searchField = simpleui.NewTextField("satelliteSearch", 40, toolY+30, 390, 34, "SEARCH NAME, NORAD OR GROUP", 13)
 	p.searchField.SetMaxLength(64)
 	p.searchField.OnChange(p.updateSearch)
-	p.stationName = simpleui.NewTextField("satelliteStationName", 470, toolY+78, 140, 30, "ESTACIÓN", 12)
-	p.stationLat = simpleui.NewTextField("satelliteStationLat", 620, toolY+78, 110, 30, "LATITUD", 12)
-	p.stationLon = simpleui.NewTextField("satelliteStationLon", 740, toolY+78, 110, 30, "LONGITUD", 12)
+	p.stationName = simpleui.NewTextField("satelliteStationName", 470, toolY+78, 140, 30, "STATION", 12)
+	p.stationLat = simpleui.NewTextField("satelliteStationLat", 620, toolY+78, 110, 30, "LATITUDE", 12)
+	p.stationLon = simpleui.NewTextField("satelliteStationLon", 740, toolY+78, 110, 30, "LONGITUDE", 12)
 	p.stationAlt = simpleui.NewTextField("satelliteStationAlt", 860, toolY+78, 80, 30, "ALT m", 12)
 	p.stationName.SetText(station.Name)
 	p.stationLat.SetText(strconv.FormatFloat(station.Latitude, 'f', 5, 64))
 	p.stationLon.SetText(strconv.FormatFloat(station.Longitude, 'f', 5, 64))
 	p.stationAlt.SetText(strconv.FormatFloat(station.AltitudeMeters, 'f', 0, 64))
 	p.controls = append(p.controls, p.searchField, p.stationName, p.stationLat, p.stationLon, p.stationAlt)
-	applyStation := button("satelliteStationApply", "APLICAR", 950, 115, p.applyStation)
+	applyStation := button("satelliteStationApply", "APPLY", 950, 115, p.applyStation)
 	applyStation.SetBounds(rl.Rectangle{X: 950, Y: toolY + 78, Width: 115, Height: 30})
 	p.populate()
 	p.SetVisible(false)
@@ -208,7 +208,7 @@ func (p *SatellitePanel) selectSearchMatch(sat satellite.Satellite) {
 		}
 	}
 	p.populateSatellites(sat.NORAD)
-	p.feedback = "BÚSQUEDA: " + sat.Name
+	p.feedback = "SEARCH: " + sat.Name
 }
 func (p *SatellitePanel) refreshSignals(s satellite.Satellite) {
 	items := make([]string, len(s.Signals))
@@ -216,7 +216,7 @@ func (p *SatellitePanel) refreshSignals(s satellite.Satellite) {
 		items[i] = x.Name + " · " + x.Mode
 	}
 	if len(items) == 0 {
-		items = []string{"Sin frecuencia catalogada"}
+		items = []string{"No catalogued frequency"}
 	}
 	p.signalSelect.SetItems(items)
 	p.signalSelect.SetSelected(0)
@@ -239,7 +239,7 @@ func (p *SatellitePanel) applyStation() {
 	alt, altErr := strconv.ParseFloat(strings.TrimSpace(p.stationAlt.Text()), 64)
 	name := strings.TrimSpace(p.stationName.Text())
 	if name == "" || latErr != nil || lonErr != nil || altErr != nil || lat < -90 || lat > 90 || lon < -180 || lon > 180 || alt < -500 || alt > 9000 {
-		p.feedback = "ESTACIÓN NO VÁLIDA · REVISA NOMBRE, LATITUD, LONGITUD Y ALTITUD"
+		p.feedback = "INVALID STATION · CHECK NAME, LATITUDEE, LONGITUDEE AND ALTITUDEE"
 		return
 	}
 	station := satellite.Station{Name: name, Latitude: lat, Longitude: lon, AltitudeMeters: alt}
@@ -247,10 +247,10 @@ func (p *SatellitePanel) applyStation() {
 	data, _ := json.MarshalIndent(station, "", "  ")
 	_ = os.MkdirAll(filepath.Dir(p.stationPath), 0755)
 	if err := os.WriteFile(p.stationPath, data, 0644); err != nil {
-		p.feedback = "NO SE PUDO GUARDAR LA ESTACIÓN: " + err.Error()
+		p.feedback = "COULD NOT SAVE STATION: " + err.Error()
 		return
 	}
-	p.feedback = "ESTACIÓN APLICADA: " + name
+	p.feedback = "STATION APPLIED: " + name
 	p.writeSnapshot(true)
 }
 func (p *SatellitePanel) SetVisible(v bool) {
@@ -276,7 +276,7 @@ func (p *SatellitePanel) Tick() {
 			if err != nil {
 				p.feedback = "ERROR: " + err.Error()
 			} else {
-				p.feedback = "CATÁLOGO ACTUALIZADO"
+				p.feedback = "CATALOG UPDATED"
 				p.populate()
 				p.writeSnapshot(true)
 			}
@@ -304,7 +304,7 @@ func (p *SatellitePanel) update() {
 		return
 	}
 	p.updating = true
-	p.feedback = "ACTUALIZANDO CATÁLOGO…"
+	p.feedback = "UPDATING CATALOG…"
 	p.updateDone = make(chan error, 1)
 	done := p.updateDone
 	go func() {
@@ -322,7 +322,7 @@ func (p *SatellitePanel) tune() {
 	signals := sats[i].Signals
 	j := p.signalSelect.SelectedIndex()
 	if j < 0 || j >= len(signals) || signals[j].DownlinkHz <= 0 {
-		p.feedback = "ESTE OBJETO NO TIENE FRECUENCIA SDR CATALOGADA"
+		p.feedback = "THIS OBJECT HAS NO CATALOGUED SDR FREQUENCY"
 		return
 	}
 	hz := signals[j].DownlinkHz
@@ -338,7 +338,7 @@ func (p *SatellitePanel) tune() {
 		}
 		p.screen.receiver.SetDemodulator(mode, hz, p.screen.demodBandwidthHz)
 	}
-	p.feedback = fmt.Sprintf("SINTONIZADO EN %.6f MHz", float64(hz)/1e6)
+	p.feedback = fmt.Sprintf("TUNED TO %.6f MHz", float64(hz)/1e6)
 	p.screen.markSettingsDirty()
 }
 func (p *SatellitePanel) writeSnapshot(force bool) {
@@ -373,7 +373,7 @@ func (p *SatellitePanel) readMapSelection() {
 	for _, sat := range p.sortedSatellites() {
 		if sat.NORAD == norad {
 			p.selectSearchMatch(sat)
-			p.feedback = "SELECCIONADO EN EL MAPA: " + sat.Name
+			p.feedback = "SELECTED ON MAP: " + sat.Name
 			break
 		}
 	}
@@ -403,25 +403,25 @@ func (p *SatellitePanel) openMap() {
 	p.writeSnapshot(true)
 	if p.viewer != nil && p.viewer.Process != nil {
 		focusRTL433Viewer(p.viewer.Process.Pid)
-		p.feedback = "MAPA YA ABIERTO"
+		p.feedback = "MAP ALREADY OPEN"
 		return
 	}
 	exe, err := os.Executable()
 	if err != nil {
-		p.feedback = "ERROR AL ABRIR MAPA"
+		p.feedback = "ERROR OPENING MAP"
 		return
 	}
 	cmd := exec.Command(exe, "--satellite-map", p.snapshotPath)
 	cmd.SysProcAttr = rtl433ViewerProcessAttributes()
 	if err = cmd.Start(); err != nil {
-		p.feedback = "ERROR AL ABRIR MAPA"
+		p.feedback = "ERROR OPENING MAP"
 		return
 	}
 	p.viewer = cmd
 	p.viewerDone = make(chan struct{})
 	done := p.viewerDone
 	go func() { _ = cmd.Wait(); close(done) }()
-	p.feedback = "MAPA ABIERTO"
+	p.feedback = "MAP OPENED"
 }
 
 func (p *SatellitePanel) DrawPanel() {
@@ -436,10 +436,10 @@ func (p *SatellitePanel) DrawPanel() {
 	eye := "BAJO EL HORIZONTE"
 	c := colors.muted
 	if selected.Visible {
-		eye = "VISIBLE DESDE " + snap.Station.Name
+		eye = "VISIBLE FROM " + snap.Station.Name
 		c = colors.green
 	}
-	simpleui.DrawText("SATÉLITES · "+selected.Name+" · "+eye, 40, toolY+7, 12, c)
+	simpleui.DrawText("SATELLITES · "+selected.Name+" · "+eye, 40, toolY+7, 12, c)
 	if p.feedback != "" {
 		simpleui.DrawText(sondeClip(p.feedback, 72), 1035, toolY+7, 11, colors.muted)
 	}
@@ -448,13 +448,13 @@ func (p *SatellitePanel) DrawPanel() {
 		freq = fmt.Sprintf("%.6f MHz", float64(selected.DownlinkHz)/1e6)
 	}
 
-	simpleui.DrawText("SATÉLITE", 40, toolY+73, 10, colors.muted)
-	simpleui.DrawText("GRUPO", 235, toolY+73, 10, colors.muted)
+	simpleui.DrawText("SATELLITE", 40, toolY+73, 10, colors.muted)
+	simpleui.DrawText("GROUP", 235, toolY+73, 10, colors.muted)
 	simpleui.DrawText("NORAD", 365, toolY+73, 10, colors.muted)
 	if p.searchField.Text() == "" {
-		simpleui.DrawText("Escribe para buscar en todo el catálogo", 40, toolY+96, 12, colors.muted)
+		simpleui.DrawText("Type to search the whole catalog", 40, toolY+96, 12, colors.muted)
 	} else if len(p.searchMatches) == 0 {
-		simpleui.DrawText("Sin coincidencias", 40, toolY+96, 12, colors.muted)
+		simpleui.DrawText("No matches", 40, toolY+96, 12, colors.muted)
 	} else {
 		mouse := simpleui.MousePosition()
 		for i, sat := range p.searchMatches {
@@ -470,7 +470,7 @@ func (p *SatellitePanel) DrawPanel() {
 		}
 	}
 
-	simpleui.DrawText("SELECCIÓN ACTUAL", 470, toolY+119, 10, colors.muted)
+	simpleui.DrawText("CURRENT SELECTION", 470, toolY+119, 10, colors.muted)
 	simpleui.DrawText(fmt.Sprintf("AZ %.1f°   EL %.1f°   ALT %.0f km   DIST %.0f km", selected.Azimuth, selected.Elevation, selected.AltitudeKM, selected.RangeKM), 495, toolY+142, 12, colors.text)
 	simpleui.DrawText(fmt.Sprintf("%s · %s · %d objetos · %s", freq, selected.Mode, len(snap.Satellites), snap.Source), 495, toolY+168, 11, colors.muted)
 }

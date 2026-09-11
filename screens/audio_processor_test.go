@@ -7,7 +7,7 @@ import (
 
 func TestAudioProcessorProducesFiniteBoundedOutput(t *testing.T) {
 	processor := NewAudioProcessor()
-	processor.Configure(100, 4000, true, [5]float32{3, -2, 1.5, 0, -1}, "FUERTE")
+	processor.Configure(100, 4000, true, [5]float32{3, -2, 1.5, 0, -1}, "STRONG")
 	samples := make([]float32, 4096)
 	for index := range samples {
 		samples[index] = float32(.8 * math.Sin(2*math.Pi*1000*float64(index)/audioSampleRate))

@@ -35,7 +35,7 @@ func main() {
 		}
 		if second == 4 {
 			receiver.SetCenterFrequency(14_261_000)
-			fmt.Println("      retune frecuencia inicial")
+			fmt.Println("      retune initial frequency")
 		}
 		stats := receiver.Snapshot(spectrum)
 		fmt.Printf("[%d/5] %s · samples=%d · fft=%d · timeout=%d · bad=%d · audio=%d buffered=%d\n",
@@ -45,8 +45,8 @@ func main() {
 
 	stats := receiver.Snapshot(spectrum)
 	if stats.ReceivedSamples == 0 || stats.FFTBlocks == 0 || stats.RMS == 0 || stats.InvalidSamples != 0 {
-		fmt.Fprintln(os.Stderr, "IQ CHECK FAILED: el stream no cumple la validación mínima")
+		fmt.Fprintln(os.Stderr, "IQ CHECK FAILED: stream does not meet the minimum validation")
 		os.Exit(2)
 	}
-	fmt.Println("IQ CHECK OK: muestras IQ válidas y FFT alimentada correctamente")
+	fmt.Println("IQ CHECK OK: valid IQ samples and FFT fed correctly")
 }

@@ -21,8 +21,8 @@ var filterCatalog = map[string][]FilterPreset{
 	"NFM":      {{"FIL1", "ANCHO", 15000}, {"FIL2", "MEDIO", 12500}, {"FIL3", "ESTRECHO", 8500}, {"CUSTOM", "PERSONALIZADO", 11500}},
 	"WFM":      {{"FIL1", "ANCHO", 220000}, {"FIL2", "MEDIO", 180000}, {"FIL3", "ESTRECHO", 150000}, {"CUSTOM", "PERSONALIZADO", 200000}},
 	"DMR BETA": {{"FIL1", "ANCHO", 15000}, {"FIL2", "DMR 12,5", 12500}, {"FIL3", "ESTRECHO", 10000}, {"CUSTOM", "PERSONALIZADO", 12500}},
-	"ADS-B":    {{"FIL1", "AMPLIO", 1800000}, {"FIL2", "COMPLETO", 2000000}, {"FIL3", "REDUCIDO", 1500000}, {"CUSTOM", "PERSONALIZADO", 2000000}},
-	"UAT":      {{"FIL1", "AMPLIO", 1800000}, {"FIL2", "COMPLETO", 2000000}, {"FIL3", "REDUCIDO", 1500000}, {"CUSTOM", "PERSONALIZADO", 2000000}},
+	"ADS-B":    {{"FIL1", "AMPLIO", 1800000}, {"FIL2", "COMPLETO", 2000000}, {"FIL3", "NETUCIDO", 1500000}, {"CUSTOM", "PERSONALIZADO", 2000000}},
+	"UAT":      {{"FIL1", "AMPLIO", 1800000}, {"FIL2", "COMPLETO", 2000000}, {"FIL3", "NETUCIDO", 1500000}, {"CUSTOM", "PERSONALIZADO", 2000000}},
 	"TETRA":    {{"FIL1", "TETRA 25", 25000}, {"FIL2", "MEDIO", 22000}, {"FIL3", "ESTRECHO", 18000}, {"CUSTOM", "PERSONALIZADO", 25000}},
 }
 
@@ -45,8 +45,8 @@ func NewFilterSelector(onSelect func(FilterPreset)) *FilterSelector {
 	selector.custom = simpleui.NewSlider("filterCustom", 510, 500, 580, 34, 0, 1, .5)
 	selector.custom.SetStep(.001)
 	selector.custom.OnChange(func(value float32) { selector.setCustomNormalized(value) })
-	selector.cancel = simpleui.NewButton("filterCancel", 564, 590, 216, 50, "CANCELAR", 17)
-	selector.apply = simpleui.NewButton("filterApply", 820, 590, 216, 50, "APLICAR", 17)
+	selector.cancel = simpleui.NewButton("filterCancel", 564, 590, 216, 50, "CANCEL", 17)
+	selector.apply = simpleui.NewButton("filterApply", 820, 590, 216, 50, "APPLY", 17)
 	selector.cancel.OnClick(selector.cancelChanges)
 	selector.apply.OnClick(func() { selector.emit(); selector.open = false })
 	return selector
@@ -129,7 +129,7 @@ func (selector *FilterSelector) DrawOverlay() {
 	rl.DrawRectangleRounded(panel, .025, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(panel, .025, 8, 2, colors.blue)
 	rl.DrawRectangleRounded(rl.Rectangle{X: 410, Y: 150, Width: 10, Height: 530}, .5, 8, colors.blue)
-	drawCentered("FILTRO "+selector.mode, rl.Rectangle{X: 450, Y: 180, Width: 700, Height: 45}, 27, colors.text)
+	drawCentered("FILTER "+selector.mode, rl.Rectangle{X: 450, Y: 180, Width: 700, Height: 45}, 27, colors.text)
 	for index, preset := range filterCatalog[selector.mode] {
 		bounds := selector.presetBounds(index)
 		fill := colors.panelAlt
@@ -147,7 +147,7 @@ func (selector *FilterSelector) DrawOverlay() {
 		drawCentered(preset.Description, rl.Rectangle{X: bounds.X, Y: bounds.Y + 36, Width: bounds.Width, Height: 18}, 11, labelColor)
 		drawCentered(formatFilterBandwidth(preset.BandwidthHz), rl.Rectangle{X: bounds.X, Y: bounds.Y + 58, Width: bounds.Width, Height: 18}, 14, colors.cyan)
 	}
-	drawCentered("CUSTOM permite ajustar y recordar un ancho para cada modo.", rl.Rectangle{X: 460, Y: 420, Width: 680, Height: 36}, 15, colors.text)
+	drawCentered("CUSTOM lets you set and remember a width for each mode.", rl.Rectangle{X: 460, Y: 420, Width: 680, Height: 36}, 15, colors.text)
 	if selector.selected[selector.mode] == 3 {
 		selector.custom.Draw()
 		minimum, maximum, _ := customFilterRange(selector.mode)

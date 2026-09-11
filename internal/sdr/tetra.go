@@ -9,7 +9,7 @@ func (r *Receiver) ConfigureTETRA(enabled bool) {
 }
 func (r *Receiver) TETRAStatus() tetra.Status {
 	if r.tetra == nil {
-		return tetra.Status{State: "NO DISPONIBLE"}
+		return tetra.Status{State: "UNAVAILABLE"}
 	}
 	return r.tetra.Snapshot()
 }

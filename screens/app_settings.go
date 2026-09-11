@@ -82,6 +82,8 @@ func loadAppSettings(path string, screen *MainScreen) {
 	if json.Unmarshal(data, &settings) != nil || settings.Version != appSettingsVersion {
 		return
 	}
+	settings.BandName = englishBandName(settings.BandName)
+	settings.APRSView = englishAPRSView(settings.APRSView)
 	if validTheme(settings.Theme) {
 		screen.themeName = strings.ToUpper(settings.Theme)
 	}
@@ -205,7 +207,7 @@ func loadAppSettings(path string, screen *MainScreen) {
 	if settings.RTL433BandwidthHz == 250_000 || settings.RTL433BandwidthHz == 500_000 || settings.RTL433BandwidthHz == 1_000_000 || settings.RTL433BandwidthHz == 2_000_000 {
 		screen.rtl433BandwidthHz = settings.RTL433BandwidthHz
 	}
-	if settings.APRSView == "PAQUETES" || settings.APRSView == "ESTACIONES" || settings.APRSView == "MENSAJES" || settings.APRSView == "RADAR" || settings.APRSView == "RAW" {
+	if settings.APRSView == "PACKETS" || settings.APRSView == "STATIONS" || settings.APRSView == "MESSAGES" || settings.APRSView == "RADAR" || settings.APRSView == "RAW" {
 		screen.aprsView = settings.APRSView
 	}
 	if settings.SubtoneMode == "AUTO" || settings.SubtoneMode == "CTCSS" || settings.SubtoneMode == "DCS" || settings.SubtoneMode == "OFF" {
@@ -414,4 +416,28 @@ func validTool(tool string) bool {
 
 func validScanResume(value string) bool {
 	return value == "AUTO" || value == "DELAY" || value == "HOLD"
+}
+
+func englishAPRSView(view string) string {
+	switch view {
+	case "PAQUETES":
+		return "PACKETS"
+	case "ESTACIONES":
+		return "STATIONS"
+	case "MENSAJES":
+		return "MESSAGES"
+	default:
+		return view
+	}
+}
+
+func englishBandName(name string) string {
+	switch name {
+	case "SONDAS":
+		return "RADIOSONDES"
+	case "FUERA DE BANDA":
+		return "OUT OF BAND"
+	default:
+		return name
+	}
 }

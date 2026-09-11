@@ -286,31 +286,31 @@ func (p *ScanPanel) DrawPanel() {
 	}())
 	simpleui.DrawTextStyled(fmt.Sprintf("RANGO %.5f–%.5f MHz  ·  DISPARO SQL %d dBm", float64(p.minimumHz)/1e6, float64(p.maximumHz)/1e6, p.screen.squelchThreshold), 720, 645, 13, simpleui.FontSemiBold, colors.muted)
 	memoryColor := rl.Color{R: 45, G: 58, B: 72, A: 255}
-	memoryDetail := "OFF · Sintonizar el pico"
+	memoryDetail := "OFF · Tune the peak"
 	if p.centerToMemory {
 		memoryColor = rl.Color{R: 20, G: 120, B: 155, A: 255}
-		memoryDetail = "ON · Si coincide con un canal"
+		memoryDetail = "ON · If it matches a channel"
 	}
-	drawScanButton(42, 678, 220, 58, "AJUSTAR A MEMORIA", memoryDetail, memoryColor)
-	drawScanButton(276, 678, 220, 58, "AL PERDER LA SEÑAL  ▾", p.resumeDescription(), rl.Color{R: 150, G: 95, B: 18, A: 255})
+	drawScanButton(42, 678, 220, 58, "SNAP TO MEMORY", memoryDetail, memoryColor)
+	drawScanButton(276, 678, 220, 58, "WHEN SIGNAL LOST  ▾", p.resumeDescription(), rl.Color{R: 150, G: 95, B: 18, A: 255})
 	drawScanButton(510, 678, 190, 58, fmt.Sprintf("ESPERA %d s  ▾", p.dwellMs/1000), "Antes de continuar", rl.Color{R: 70, G: 68, B: 55, A: 255})
-	startColor, startText, startDetail := rl.Color{R: 25, G: 125, B: 65, A: 255}, "INICIAR ESCANEO", "Buscar entre MIN y MAX"
+	startColor, startText, startDetail := rl.Color{R: 25, G: 125, B: 65, A: 255}, "START SCAN", "Search between MIN and MAX"
 	if p.running {
-		startColor, startText, startDetail = rl.Color{R: 155, G: 42, B: 35, A: 255}, "DETENER ESCANEO", "Conservar frecuencia actual"
+		startColor, startText, startDetail = rl.Color{R: 155, G: 42, B: 35, A: 255}, "STOP SCAN", "Keep current frequency"
 	}
 	drawScanButton(714, 678, 190, 58, startText, startDetail, startColor)
-	saveTitle, saveDetail := "GUARDAR MEMORIA", "Frecuencia y ajustes actuales"
+	saveTitle, saveDetail := "SAVE MEMORY", "Current frequency and settings"
 	saveColor := rl.Color{R: 25, G: 85, B: 145, A: 255}
 	if rl.GetTime() < p.saveFeedbackUntil {
-		saveTitle, saveDetail = "MEMORIA GUARDADA  ✓", p.savedMemoryName
+		saveTitle, saveDetail = "MEMORY SAVED  ✓", p.savedMemoryName
 		saveColor = rl.Color{R: 24, G: 125, B: 70, A: 255}
 	}
 	drawScanButton(918, 678, 190, 58, saveTitle, saveDetail, saveColor)
-	drawScanButton(1122, 678, 260, 58, "DURANTE LA ESCUCHA  ▾", p.policyDescription(), rl.Color{R: 45, G: 58, B: 72, A: 255})
+	drawScanButton(1122, 678, 260, 58, "DURANTE LA LISTEN  ▾", p.policyDescription(), rl.Color{R: 45, G: 58, B: 72, A: 255})
 	if p.choiceMenu != "" {
 		p.drawChoiceStrip()
 	} else {
-		simpleui.DrawTextStyled("Arrastra MIN y MAX sobre el FFT · El nivel SQL es el disparo del scanner", 42, 760, 14, simpleui.FontRegular, colors.muted)
+		simpleui.DrawTextStyled("Drag MIN and MAX on the FFT · SQL level is the scanner trigger", 42, 760, 14, simpleui.FontRegular, colors.muted)
 	}
 }
 
@@ -404,7 +404,7 @@ func (p *ScanPanel) choiceOptions() ([]string, int) {
 	switch p.choiceMenu {
 	case "resume":
 		selected := map[string]int{"AUTO": 0, "DELAY": 1, "HOLD": 2}[p.resume]
-		return []string{"CONTINUAR RÁPIDO", "ESPERAR Y CONTINUAR", "QUEDARSE EN LA SEÑAL"}, selected
+		return []string{"CONTINUE FAST", "WAIT AND CONTINUE", "STAY ON SIGNAL"}, selected
 	case "dwell":
 		values := []int{1000, 2000, 3000, 5000, 10000}
 		selected := 0
@@ -421,7 +421,7 @@ func (p *ScanPanel) choiceOptions() ([]string, int) {
 		if p.policy == "STRONGER" {
 			selected = 1
 		}
-		return []string{"MANTENER SEÑAL ACTUAL", "SALTAR A OTRA MÁS FUERTE"}, selected
+		return []string{"KEEP CURRENT SIGNAL", "JUMP TO A STRONGER ONE"}, selected
 	}
 	return nil, -1
 }
@@ -469,37 +469,37 @@ func (p *ScanPanel) selectChoice(mouse rl.Vector2) bool {
 func (p *ScanPanel) resumeDescription() string {
 	switch p.resume {
 	case "AUTO":
-		return "Continuar rápidamente"
+		return "Continue quickly"
 	case "HOLD":
-		return "Permanecer detenido"
+		return "Stay stopped"
 	default:
-		return "Esperar y continuar"
+		return "Wait and continue"
 	}
 }
 
 func (p *ScanPanel) policyDescription() string {
 	if p.policy == "STRONGER" {
-		return "Saltar a otra más fuerte"
+		return "Jump to a stronger one"
 	}
-	return "Mantener señal actual"
+	return "Keep current signal"
 }
 
 func (p *ScanPanel) displayStatus() string {
 	switch {
 	case p.status == "READY":
-		return "PREPARADO"
+		return "READY"
 	case p.status == "SCANNING":
-		return "BUSCANDO TRANSMISIONES"
+		return "SEARCHING FOR TRANSMISSIONS"
 	case p.status == "HOLD":
-		return "ESCUCHA RETENIDA"
+		return "HOLDING AUDIO"
 	case strings.HasPrefix(p.status, "VERIFY"):
-		return "VERIFICANDO" + strings.TrimPrefix(p.status, "VERIFY")
+		return "VERIFYING" + strings.TrimPrefix(p.status, "VERIFY")
 	case strings.HasPrefix(p.status, "SIGNAL"):
-		return "ESCUCHANDO" + strings.TrimPrefix(p.status, "SIGNAL")
+		return "LISTENING" + strings.TrimPrefix(p.status, "SIGNAL")
 	case strings.HasPrefix(p.status, "LISTENING"):
-		return "ESCUCHANDO" + strings.TrimPrefix(p.status, "LISTENING")
+		return "LISTENING" + strings.TrimPrefix(p.status, "LISTENING")
 	case strings.HasPrefix(p.status, "JUMP"):
-		return "CAMBIO" + strings.TrimPrefix(p.status, "JUMP")
+		return "JUMP" + strings.TrimPrefix(p.status, "JUMP")
 	default:
 		return p.status
 	}

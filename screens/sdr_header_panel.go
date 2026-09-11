@@ -115,7 +115,7 @@ func (p *SDRHeaderPanel) submit() {
 func (p *SDRHeaderPanel) refresh() {
 	s := p.current
 	rtl := s.Driver == "rtlsdr"
-	status := "SDR · SIN DISPOSITIVO"
+	status := "SDR · NO DEVICE"
 	if s.Available {
 		status = fmt.Sprintf("SDR %s · %s", s.Device, s.Driver)
 	}
@@ -173,7 +173,7 @@ func (p *SDRHeaderPanel) refreshLabels() {
 		direct := []string{"DIRECT · OFF", "DIRECT · I", "DIRECT · Q"}
 		mode := min(max(p.current.DirectSampling, 0), 2)
 		p.ifLabel.SetText(direct[mode])
-		p.setpointLabel.SetText("SETPOINT · NO DISP.")
+		p.setpointLabel.SetText("SETPOINT · N/A")
 		return
 	}
 	p.rfLabel.SetText(fmt.Sprintf("RF / LNA  %.0f", p.current.RFGain))

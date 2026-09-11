@@ -73,9 +73,9 @@ func (p *AudioProcessor) Process(samples []float32) {
 			}
 		}
 		switch p.profile {
-		case "SUAVE":
+		case "SOFT":
 			value *= .82
-		case "FUERTE":
+		case "STRONG":
 			value = float32(math.Tanh(float64(value*1.8))) * .92
 		default:
 			value = float32(math.Tanh(float64(value*1.2))) * .94

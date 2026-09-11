@@ -183,7 +183,7 @@ func (d *Decoder) start() error {
 		return err
 	}
 	if _, err = os.Stat(exePath); err != nil {
-		d.status.State, d.status.Detail = "ERROR", "No se encuentra el decoder DMR"
+		d.status.State, d.status.Detail = "ERROR", "DMR decoder not found"
 		d.mu.Unlock()
 		return err
 	}
@@ -239,9 +239,9 @@ func (d *Decoder) start() error {
 		d.process, d.stdin, d.front = nil, nil, nil
 		d.status.State = "ERROR"
 		if err != nil {
-			d.status.Detail = "El decoder DMR terminó: " + err.Error()
+			d.status.Detail = "DMR decoder exited: " + err.Error()
 		} else {
-			d.status.Detail = "El decoder DMR terminó"
+			d.status.Detail = "DMR decoder exited"
 		}
 		shouldRestart := d.desiredEnabled && d.restartAttempts < 3 && !d.resyncing
 		restartAttempt := 0
@@ -348,7 +348,7 @@ func (d *Decoder) failGeneration(generation uint64, err error) {
 	if d.generation != generation || !d.enabled.Load() {
 		return
 	}
-	d.status.State, d.status.Detail = "ERROR", "Fallo en el flujo DMR: "+err.Error()
+	d.status.State, d.status.Detail = "ERROR", "DMR stream failure: "+err.Error()
 	if d.stdin != nil {
 		_ = d.stdin.Close()
 	}
@@ -612,7 +612,7 @@ func (d *Decoder) resetSessionLocked() {
 	d.rawState, d.confirmed, d.confirmationStreak = "SEARCH", false, 0
 	d.pendingAudio = d.pendingAudio[:0]
 	d.candidateSince, d.lastTrustedTelemetry, d.lastTelemetry = time.Time{}, time.Time{}, time.Time{}
-	d.status.State, d.status.Detail = "SEARCH", "Buscando sincronismo"
+	d.status.State, d.status.Detail = "SEARCH", "Searching for sync"
 	d.status.ColorCode, d.status.InputLevel, d.status.SyncQuality = -1, 0, 0
 	d.status.PLLLocked, d.status.Slot1, d.status.Slot2 = false, "--", "--"
 }

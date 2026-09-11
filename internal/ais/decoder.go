@@ -83,7 +83,7 @@ type Decoder struct {
 }
 
 func New(rate float64, executable string) *Decoder {
-	return &Decoder{rate: rate, executable: executable, state: "DETENIDO", vessels: make(map[uint32]Vessel)}
+	return &Decoder{rate: rate, executable: executable, state: "STOPPED", vessels: make(map[uint32]Vessel)}
 }
 func (d *Decoder) Configure(enabled bool) {
 	d.lifecycle.Lock()
@@ -93,7 +93,7 @@ func (d *Decoder) Configure(enabled bool) {
 		return
 	}
 	if d.executable == "" {
-		d.fail(errors.New("AIS-catcher no configurado"))
+		d.fail(errors.New("AIS-catcher not configured"))
 		return
 	}
 	d.queue = make(chan []float32, 16)
@@ -123,7 +123,7 @@ func (d *Decoder) Configure(enabled bool) {
 	session := d.session
 	d.stdin = stdin
 	d.running = true
-	d.state = "ESPERANDO BARCOS"
+	d.state = "WAITING FOR SHIPS"
 	d.lastError = ""
 	d.detail = ""
 	d.mu.Unlock()
@@ -274,7 +274,7 @@ func (d *Decoder) Close() { d.lifecycle.Lock(); defer d.lifecycle.Unlock(); d.st
 func (d *Decoder) stopProcess() {
 	d.mu.Lock()
 	if !d.running {
-		d.state = "DETENIDO"
+		d.state = "STOPPED"
 		d.mu.Unlock()
 		return
 	}
@@ -290,7 +290,7 @@ func (d *Decoder) stopProcess() {
 	}
 	<-done
 	d.mu.Lock()
-	d.state = "DETENIDO"
+	d.state = "STOPPED"
 	d.mu.Unlock()
 }
 func (d *Decoder) fail(err error) {

@@ -232,7 +232,7 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		savedMode:              "USB",
 		dmrAutoCenter:          true,
 		dmrAudioSlot:           "AUTO",
-		aprsView:               "PAQUETES",
+		aprsView:               "PACKETS",
 		rtl433FrequencyHz:      433_920_000,
 		rtl433BandwidthHz:      500_000,
 		sstvAutomatic:          true,
@@ -371,7 +371,7 @@ func (screen *MainScreen) CreateControls() {
 	menu := simpleui.NewButton("menu", toolContentX, 842, 130, 40, "MENU", 15)
 	screen.viewButton = simpleui.NewButton("view", toolContentX+140, 842, 115, 40, "VIEW 1", 14)
 	screen.step = simpleui.NewButton("step", toolContentX+265, 842, 250, 40, "STEP  "+formatStep(screen.tuningStepHz), 15)
-	screen.themeButton = simpleui.NewButton("theme", toolContentX+525, 842, 190, 40, "ESTILO  "+themeDisplayName(screen.themeName), 13)
+	screen.themeButton = simpleui.NewButton("theme", toolContentX+525, 842, 190, 40, "THEME  "+themeDisplayName(screen.themeName), 13)
 	spanDown.OnClick(func() { screen.changeSpan(-1) })
 	spanUp.OnClick(func() { screen.changeSpan(1) })
 	screen.toolMenu = NewToolMenu(screen.activeTool, screen.selectTool)
@@ -880,7 +880,7 @@ func (screen *MainScreen) drawSpectrum() {
 	} else {
 		message := screen.stats.Status
 		if message == "" {
-			message = "Esperando stream IQ…"
+			message = "Waiting for IQ stream…"
 		}
 		simpleui.DrawText(message, x+48, y+height*.5, 13, colors.orange)
 	}
@@ -1070,7 +1070,7 @@ func (screen *MainScreen) drawLowerWorkspace() {
 			screen.satellitePanel.DrawPanel()
 		} else {
 			drawSmallText(toolDisplayName(screen.activeTool), 40, toolY+14, colors.cyan)
-			simpleui.DrawText("Esta herramienta se implementará en la siguiente fase. Pulsa MENU para cambiar de tool.", 40, toolY+48, 10, colors.muted)
+			simpleui.DrawText("This tool will be implemented in a later phase. Press MENU to change tools.", 40, toolY+48, 10, colors.muted)
 		}
 	})
 }
@@ -1645,7 +1645,7 @@ func recommendedModeForBand(band BandDefinition) string {
 		switch band.Name {
 		case "FM", "DAB":
 			return "WFM"
-		case "MARINE", "SONDAS":
+		case "MARINE", "RADIOSONDES":
 			return "NFM"
 		default:
 			return "AM"

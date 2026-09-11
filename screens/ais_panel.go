@@ -33,16 +33,16 @@ func NewAISPanel(screen *MainScreen) *AISPanel {
 		p.controls = append(p.controls, b)
 		return b
 	}
-	p.start = button("aisStart", "INICIAR", 40, 145, func() {
+	p.start = button("aisStart", "START", 40, 145, func() {
 		if !p.enabled {
 			p.tuneAIS()
 		}
 		p.enabled = !p.enabled
 		p.apply()
 	})
-	mapButton := button("aisMap", "ABRIR MAPA", 205, 180, p.openMap)
+	mapButton := button("aisMap", "OPEN MAP", 205, 180, p.openMap)
 	mapButton.SetColors(colors.blue, colors.border, colors.text)
-	clearButton := button("aisClear", "LIMPIAR", 405, 135, func() {
+	clearButton := button("aisClear", "CLEAR", 405, 135, func() {
 		if screen.receiver != nil {
 			screen.receiver.ClearAIS()
 		}
@@ -61,7 +61,7 @@ func (p *AISPanel) SetVisible(v bool) {
 }
 func (p *AISPanel) Enter() {
 	// Opening a tool must never alter the RF tuning. AIS tunes only when the
-	// user explicitly presses INICIAR.
+	// user explicitly presses START.
 }
 func (p *AISPanel) tuneAIS() {
 	s := p.screen
@@ -93,10 +93,10 @@ func (p *AISPanel) apply() {
 		}
 	}
 	if p.enabled {
-		p.start.SetLabel("DETENER")
+		p.start.SetLabel("STOP")
 		p.start.SetColors(actionStopFill, colors.red, colors.text)
 	} else {
-		p.start.SetLabel("INICIAR")
+		p.start.SetLabel("START")
 		p.start.SetColors(actionStartFill, colors.green, colors.text)
 	}
 }
@@ -115,7 +115,7 @@ func (p *AISPanel) Tick() {
 	p.writeSnapshot(vessels)
 	if p.enabled && !p.screen.receiver.AISStatus().Running {
 		p.enabled = false
-		p.start.SetLabel("INICIAR")
+		p.start.SetLabel("START")
 	}
 	if p.viewerDone != nil {
 		select {
@@ -145,43 +145,43 @@ func (p *AISPanel) openMap() {
 	}
 	if p.viewer != nil && p.viewer.Process != nil {
 		focusRTL433Viewer(p.viewer.Process.Pid)
-		p.feedback = "MAPA YA ABIERTO"
+		p.feedback = "MAP ALREADY OPEN"
 		return
 	}
 	executable, err := os.Executable()
 	if err != nil {
-		p.feedback = "ERROR AL ABRIR MAPA"
+		p.feedback = "ERROR OPENING MAP"
 		return
 	}
 	cmd := exec.Command(executable, "--ais-map", p.snapshotPath)
 	cmd.SysProcAttr = rtl433ViewerProcessAttributes()
 	if err = cmd.Start(); err != nil {
-		p.feedback = "ERROR AL ABRIR MAPA"
+		p.feedback = "ERROR OPENING MAP"
 		return
 	}
 	p.viewer = cmd
 	p.viewerDone = make(chan struct{})
 	done := p.viewerDone
 	go func() { _ = cmd.Wait(); close(done) }()
-	p.feedback = "MAPA ABIERTO"
+	p.feedback = "MAP OPENED"
 }
 func (p *AISPanel) DrawPanel() {
-	status := ais.Status{State: "SIN RECEPTOR"}
+	status := ais.Status{State: "NO RECEIVER"}
 	var vessels []ais.Vessel
 	if p.screen.receiver != nil {
 		status = p.screen.receiver.AISStatus()
 		vessels = p.screen.receiver.AISVessels()
 	}
-	simpleui.DrawText(fmt.Sprintf("AIS MARÍTIMO · 161.975 / 162.025 MHz · %s · %d barcos · %d mensajes", status.State, len(vessels), status.Messages), 40, toolY+7, 12, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf("MARITIME AIS · 161.975 / 162.025 MHz · %s · %d ships · %d messages", status.State, len(vessels), status.Messages), 40, toolY+7, 12, colors.cyan)
 	if status.Error != "" {
 		simpleui.DrawText(sondeClip(status.Error, 100), 570, toolY+38, 12, colors.red)
 	} else {
-		simpleui.DrawText("Recepción simultánea de los dos canales AIS", 570, toolY+38, 12, colors.muted)
+		simpleui.DrawText("Simultaneous reception of both AIS channels", 570, toolY+38, 12, colors.muted)
 	}
 	cols := []struct {
 		x    float32
 		name string
-	}{{40, "BARCO / MMSI"}, {310, "ÚLTIMA"}, {410, "LATITUD"}, {535, "LONGITUD"}, {665, "VEL. kn"}, {770, "RUMBO"}, {880, "ESTADO"}, {1090, "DESTINO"}}
+	}{{40, "SHIP / MMSI"}, {310, "LAST"}, {410, "LATITUDE"}, {535, "LONGITUDE"}, {665, "VEL. kn"}, {770, "TRACK"}, {880, "STATUS"}, {1090, "DESTINATION"}}
 	for _, c := range cols {
 		simpleui.DrawText(c.name, c.x, toolY+78, 12, colors.muted)
 	}
@@ -213,7 +213,7 @@ func (p *AISPanel) DrawPanel() {
 		}
 	}
 	if len(vessels) == 0 {
-		simpleui.DrawText("Pulsa INICIAR para decodificar AIS desde el receptor SDR. ABRIR MAPA muestra las posiciones en otra ventana.", 40, toolY+110, 13, colors.muted)
+		simpleui.DrawText("Press START to decode AIS from the SDR receiver. OPEN MAP shows positions in another window.", 40, toolY+110, 13, colors.muted)
 	}
-	simpleui.DrawText(sondeClip(p.feedback+"  AIS-catcher · mapa local sin conexión a Internet", 150), 40, toolY+174, 12, colors.muted)
+	simpleui.DrawText(sondeClip(p.feedback+"  AIS-catcher · local map with no Internet connection", 150), 40, toolY+174, 12, colors.muted)
 }

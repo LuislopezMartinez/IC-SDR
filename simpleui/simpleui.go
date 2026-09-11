@@ -115,7 +115,7 @@ func Run(draw func()) {
 	ensureNotStarted("Run")
 	runtime.started = true
 
-	traceLifecycle("Raylib: configurando flags de ventana")
+	traceLifecycle("Raylib: configuring window flags")
 	rl.SetConfigFlags(runtime.windowFlags)
 	traceLifecycle("Raylib: llamando a InitWindow (%dx%d)", runtime.width, runtime.height)
 	windowWidth, windowHeight := runtime.width, runtime.height
@@ -141,7 +141,7 @@ func Run(draw func()) {
 		runtime.started = false
 	}()
 
-	traceLifecycle("Raylib: entrando en el bucle de interfaz")
+	traceLifecycle("Raylib: entering interface loop")
 	for !rl.WindowShouldClose() {
 		handleWindowShortcuts()
 		runtime.canvas.Begin(runtime.background)
@@ -166,7 +166,7 @@ func placeWindowOnPrimaryMonitor(wantedWidth, wantedHeight int32) {
 	rl.SetWindowMonitor(primaryMonitor)
 	rl.SetWindowSize(width, height)
 	rl.SetWindowPosition(x, y)
-	traceLifecycle("Raylib: ventana colocada en monitor principal · posición=(%d,%d) · tamaño=%dx%d", x, y, width, height)
+	traceLifecycle("Raylib: window placed on primary monitor · position=(%d,%d) · size=%dx%d", x, y, width, height)
 }
 
 func safeWindowBounds(wantedWidth, wantedHeight, monitorWidth, monitorHeight, monitorX, monitorY int) (width, height, x, y int) {

@@ -176,15 +176,15 @@ func NewReceiver(config Config) *Receiver {
 }
 
 func (receiver *Receiver) Start() error {
-	receiver.trace("SDR: buscando candidatos de dispositivo")
+	receiver.trace("SDR: searching for device candidates")
 	device, err := openSoapy(receiver.config)
 	if err != nil {
 		receiver.setError(err)
 		return err
 	}
 	receiver.device = device
-	receiver.trace("SDR: dispositivo abierto · hardware=%s · driver=%s", device.hardware, device.driver)
-	receiver.trace("SDR: leyendo controles físicos")
+	receiver.trace("SDR: device opened · hardware=%s · driver=%s", device.hardware, device.driver)
+	receiver.trace("SDR: reading physical controls")
 	hardware := device.hardwareSettings()
 	if receiver.config.InitialHardware != nil {
 		receiver.trace("SDR: aplicando ajustes iniciales")
@@ -211,7 +211,7 @@ func (receiver *Receiver) Start() error {
 	receiver.running.Store(true)
 	go receiver.run()
 	go receiver.runTuner()
-	receiver.trace("SDR: hilos de captura y sintonía iniciados")
+	receiver.trace("SDR: capture and tune threads started")
 	return nil
 }
 
@@ -352,7 +352,7 @@ func (receiver *Receiver) ConfigureSSTV(enabled bool) {
 }
 func (receiver *Receiver) SSTVStatus() sstv.Status {
 	if receiver.sstv == nil {
-		return sstv.Status{State: "NO DISPONIBLE"}
+		return sstv.Status{State: "UNAVAILABLE"}
 	}
 	return receiver.sstv.Snapshot()
 }
@@ -412,7 +412,7 @@ func (receiver *Receiver) ConfigureRTL433(enabled bool, frequencyHz int64, bandw
 }
 func (receiver *Receiver) RTL433Status() rtl433.Status {
 	if receiver.rtl433 == nil {
-		return rtl433.Status{State: "NO DISPONIBLE"}
+		return rtl433.Status{State: "UNAVAILABLE"}
 	}
 	return receiver.rtl433.Snapshot()
 }
@@ -435,7 +435,7 @@ func (receiver *Receiver) ConfigureAPRS(enabled bool, frequencyHz int64, bandwid
 }
 func (receiver *Receiver) APRSStatus() aprs.Status {
 	if receiver.aprs == nil {
-		return aprs.Status{State: "NO DISPONIBLE", AudioLevel: -1}
+		return aprs.Status{State: "UNAVAILABLE", AudioLevel: -1}
 	}
 	return receiver.aprs.Snapshot()
 }
@@ -607,7 +607,7 @@ func (receiver *Receiver) run() {
 		receiver.stats.RMS = rms
 		receiver.stats.Peak = peak
 		receiver.stats.InvalidSamples += invalid
-		receiver.stats.Status = "IQ válido"
+		receiver.stats.Status = "IQ valid"
 		receiver.mu.Unlock()
 
 		source := 0

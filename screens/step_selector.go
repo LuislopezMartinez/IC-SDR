@@ -25,7 +25,7 @@ func NewStepSelector(selected int64, onSelect func(int64)) *StepSelector {
 	return &StepSelector{
 		BaseElement: simpleui.NewBaseElement("stepSelectorOverlay", 0, 0, designWidth, designHeight),
 		selected:    selected, pressed: -1, onSelect: onSelect,
-		close: simpleui.NewButton("stepSelectorClose", 650, 445, 300, 50, "CERRAR", 17),
+		close: simpleui.NewButton("stepSelectorClose", 650, 445, 300, 50, "CLOSE", 17),
 	}
 }
 

@@ -19,10 +19,10 @@ func RunSatelliteMap(path string) {
 	simpleui.SetMode(1440, 840, simpleui.Fit)
 	simpleui.SetCanvasFilter(rl.FilterBilinear)
 	simpleui.SetTextScale(1.25)
-	simpleui.SetTitle("IC-SDR · Seguimiento de satélites")
+	simpleui.SetTitle("IC-SDR · Satellite tracking")
 	simpleui.SetMinimumSize(960, 560)
-	v := &satelliteMap{path: path, enabled: map[int]bool{}, expanded: map[string]bool{"Estaciones espaciales": true, "Radioaficionados": true, "Meteorológicos": true}, selected: 25544}
-	v.search = simpleui.NewTextField("satelliteMapSearch", 28, 105, 296, 34, "BUSCAR NOMBRE, NORAD O GRUPO", 12)
+	v := &satelliteMap{path: path, enabled: map[int]bool{}, expanded: map[string]bool{"Space stations": true, "Amateur radio": true, "Weather": true}, selected: 25544}
+	v.search = simpleui.NewTextField("satelliteMapSearch", 28, 105, 296, 34, "SEARCH NAME, NORAD OR GROUP", 12)
 	v.search.SetMaxLength(64)
 	v.search.OnChange(func(value string) { v.query = strings.ToLower(strings.TrimSpace(value)); v.scroll = 0 })
 	simpleui.Add(v.search)
@@ -118,14 +118,14 @@ func (v *satelliteMap) draw() {
 	v.drawDetails(details)
 }
 func (v *satelliteMap) drawHeader() {
-	simpleui.DrawTextStyled("SEGUIMIENTO DE SATÉLITES", 20, 19, 23, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled("SATELLITE TRACKING", 20, 19, 23, simpleui.FontSemiBold, colors.cyan)
 	visible := 0
 	for _, s := range v.snapshot.Satellites {
 		if s.Visible {
 			visible++
 		}
 	}
-	simpleui.DrawText(fmt.Sprintf("%d objetos · %d visibles desde %s · %s", len(v.snapshot.Satellites), visible, v.snapshot.Station.Name, v.snapshot.Source), 380, 27, 13, colors.muted)
+	simpleui.DrawText(fmt.Sprintf("%d objects · %d visible from %s · %s", len(v.snapshot.Satellites), visible, v.snapshot.Station.Name, v.snapshot.Source), 380, 27, 13, colors.muted)
 }
 func (v *satelliteMap) grouped() ([]string, map[string][]satellite.State) {
 	m := map[string][]satellite.State{}
@@ -138,11 +138,11 @@ func (v *satelliteMap) grouped() ([]string, map[string][]satellite.State) {
 		}
 		m[s.Group] = append(m[s.Group], s)
 	}
-	order := []string{"Estaciones espaciales", "Radioaficionados", "CubeSats", "Meteorológicos", "GPS", "Galileo", "GLONASS", "BeiDou", "Iridium NEXT", "Orbcomm", "Starlink"}
+	order := []string{"Space stations", "Amateur radio", "CubeSats", "Weather", "GPS", "Galileo", "GLONASS", "BeiDou", "Iridium NEXT", "Orbcomm", "Starlink"}
 	return order, m
 }
 func (v *satelliteMap) drawList(b rl.Rectangle) {
-	simpleui.DrawTextStyled("CATÁLOGO", b.X+12, b.Y+10, 15, simpleui.FontSemiBold, colors.orange)
+	simpleui.DrawTextStyled("CATALOG", b.X+12, b.Y+10, 15, simpleui.FontSemiBold, colors.orange)
 	order, groups := v.grouped()
 	mouse := simpleui.MousePosition()
 	contentBounds := rl.Rectangle{X: b.X + 1, Y: b.Y + 78, Width: b.Width - 2, Height: b.Height - 79}
@@ -261,12 +261,12 @@ func (v *satelliteMap) drawMap(b rl.Rectangle) {
 	drawMapToggle(rl.Vector2{X: b.X + 7, Y: legendY + 5}, true)
 	simpleui.DrawText("mostrar/ocultar", b.X+19, legendY, 11, colors.muted)
 	drawVisibilityIndicator(rl.Vector2{X: b.X + 151, Y: legendY + 5}, true)
-	simpleui.DrawText("visible desde la estación", b.X+163, legendY, 11, colors.muted)
+	simpleui.DrawText("visible from the station", b.X+163, legendY, 11, colors.muted)
 	drawVisibilityIndicator(rl.Vector2{X: b.X + 355, Y: legendY + 5}, false)
-	simpleui.DrawText("bajo el horizonte", b.X+367, legendY, 11, colors.muted)
+	simpleui.DrawText("below the horizon", b.X+367, legendY, 11, colors.muted)
 }
 func (v *satelliteMap) drawDetails(b rl.Rectangle) {
-	simpleui.DrawTextStyled("SATÉLITE SELECCIONADO", b.X+14, b.Y+10, 14, simpleui.FontSemiBold, colors.orange)
+	simpleui.DrawTextStyled("SELECTED SATELLITE", b.X+14, b.Y+10, 14, simpleui.FontSemiBold, colors.orange)
 	var s *satellite.State
 	for i := range v.snapshot.Satellites {
 		if v.snapshot.Satellites[i].NORAD == v.selected {
@@ -275,13 +275,13 @@ func (v *satelliteMap) drawDetails(b rl.Rectangle) {
 		}
 	}
 	if s == nil {
-		simpleui.DrawText("Pulsa un satélite en el mapa o en el catálogo", b.X+14, b.Y+48, 13, colors.muted)
+		simpleui.DrawText("Click a satellite on the map or in the catalog", b.X+14, b.Y+48, 13, colors.muted)
 		return
 	}
 	eye := "BAJO EL HORIZONTE"
 	c := colors.muted
 	if s.Visible {
-		eye = "VISIBLE DESDE " + v.snapshot.Station.Name
+		eye = "VISIBLE FROM " + v.snapshot.Station.Name
 		c = colors.green
 	}
 	separator := withAlpha(colors.border, 180)
@@ -294,19 +294,19 @@ func (v *satelliteMap) drawDetails(b rl.Rectangle) {
 	simpleui.DrawText(eye, b.X+14, b.Y+105, 12, c)
 
 	x := b.X + 304
-	simpleui.DrawText("POSICIÓN ORBITAL", x, b.Y+45, 11, colors.muted)
-	simpleui.DrawText(fmt.Sprintf("Latitud       %.4f°", s.Latitude), x, b.Y+72, 13, colors.text)
-	simpleui.DrawText(fmt.Sprintf("Longitud    %.4f°", s.Longitude), x, b.Y+98, 13, colors.text)
-	simpleui.DrawText(fmt.Sprintf("Altitud       %.0f km", s.AltitudeKM), x, b.Y+124, 13, colors.text)
+	simpleui.DrawText("ORBITAL POSITION", x, b.Y+45, 11, colors.muted)
+simpleui.DrawText(fmt.Sprintf("Latitude      %.4f°", s.Latitude), x, b.Y+72, 13, colors.text)
+		simpleui.DrawText(fmt.Sprintf("Longitude     %.4f°", s.Longitude), x, b.Y+98, 13, colors.text)
+		simpleui.DrawText(fmt.Sprintf("Altitude      %.0f km", s.AltitudeKM), x, b.Y+124, 13, colors.text)
 
 	x = b.X + 566
-	simpleui.DrawText("DESDE "+v.snapshot.Station.Name, x, b.Y+45, 11, colors.muted)
-	simpleui.DrawText(fmt.Sprintf("Azimut        %.1f°", s.Azimuth), x, b.Y+72, 13, colors.text)
-	simpleui.DrawText(fmt.Sprintf("Elevación   %.1f°", s.Elevation), x, b.Y+98, 13, colors.text)
+	simpleui.DrawText("FROM "+v.snapshot.Station.Name, x, b.Y+45, 11, colors.muted)
+simpleui.DrawText(fmt.Sprintf("Azimuth       %.1f°", s.Azimuth), x, b.Y+72, 13, colors.text)
+		simpleui.DrawText(fmt.Sprintf("Elevation    %.1f°", s.Elevation), x, b.Y+98, 13, colors.text)
 	simpleui.DrawText(fmt.Sprintf("Distancia   %.0f km", s.RangeKM), x, b.Y+124, 13, colors.text)
 
 	x = b.X + 808
-	simpleui.DrawText("RADIO / TELEMETRÍA", x, b.Y+45, 11, colors.muted)
+	simpleui.DrawText("RADIO / TELEMETRY", x, b.Y+45, 11, colors.muted)
 	simpleui.DrawText(sondeClip(s.Signal, 28), x, b.Y+72, 13, colors.text)
 	simpleui.DrawText("Modo          "+s.Mode, x, b.Y+98, 13, colors.text)
 	frequency := "Downlink    --"

@@ -25,15 +25,15 @@ func newVoiceDecoder(path string) *voiceDecoder {
 	}
 	v.init, v.cdec, v.sdec = dll.NewProc("tetra_decode_init"), dll.NewProc("tetra_cdec"), dll.NewProc("tetra_sdec")
 	if err := v.init.Find(); err != nil {
-		v.errText = "INIT NO DISPONIBLE"
+		v.errText = "INIT UNAVAILABLE"
 		return v
 	}
 	if err := v.cdec.Find(); err != nil {
-		v.errText = "CDEC NO DISPONIBLE"
+		v.errText = "CDEC UNAVAILABLE"
 		return v
 	}
 	if err := v.sdec.Find(); err != nil {
-		v.errText = "SDEC NO DISPONIBLE"
+		v.errText = "SDEC UNAVAILABLE"
 		return v
 	}
 	v.init.Call()

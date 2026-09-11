@@ -82,7 +82,7 @@ func TestAISMapRender(t *testing.T) {
 	simpleui.SetTextScale(1.25)
 	lat1, lon1, speed1, course1, heading1 := 43.36, -8.41, 12.4, 238.0, 240.0
 	lat2, lon2, speed2, course2 := 43.31, -8.50, 6.2, 91.0
-	vessels := []ais.Vessel{{MMSI: 224123456, Name: "GALICIA STAR", Callsign: "EABC", ShipTypeText: "Cargo", StatusText: "Under way", Latitude: &lat1, Longitude: &lon1, Speed: &speed1, Course: &course1, Heading: &heading1, Destination: "A CORUÑA", LastSeen: time.Now(), Messages: 143}, {MMSI: 224654321, Name: "MAR AZUL", Latitude: &lat2, Longitude: &lon2, Speed: &speed2, Course: &course2, LastSeen: time.Now(), Messages: 44}}
+	vessels := []ais.Vessel{{MMSI: 224123456, Name: "GALICIA STAR", Callsign: "EABC", ShipTypeText: "Cargo", StatusText: "Under way", Latitude: &lat1, Longitude: &lon1, Speed: &speed1, Course: &course1, Heading: &heading1, Destination: "A CORUÑA", LastSeen: time.Now(), Messages: 143}, {MMSI: 224654321, Name: "MAR BLUE", Latitude: &lat2, Longitude: &lon2, Speed: &speed2, Course: &course2, LastSeen: time.Now(), Messages: 44}}
 	data, _ := json.Marshal(vessels)
 	path := filepath.Join(dir, "vessels.json")
 	_ = os.MkdirAll(dir, 0755)

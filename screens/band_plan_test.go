@@ -24,7 +24,7 @@ func TestOutOfBandUsesCompactButtonLabel(t *testing.T) {
 	if got := screen.band.Label(); got != "BAND OUT" {
 		t.Fatalf("out-of-band label = %q", got)
 	}
-	if screen.bandName != "FUERA DE BANDA" {
+	if screen.bandName != "OUT OF BAND" {
 		t.Fatalf("internal band name changed to %q", screen.bandName)
 	}
 }

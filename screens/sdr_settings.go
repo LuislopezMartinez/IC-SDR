@@ -49,7 +49,7 @@ func (modal *SDRSettings) createControls() {
 	modal.ifLabel = label("settingsIFLabel", 500, 378, 360, "IFGR", 14)
 	modal.ifGain = simpleui.NewSlider("settingsIF", 500, 412, 360, 26, 20, 59, 40)
 	modal.ifGain.SetStep(1)
-	modal.ppmLabel = label("settingsPPMLabel", 500, 458, 360, "CORRECCIÓN DE FRECUENCIA", 14)
+	modal.ppmLabel = label("settingsPPMLabel", 500, 458, 360, "FREQUENCY CORRECTION", 14)
 	modal.ppm = simpleui.NewSlider("settingsPPM", 500, 492, 360, 26, -100, 100, 0)
 	modal.ppm.SetStep(.1)
 
@@ -61,8 +61,8 @@ func (modal *SDRSettings) createControls() {
 	modal.setpoint = simpleui.NewSlider("settingsSetpoint", 920, 492, 230, 26, -60, 0, -30)
 	modal.setpoint.SetStep(1)
 
-	modal.cancel = simpleui.NewButton("settingsCancel", 562, 566, 220, 46, "CANCELAR", 16)
-	modal.apply = simpleui.NewButton("settingsApply", 818, 566, 220, 46, "APLICAR", 16)
+	modal.cancel = simpleui.NewButton("settingsCancel", 562, 566, 220, 46, "CANCEL", 16)
+	modal.apply = simpleui.NewButton("settingsApply", 818, 566, 220, 46, "APPLY", 16)
 	modal.cancel.OnClick(func() { modal.set(modal.original); modal.Close() })
 	modal.apply.OnClick(modal.Close)
 
@@ -137,17 +137,17 @@ func (modal *SDRSettings) DrawOverlay() {
 	rl.DrawRectangleRounded(panel, .025, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(panel, .025, 8, 2, colors.border)
 	rl.DrawRectangleRounded(rl.Rectangle{X: 420, Y: 100, Width: 10, Height: 550}, .5, 8, colors.blue)
-	drawCentered("CONFIGURACIÓN SDR", rl.Rectangle{X: 460, Y: 116, Width: 680, Height: 38}, 25, colors.text)
+	drawCentered("SDR SETTINGS", rl.Rectangle{X: 460, Y: 116, Width: 680, Height: 38}, 25, colors.text)
 	rl.DrawLineEx(rl.Vector2{X: 465, Y: 195}, rl.Vector2{X: 1135, Y: 195}, 2, colors.border)
 	if !modal.current.Available {
-		drawCentered("No hay un receptor físico activo.", rl.Rectangle{X: 500, Y: 300, Width: 600, Height: 40}, 18, colors.orange)
+		drawCentered("No physical receiver is active.", rl.Rectangle{X: 500, Y: 300, Width: 600, Height: 40}, 18, colors.orange)
 		modal.cancel.Draw()
 		return
 	}
 	for _, control := range modal.controls {
 		control.Draw()
 	}
-	drawCentered("BIAS-T SUMINISTRA TENSIÓN POR EL CONECTOR DE ANTENA", rl.Rectangle{X: 880, Y: 525, Width: 300, Height: 24}, 10, colors.orange)
+	drawCentered("BIAS-T SUPPLIES VOLTAGE ON THE ANTENNA CONNECTOR", rl.Rectangle{X: 880, Y: 525, Width: 300, Height: 24}, 10, colors.orange)
 }
 
 func (modal *SDRSettings) set(settings sdr.HardwareSettings) {
@@ -183,12 +183,12 @@ func (modal *SDRSettings) refresh() {
 }
 
 func (modal *SDRSettings) refreshLabels() {
-	modal.rfLabel.SetText(fmt.Sprintf("LNA / RFGR   ESTADO %.0f", modal.current.RFGain))
+	modal.rfLabel.SetText(fmt.Sprintf("LNA / RFGR   STATUS %.0f", modal.current.RFGain))
 	ifText := fmt.Sprintf("IFGR   %.0f dB", modal.current.IFGain)
 	if modal.current.AGC {
 		ifText += "   (CONTROLADO POR AGC)"
 	}
 	modal.ifLabel.SetText(ifText)
-	modal.ppmLabel.SetText(fmt.Sprintf("CORRECCIÓN DE FRECUENCIA   %.1f ppm", modal.current.PPM))
+	modal.ppmLabel.SetText(fmt.Sprintf("FREQUENCY CORRECTION   %.1f ppm", modal.current.PPM))
 	modal.setpointLabel.SetText(fmt.Sprintf("AGC SETPOINT   %d dB", modal.current.AGCSetpoint))
 }

@@ -25,7 +25,7 @@ func main() {
 	var err error
 	startupLogFile, err = configureStartupLog()
 	if err != nil {
-		showStartupError("IC-SDR no puede crear DATA\\logs\\startup.log:\n\n" + err.Error() + "\n\nCompruebe que la carpeta portable permite escritura.")
+		showStartupError("IC-SDR cannot create DATA\\logs\\startup.log:\n\n" + err.Error() + "\n\nCheck that the portable folder is writable.")
 		return
 	}
 	if startupLogFile != nil {
@@ -33,52 +33,52 @@ func main() {
 	}
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			message := "IC-SDR no pudo iniciarse. Consulte DATA\\logs\\startup.log."
-			startupStep("FALLO IRRECUPERABLE: %v\n%s", recovered, debug.Stack())
+			message := "IC-SDR could not start. See DATA\\logs\\startup.log."
+			startupStep("UNRECOVERABLE FAILURE: %v\n%s", recovered, debug.Stack())
 			showStartupError(message)
 		}
 	}()
-	startupStep("Proceso iniciado · PID=%d · %s/%s · Go=%s", os.Getpid(), runtime.GOOS, runtime.GOARCH, runtime.Version())
+	startupStep("Process started · PID=%d · %s/%s · Go=%s", os.Getpid(), runtime.GOOS, runtime.GOARCH, runtime.Version())
 	executable, executableErr := os.Executable()
 	workingDirectory, workingErr := os.Getwd()
-	startupStep("Ejecutable=%q (error=%v)", executable, executableErr)
-	startupStep("Directorio de trabajo=%q (error=%v)", workingDirectory, workingErr)
-	startupStep("Argumentos=%q", os.Args)
+	startupStep("Executable=%q (error=%v)", executable, executableErr)
+	startupStep("Working directory=%q (error=%v)", workingDirectory, workingErr)
+	startupStep("Arguments=%q", os.Args)
 	startupStep("DATA=%q", resources.WritablePath())
 	stopWatchdog := startStartupWatchdog()
 	defer stopWatchdog()
 
 	if len(os.Args) == 3 && os.Args[1] == "--rtl433-viewer" {
-		startupStep("Abriendo visor RTL_433")
+		startupStep("Opening RTL_433 viewer")
 		screens.RunRTL433Viewer(os.Args[2])
 		return
 	}
 	if len(os.Args) == 3 && os.Args[1] == "--aprs-viewer" {
-		startupStep("Abriendo visor APRS")
+		startupStep("Opening APRS viewer")
 		screens.RunAPRSViewer(os.Args[2])
 		return
 	}
 	if len(os.Args) == 3 && os.Args[1] == "--ais-map" {
-		startupStep("Abriendo mapa AIS")
+		startupStep("Opening AIS map")
 		screens.RunAISMap(os.Args[2])
 		return
 	}
 	if len(os.Args) == 3 && os.Args[1] == "--aircraft-map" {
-		startupStep("Abriendo mapa ADS-B")
+		startupStep("Opening ADS-B map")
 		screens.RunAircraftMap(os.Args[2])
 		return
 	}
 	if len(os.Args) == 3 && os.Args[1] == "--satellite-map" {
-		startupStep("Abriendo mapa de satélites")
+		startupStep("Opening satellite map")
 		screens.RunSatelliteMap(os.Args[2])
 		return
 	}
 	if len(os.Args) == 4 && os.Args[1] == "--tetra-viewer" {
-		startupStep("Abriendo consola TETRA")
+		startupStep("Opening TETRA console")
 		screens.RunTETRAViewer(os.Args[2], os.Args[3])
 		return
 	}
-	startupStep("Configurando SimpleUI")
+	startupStep("Configuring SimpleUI")
 	simpleui.SetLifecycleLogger(startupStep)
 	simpleui.SetMode(1600, 900, simpleui.Stretch)
 	simpleui.SetTextScale(1.25)
@@ -91,9 +91,9 @@ func main() {
 	initialHardware := &sdr.HardwareSettings{
 		AGC: true, RFGain: 0, IFGain: 20, AGCSetpoint: -14, IQCorrection: true,
 	}
-	startupStep("Comprobando recursos portables")
+	startupStep("Checking portable resources")
 	logPortableResources()
-	startupStep("Construyendo receptor y decodificadores")
+	startupStep("Building receiver and decoders")
 	receiver := sdr.NewReceiver(sdr.Config{
 		RuntimeRoot: resources.Path("runtime", "windows-x64"),
 		Driver:      "sdrplay",
@@ -120,31 +120,31 @@ func main() {
 		SSTVOutputDirectory:       resources.WritablePath("captures", "sstv"),
 		StartupLog:                startupStep,
 	})
-	startupStep("Receptor construido")
-	startupStep("Abriendo dispositivo SDR")
+	startupStep("Receiver built")
+	startupStep("Opening SDR device")
 	if err := receiver.Start(); err != nil {
-		startupStep("El receptor no se pudo iniciar; la interfaz continuará disponible: %v", err)
+		startupStep("Receiver could not start; the interface will remain available: %v", err)
 	} else {
-		startupStep("Dispositivo SDR iniciado correctamente")
+		startupStep("SDR device started successfully")
 	}
 	defer receiver.Close()
 
-	startupStep("Creando MainScreen")
+	startupStep("Creating MainScreen")
 	mainScreen := screens.NewMainScreen(receiver)
-	startupStep("MainScreen creado")
+	startupStep("MainScreen created")
 	defer mainScreen.Close()
-	startupStep("Creando controles")
+	startupStep("Creating controls")
 	mainScreen.CreateControls()
-	startupStep("Controles creados")
+	startupStep("Controls created")
 	var firstFrame sync.Once
 	simpleui.Run(func() {
 		firstFrame.Do(func() {
-			startupStep("Primera trama de interfaz iniciada; arranque completado")
+			startupStep("First interface frame started; startup completed")
 			stopWatchdog()
 		})
 		mainScreen.Draw()
 	})
-	startupStep("Cierre normal")
+	startupStep("Normal shutdown")
 }
 
 func configureStartupLog() (*os.File, error) {
@@ -171,7 +171,7 @@ func configureStartupLog() (*os.File, error) {
 func startupStep(format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
 	startupStage.Store(message)
-	log.Print("PASO · " + message)
+	log.Print("STEP · " + message)
 	if startupLogFile != nil {
 		_ = startupLogFile.Sync()
 	}
@@ -187,7 +187,7 @@ func startStartupWatchdog() func() {
 			select {
 			case <-ticker.C:
 				stage, _ := startupStage.Load().(string)
-				log.Printf("ESPERA · el proceso sigue dentro de: %s", stage)
+				log.Printf("WAIT · process still inside: %s", stage)
 				if startupLogFile != nil {
 					_ = startupLogFile.Sync()
 				}
@@ -211,9 +211,9 @@ func logPortableResources() {
 	for _, path := range paths {
 		info, err := os.Stat(path)
 		if err != nil {
-			startupStep("Recurso AUSENTE: %q · %v", path, err)
+			startupStep("Resource MISSING: %q · %v", path, err)
 			continue
 		}
-		startupStep("Recurso OK: %q · %d bytes", path, info.Size())
+		startupStep("Resource OK: %q · %d bytes", path, info.Size())
 	}
 }

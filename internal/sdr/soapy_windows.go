@@ -73,7 +73,7 @@ func openSoapy(config Config) (*soapyDevice, error) {
 		config.trace("SoapySDR: driver %s rechazado: %v", candidate.Driver, err)
 		failures = append(failures, fmt.Errorf("%s: %w", candidate.Driver, err))
 	}
-	return nil, fmt.Errorf("no se encontró RSP ni RTL-SDR: %w", errors.Join(failures...))
+	return nil, fmt.Errorf("no RSP or RTL-SDR found: %w", errors.Join(failures...))
 }
 
 func deviceCandidates(config Config) []Config {
@@ -92,12 +92,12 @@ func deviceCandidates(config Config) []Config {
 }
 
 func openSoapyCandidate(config Config) (result *soapyDevice, err error) {
-	config.trace("SoapySDR/%s: cargando DLL y módulo", config.Driver)
+	config.trace("SoapySDR/%s: loading DLL and module", config.Driver)
 	api, err := loadSoapy(config)
 	if err != nil {
 		return nil, err
 	}
-	config.trace("SoapySDR/%s: creando dispositivo", config.Driver)
+	config.trace("SoapySDR/%s: creating device", config.Driver)
 	device := api.makeDevice(config.deviceArguments())
 	if device == 0 {
 		message := api.deviceError()
@@ -111,12 +111,12 @@ func openSoapyCandidate(config Config) (result *soapyDevice, err error) {
 		}
 	}()
 	result.hardware = api.consume(api.hardwareKey(device))
-	config.trace("SoapySDR/%s: configurando sample rate %.0f", config.Driver, config.SampleRate)
+	config.trace("SoapySDR/%s: configuring sample rate %.0f", config.Driver, config.SampleRate)
 	if err = api.check(api.setSampleRate(device, soapyRX, 0, config.SampleRate), "set sample rate"); err != nil {
 		return nil, err
 	}
 	result.sampleRate = api.getSampleRate(device, soapyRX, 0)
-	config.trace("SoapySDR/%s: sintonizando %d Hz", config.Driver, config.FrequencyHz)
+	config.trace("SoapySDR/%s: tuning %d Hz", config.Driver, config.FrequencyHz)
 	if err = api.check(api.setFrequency(device, soapyRX, 0, float64(config.FrequencyHz), 0), "set frequency"); err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func loadSoapy(config Config) (*soapyAPI, error) {
 			api.close()
 			return nil, fmt.Errorf("load SDRplay API %s: %w", vendorPath, err)
 		}
-		config.trace("SoapySDR/sdrplay: API del fabricante cargada")
+		config.trace("SoapySDR/sdrplay: vendor API loaded")
 		moduleName = "sdrPlaySupport.dll"
 	} else if config.Driver == "rtlsdr" {
 		// Load transitive DLLs by absolute path. Relying on PATH works in the
@@ -173,7 +173,7 @@ func loadSoapy(config Config) (*soapyAPI, error) {
 		}
 	}
 	modulePath := filepath.Join(root, "lib", "SoapySDR", "modules0.8", moduleName)
-	config.trace("SoapySDR/%s: registrando símbolos de la API", config.Driver)
+	config.trace("SoapySDR/%s: registering API symbols", config.Driver)
 	purego.RegisterLibFunc(&api.loadModule, uintptr(core), "SoapySDR_loadModule")
 	purego.RegisterLibFunc(&api.free, uintptr(core), "SoapySDR_free")
 	purego.RegisterLibFunc(&api.makeDevice, uintptr(core), "SoapySDRDevice_makeStrArgs")
@@ -199,13 +199,13 @@ func loadSoapy(config Config) (*soapyAPI, error) {
 	purego.RegisterLibFunc(&api.readStream, uintptr(core), "SoapySDRDevice_readStream")
 	purego.RegisterLibFunc(&api.errToString, uintptr(core), "SoapySDR_errToStr")
 
-	config.trace("SoapySDR/%s: cargando módulo %s", config.Driver, modulePath)
+	config.trace("SoapySDR/%s: loading module %s", config.Driver, modulePath)
 	message := api.consume(api.loadModule(modulePath))
 	if message != "" {
 		api.close()
 		return nil, fmt.Errorf("load Soapy module %s: %s", moduleName, message)
 	}
-	config.trace("SoapySDR/%s: módulo cargado", config.Driver)
+	config.trace("SoapySDR/%s: module loaded", config.Driver)
 	return api, nil
 }
 

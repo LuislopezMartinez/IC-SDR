@@ -108,7 +108,7 @@ func TestNativeAutomatic(t *testing.T) {
 		}
 	}
 	d.Configure(true, "AUTO", 403010000, 403000000)
-	if s := d.Snapshot(); s.State != "AUTO · BUSCANDO" {
+	if s := d.Snapshot(); s.State != "AUTO · SEARCHING" {
 		t.Fatalf("retune kept detection: %+v", s)
 	}
 	d.Configure(true, "RS41", 403000000, 403000000)

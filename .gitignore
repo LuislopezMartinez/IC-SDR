@@ -15,3 +15,8 @@ DATA/captures/
 Thumbs.db
 *.tmp
 *.log
+
+# Local translation helpers
+_translate_en.py
+_fix_status.py
+_spanish_hits.txt

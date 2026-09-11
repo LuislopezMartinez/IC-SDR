@@ -56,30 +56,30 @@ func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
 	p.auto = p.button("sstvAuto", 1166, 657, 116, 36, "AUTO VIS", colors.blue)
 	p.force = p.button("sstvForce", 1292, 657, 126, 36, "FORZAR RX", colors.orange)
 	p.force.SetColors(colors.orange, colors.cyan, colors.background)
-	p.stop = p.button("sstvStop", 1428, 657, 128, 36, "DETENER", colors.red)
-	p.restart = p.button("sstvRestart", 1006, 703, 128, 36, "REINICIAR", colors.panelAlt)
-	p.save = p.button("sstvSave", 1144, 703, 128, 36, "GUARDAR PNG", colors.green)
+	p.stop = p.button("sstvStop", 1428, 657, 128, 36, "STOP", colors.red)
+	p.restart = p.button("sstvRestart", 1006, 703, 128, 36, "RESTART", colors.panelAlt)
+	p.save = p.button("sstvSave", 1144, 703, 128, 36, "SAVE PNG", colors.green)
 	p.save.SetColors(colors.green, colors.cyan, colors.background)
-	p.folder = p.button("sstvFolder", 1282, 703, 274, 36, "ABRIR CARPETA", colors.panelAlt)
+	p.folder = p.button("sstvFolder", 1282, 703, 274, 36, "OPEN FOLDER", colors.panelAlt)
 	p.auto.OnClick(func() {
 		screen.sstvAutomatic = true
 		if screen.receiver != nil {
 			screen.receiver.SetSSTVAutomatic(true)
 		}
-		p.flash("Detección VIS automática")
+		p.flash("Automatic VIS detection")
 		screen.markSettingsDirty()
 	})
 	p.force.OnClick(func() {
 		if screen.receiver != nil {
 			screen.receiver.ForceSSTV()
 		}
-		p.flash("Recepción forzada: 4 candidatos")
+		p.flash("Forced reception: 4 candidates")
 	})
 	p.stop.OnClick(func() {
 		if screen.receiver != nil {
 			screen.receiver.StopSSTVReceive()
 		}
-		p.flash("Recepción detenida; buscando VIS")
+		p.flash("Reception stopped; searching for VIS")
 	})
 	p.restart.OnClick(func() {
 		if screen.receiver != nil {
@@ -199,7 +199,7 @@ func (p *SSTVPanel) updatePreview(channel int, frame sstv.Frame) {
 }
 
 func (p *SSTVPanel) DrawPanel() {
-	drawSmallText("SSTV · RECEPCIÓN DE IMÁGENES", 40, toolY+10, colors.cyan)
+	drawSmallText("SSTV · IMAGE RECEPTION", 40, toolY+10, colors.cyan)
 	channels := []int{0, 1, 2, 3}
 	p.drawAutomaticDecoderHeader()
 	for i := range p.candidateModes {
@@ -214,7 +214,7 @@ func (p *SSTVPanel) DrawPanel() {
 		stateColor = colors.green
 	}
 	drawSmallText(p.status.State+" · "+p.displayMode(), 1006, 751, stateColor)
-	drawSmallText(fmt.Sprintf("PROGRESO %d%%   SYNC %d%%   COLA %d   DROP %d", p.status.Progress, p.status.SyncPercent, p.status.Queued, p.status.Dropped), 1006, 774, colors.text)
+	drawSmallText(fmt.Sprintf("PROGRESS %d%%   SYNC %d%%   QUEUE %d   DROP %d", p.status.Progress, p.status.SyncPercent, p.status.Queued, p.status.Dropped), 1006, 774, colors.text)
 	bar := rl.Rectangle{X: 1006, Y: 799, Width: 550, Height: 10}
 	rl.DrawRectangleRec(bar, colors.grid)
 	rl.DrawRectangleRec(rl.Rectangle{X: bar.X, Y: bar.Y, Width: bar.Width * float32(p.status.Progress) / 100, Height: bar.Height}, colors.green)
@@ -245,7 +245,7 @@ func (p *SSTVPanel) drawPreview(slot, channel int) {
 		dst := fitRectangle(x+2, y+2, w-4, h-4, float32(preview.width), float32(preview.height))
 		rl.DrawTexturePro(preview.texture, src, dst, rl.Vector2{}, 0, rl.White)
 	} else {
-		simpleui.DrawText("ESPERANDO IMAGEN", x+28, y+82, uiMinimumFontSize, colors.muted)
+		simpleui.DrawText("WAITING FOR IMAGE", x+28, y+82, uiMinimumFontSize, colors.muted)
 	}
 }
 

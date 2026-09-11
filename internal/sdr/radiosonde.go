@@ -9,7 +9,7 @@ func (r *Receiver) ConfigureRadiosonde(enabled bool, family string, frequency in
 }
 func (r *Receiver) RadiosondeStatus() radiosonde.Status {
 	if r.radiosonde == nil {
-		return radiosonde.Status{State: "NO DISPONIBLE"}
+		return radiosonde.Status{State: "UNAVAILABLE"}
 	}
 	return r.radiosonde.Snapshot()
 }
