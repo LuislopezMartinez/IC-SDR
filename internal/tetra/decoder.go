@@ -344,7 +344,7 @@ func (d *Decoder) Snapshot() Status {
 	if time.Since(d.activeAudioSeen) > 5*time.Second {
 		activeAudioSlot = 0
 	}
-	codecReady, codecError := false, "CODEC NOT CONFIGUNET"
+	codecReady, codecError := false, "CODEC NOT CONFIGURED"
 	codecReady = true
 	for _, voice := range d.voice {
 		if voice == nil || !voice.ready {
@@ -548,12 +548,12 @@ func (d *Decoder) run(queue <-chan []float32, stop <-chan struct{}, done chan<- 
 						d.syncHits++
 						d.lastSyncBit = d.totalBits
 						d.lastSync = time.Now()
-						d.state = "SYNC TETRA REAL"
+						d.state = "LIVE TETRA SYNC"
 						start := len(bits) - len(syncTraining) - 120
 						if start >= 0 {
 							if si, ok := decodeBSCH(bits[start : start+120]); ok {
 								d.system = si
-								d.state = "BSCH DECODIFICADO"
+								d.state = "BSCH DECODED"
 							} else {
 								d.bschFailures++
 							}
@@ -704,7 +704,7 @@ func (d *Decoder) processNormalBurst(burst []byte, slot int, ndb2 bool) {
 				d.lastAudioDecision = fmt.Sprintf("TS%d NDB2 NOT SELECTED", slot+1)
 			} else if d.clearAudioOnly && d.slotEncrypted[slot] != 0 {
 				d.audioRejectedEncrypted++
-				d.lastAudioDecision = fmt.Sprintf("TS%d NDB2 CIPHER O DESCONOCIDO", slot+1)
+				d.lastAudioDecision = fmt.Sprintf("TS%d NDB2 CIPHER OR UNKNOWN", slot+1)
 			} else if half := descrambleBlock(coded[216:], si); half != nil {
 				voiceBits := make([]byte, 432)
 				copy(voiceBits[216:], half)
@@ -752,7 +752,7 @@ func (d *Decoder) processMACPayloadLocked(payload []byte, slot int) {
 		case 2:
 			if network, valid := parseMACSysinfo(pdu); valid {
 				d.network = network
-				d.state = "SYSINFO DECODIFICADO"
+				d.state = "SYSINFO DECODED"
 			}
 			// Broadcast PDUs occupy their logical channel; remaining decoded
 			// bits are padding rather than another concatenated MAC PDU.
@@ -771,7 +771,7 @@ func (d *Decoder) processVoiceLocked(coded []byte, si SystemInfo, slot int) {
 	if d.clearAudioOnly && d.slotEncrypted[slot] != 0 {
 		d.audioRejectedEncrypted++
 		if d.slotEncrypted[slot] < 0 {
-			d.lastAudioDecision = fmt.Sprintf("TS%d CIPHER DESCONOCIDO", slot+1)
+			d.lastAudioDecision = fmt.Sprintf("TS%d UNKNOWN CIPHER", slot+1)
 		} else {
 			d.lastAudioDecision = fmt.Sprintf("TS%d CIPHER", slot+1)
 		}
@@ -802,12 +802,12 @@ func (d *Decoder) processVoiceBitsLocked(type4 []byte, slot int, stolen bool) {
 	pcm, ok := voice.decode(type4, stolen)
 	if !ok {
 		d.audioRejectedDamaged++
-		d.lastAudioDecision = fmt.Sprintf("TS%d TRAMA DE VOZ RECHAZADA", slot+1)
+		d.lastAudioDecision = fmt.Sprintf("TS%d VOICE FRAME REJECTED", slot+1)
 		return
 	}
 	d.audioFrames++
 	d.lastAudio = time.Now()
-	d.lastAudioDecision = fmt.Sprintf("REPRODUCIENDO TS%d", slot+1)
+	d.lastAudioDecision = fmt.Sprintf("PLAYING TS%d", slot+1)
 	d.onAudio(pcm)
 }
 
@@ -856,7 +856,7 @@ func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
 	fresh := userFromResource(address, slot+1)
 	fresh.Seen = u.Seen + 1
 	d.users[address.SSI] = fresh
-	d.state = "MAC-RESOURCE DECODIFICADO"
+	d.state = "MAC-RESOURCE DECODED"
 	pdu, llcOK := parseLLC(payload, address)
 	if !llcOK || pdu.FCSInvalid {
 		d.llcRejected++
@@ -933,7 +933,7 @@ func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
 			for _, neighbour := range parsed {
 				d.neighbours[neighbour.CellID] = neighbour
 			}
-			d.state = "CELLS VECINAS DECODIFICADAS"
+			d.state = "NEIGHBOUR CELLS DECODED"
 			return
 		}
 		d.llcNonCMCE++

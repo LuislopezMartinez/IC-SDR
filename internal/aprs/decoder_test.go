@@ -7,7 +7,7 @@ import (
 
 func TestDecoderSuppressesImmediateIdenticalPackets(t *testing.T) {
 	d := New(2_048_000, "", "", "")
-	packet := Packet{Raw: "EA1ABC>APRS:>prueba", Source: "EA1ABC", Destination: "APRS", Received: time.Now()}
+	packet := Packet{Raw: "EA1ABC>APRS:>test", Source: "EA1ABC", Destination: "APRS", Received: time.Now()}
 	d.add(packet)
 	d.add(packet)
 	d.add(packet)

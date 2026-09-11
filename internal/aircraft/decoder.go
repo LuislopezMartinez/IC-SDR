@@ -135,7 +135,7 @@ func (d *Decoder) Configure(enabled bool, mode string) {
 		return
 	}
 	d.running = true
-	d.state = "WAITING AERONAVES"
+	d.state = "WAITING FOR AIRCRAFT"
 	d.lastError = ""
 	go d.writeIQ()
 	if mode == Mode1090 {
@@ -157,7 +157,7 @@ func (d *Decoder) Configure(enabled bool, mode string) {
 				d.state = "ERROR"
 				d.lastError = err.Error()
 			} else {
-				d.state = "FINALIZADO"
+				d.state = "FINISHED"
 			}
 		}
 		d.mu.Unlock()

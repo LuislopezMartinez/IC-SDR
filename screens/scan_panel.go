@@ -284,7 +284,7 @@ func (p *ScanPanel) DrawPanel() {
 		}
 		return colors.muted
 	}())
-	simpleui.DrawTextStyled(fmt.Sprintf("RANGO %.5f–%.5f MHz  ·  DISPARO SQL %d dBm", float64(p.minimumHz)/1e6, float64(p.maximumHz)/1e6, p.screen.squelchThreshold), 720, 645, 13, simpleui.FontSemiBold, colors.muted)
+	simpleui.DrawTextStyled(fmt.Sprintf("RANGE %.5f–%.5f MHz  ·  SQL TRIGGER %d dBm", float64(p.minimumHz)/1e6, float64(p.maximumHz)/1e6, p.screen.squelchThreshold), 720, 645, 13, simpleui.FontSemiBold, colors.muted)
 	memoryColor := rl.Color{R: 45, G: 58, B: 72, A: 255}
 	memoryDetail := "OFF · Tune the peak"
 	if p.centerToMemory {
@@ -293,7 +293,7 @@ func (p *ScanPanel) DrawPanel() {
 	}
 	drawScanButton(42, 678, 220, 58, "SNAP TO MEMORY", memoryDetail, memoryColor)
 	drawScanButton(276, 678, 220, 58, "WHEN SIGNAL LOST  ▾", p.resumeDescription(), rl.Color{R: 150, G: 95, B: 18, A: 255})
-	drawScanButton(510, 678, 190, 58, fmt.Sprintf("ESPERA %d s  ▾", p.dwellMs/1000), "Antes de continuar", rl.Color{R: 70, G: 68, B: 55, A: 255})
+	drawScanButton(510, 678, 190, 58, fmt.Sprintf("DWELL %d s  ▾", p.dwellMs/1000), "Before continuing", rl.Color{R: 70, G: 68, B: 55, A: 255})
 	startColor, startText, startDetail := rl.Color{R: 25, G: 125, B: 65, A: 255}, "START SCAN", "Search between MIN and MAX"
 	if p.running {
 		startColor, startText, startDetail = rl.Color{R: 155, G: 42, B: 35, A: 255}, "STOP SCAN", "Keep current frequency"
@@ -306,7 +306,7 @@ func (p *ScanPanel) DrawPanel() {
 		saveColor = rl.Color{R: 24, G: 125, B: 70, A: 255}
 	}
 	drawScanButton(918, 678, 190, 58, saveTitle, saveDetail, saveColor)
-	drawScanButton(1122, 678, 260, 58, "DURANTE LA LISTEN  ▾", p.policyDescription(), rl.Color{R: 45, G: 58, B: 72, A: 255})
+	drawScanButton(1122, 678, 260, 58, "WHILE LISTENING  ▾", p.policyDescription(), rl.Color{R: 45, G: 58, B: 72, A: 255})
 	if p.choiceMenu != "" {
 		p.drawChoiceStrip()
 	} else {

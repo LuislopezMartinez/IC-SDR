@@ -178,7 +178,7 @@ func (d *Decoder) Configure(enabled bool, family string, frequency, center int64
 	d.mu.Lock()
 	d.current = s
 	d.status.Running = true
-	d.status.State = "WAITING TRAMAS"
+	d.status.State = "WAITING FOR FRAMES"
 	d.mu.Unlock()
 	go func() {
 		defer close(s.writerDone)
@@ -217,7 +217,7 @@ func (d *Decoder) Configure(enabled bool, family string, frequency, center int64
 				d.events = d.events[:2000]
 			}
 			if d.current == s {
-				d.status.State = "RECIBIENDO"
+				d.status.State = "RECEIVING"
 			}
 			d.mu.Unlock()
 			if d.eventSink != nil {
@@ -243,7 +243,7 @@ func (d *Decoder) Configure(enabled bool, family string, frequency, center int64
 		d.mu.Lock()
 		if d.current == s {
 			d.status.Running = false
-			d.status.State = "FINALIZADO"
+			d.status.State = "FINISHED"
 			if err != nil {
 				d.status.Error = err.Error()
 				d.status.State = "ERROR"

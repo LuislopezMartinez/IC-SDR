@@ -19,7 +19,7 @@ func TestMemoryGroupColorPersistsSeparately(t *testing.T) {
 }
 func TestUnknownGroupKeepsDefaultCyan(t *testing.T) {
 	panel := &MemoryPanel{groupColors: map[string]string{}}
-	if got := panel.groupColor("NUEVO"); got != colors.cyan {
+	if got := panel.groupColor("NEW"); got != colors.cyan {
 		t.Fatalf("fallback=%+v", got)
 	}
 }
@@ -28,16 +28,16 @@ func TestCreateEmptyMemoryGroupPersists(t *testing.T) {
 	dir := t.TempDir()
 	panel := &MemoryPanel{groupColorsPath: filepath.Join(dir, "groups.json"), groupColors: map[string]string{}, selectedGroup: "ALL"}
 	panel.rebuildGroups()
-	panel.pendingGroup = "Emergencias"
+	panel.pendingGroup = "Emergencies"
 	panel.pendingGroupColor = 3
 	panel.commitNewGroup()
-	if panel.selectedGroup != "Emergencias" || !panel.groupExists("emergencias") {
+	if panel.selectedGroup != "Emergencies" || !panel.groupExists("emergencies") {
 		t.Fatalf("new group was not selected or indexed: %+v", panel.groups)
 	}
 	loaded := &MemoryPanel{groupColorsPath: panel.groupColorsPath, groupColors: map[string]string{}, selectedGroup: "ALL"}
 	loaded.loadGroupColors()
 	loaded.rebuildGroups()
-	if !loaded.groupExists("EMERGENCIAS") {
+	if !loaded.groupExists("EMERGENCIES") {
 		t.Fatalf("empty group did not survive reload: %+v", loaded.groups)
 	}
 }

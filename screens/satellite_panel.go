@@ -239,7 +239,7 @@ func (p *SatellitePanel) applyStation() {
 	alt, altErr := strconv.ParseFloat(strings.TrimSpace(p.stationAlt.Text()), 64)
 	name := strings.TrimSpace(p.stationName.Text())
 	if name == "" || latErr != nil || lonErr != nil || altErr != nil || lat < -90 || lat > 90 || lon < -180 || lon > 180 || alt < -500 || alt > 9000 {
-		p.feedback = "INVALID STATION · CHECK NAME, LATITUDEE, LONGITUDEE AND ALTITUDEE"
+		p.feedback = "INVALID STATION · CHECK NAME, LATITUDE, LONGITUDE AND ALTITUDE"
 		return
 	}
 	station := satellite.Station{Name: name, Latitude: lat, Longitude: lon, AltitudeMeters: alt}
@@ -433,7 +433,7 @@ func (p *SatellitePanel) DrawPanel() {
 			break
 		}
 	}
-	eye := "BAJO EL HORIZONTE"
+	eye := "BELOW THE HORIZON"
 	c := colors.muted
 	if selected.Visible {
 		eye = "VISIBLE FROM " + snap.Station.Name

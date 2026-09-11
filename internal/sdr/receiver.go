@@ -145,7 +145,7 @@ func NewReceiver(config Config) *Receiver {
 		tune:                make(chan int64, 1),
 		settings:            make(chan HardwareSettings, 1),
 		spectrum:            make([]float32, config.FFTSize),
-		stats:               Stats{Status: "SDR desconectado"},
+		stats:               Stats{Status: "SDR disconnected"},
 		tunedHz:             config.FrequencyHz,
 		demodBandwidthHz:    9_000,
 		pbtLowHz:            100,
@@ -187,7 +187,7 @@ func (receiver *Receiver) Start() error {
 	receiver.trace("SDR: reading physical controls")
 	hardware := device.hardwareSettings()
 	if receiver.config.InitialHardware != nil {
-		receiver.trace("SDR: aplicando ajustes iniciales")
+		receiver.trace("SDR: applying initial settings")
 		initial := *receiver.config.InitialHardware
 		initial.Available = true
 		initial.Device = hardware.Device
@@ -200,12 +200,12 @@ func (receiver *Receiver) Start() error {
 		}
 		hardware = device.hardwareSettings()
 	}
-	receiver.trace("SDR: ajustes confirmados · sampleRate=%.0f", device.sampleRate)
+	receiver.trace("SDR: settings confirmed · sampleRate=%.0f", device.sampleRate)
 	receiver.mu.Lock()
 	receiver.stats.Device = device.hardware
 	receiver.stats.SampleRate = device.sampleRate
 	receiver.stats.SpectrumCenterHz = receiver.config.FrequencyHz
-	receiver.stats.Status = "IQ esperando primeras muestras"
+	receiver.stats.Status = "IQ waiting for first samples"
 	receiver.hardware = hardware
 	receiver.mu.Unlock()
 	receiver.running.Store(true)
@@ -390,7 +390,7 @@ func (receiver *Receiver) RestartSSTV() bool {
 }
 func (receiver *Receiver) SaveSSTVPartial() (string, error) {
 	if receiver.sstv == nil {
-		return "", fmt.Errorf("SSTV no disponible")
+		return "", fmt.Errorf("SSTV not available")
 	}
 	return receiver.sstv.SavePartial()
 }

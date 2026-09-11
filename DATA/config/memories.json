@@ -166,7 +166,7 @@
     "filterBandwidthHz": 11500,
     "stepHz": 12500,
     "scanEnabled": true,
-    "group": "REPETIDORES",
+    "group": "REPEATERS",
     "priority": false
   },
   {
@@ -186,11 +186,11 @@
     "filterBandwidthHz": 12500,
     "stepHz": 1000,
     "scanEnabled": true,
-    "group": "APRS ESP",
+    "group": "APRS SPAIN",
     "priority": false
   },
   {
-    "name": "AEROPUERTO ?",
+    "name": "AIRPORT ?",
     "frequencyHz": 420800260,
     "mode": "TETRA",
     "filterBandwidthHz": 25000,
@@ -201,7 +201,7 @@
   },
   {
     "name": "BCN TWR ARR",
-    "description": "Barcelona Torre, llegadas y salidas locales.",
+    "description": "Barcelona Tower, local arrivals and departures.",
     "frequencyHz": 118105000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
@@ -212,7 +212,7 @@
   },
   {
     "name": "BCN TWR DEP",
-    "description": "Barcelona Torre, salidas locales.",
+    "description": "Barcelona Tower, local departures.",
     "frequencyHz": 118330000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
@@ -267,7 +267,7 @@
   },
   {
     "name": "BCN GMC C",
-    "description": "Control de movimientos en tierra, zona central.",
+    "description": "Ground movement control, central area.",
     "frequencyHz": 121655000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
@@ -278,7 +278,7 @@
   },
   {
     "name": "BCN GMC N",
-    "description": "Control de movimientos en tierra, zona norte.",
+    "description": "Ground movement control, north area.",
     "frequencyHz": 121705000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
@@ -289,7 +289,7 @@
   },
   {
     "name": "BCN CLR",
-    "description": "Entrega de autorizaciones de salida.",
+    "description": "Departure clearance delivery.",
     "frequencyHz": 121805000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
@@ -311,7 +311,7 @@
   },
   {
     "name": "BCN GMC S",
-    "description": "Control de movimientos en tierra, zona sur.",
+    "description": "Ground movement control, south area.",
     "frequencyHz": 122230000,
     "mode": "AM",
     "filterBandwidthHz": 11500,
@@ -443,7 +443,7 @@
   },
   {
     "name": "MAR CH09",
-    "description": "Canal 9, llamada y embarcaciones de recreo.",
+    "description": "Channel 9, calling and recreational vessels.",
     "frequencyHz": 156450000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
@@ -476,7 +476,7 @@
   },
   {
     "name": "MAR DSC 70",
-    "description": "Canal 70, llamada selectiva digital de socorro; no contiene voz.",
+    "description": "Channel 70, digital selective calling for distress; no voice.",
     "frequencyHz": 156525000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
@@ -487,7 +487,7 @@
   },
   {
     "name": "MAR CH11",
-    "description": "Canal 11, operaciones portuarias.",
+    "description": "Channel 11, port operations.",
     "frequencyHz": 156550000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
@@ -509,7 +509,7 @@
   },
   {
     "name": "MAR CH12",
-    "description": "Canal 12, operaciones portuarias.",
+    "description": "Channel 12, port operations.",
     "frequencyHz": 156600000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
@@ -553,7 +553,7 @@
   },
   {
     "name": "MAR CH14",
-    "description": "Canal 14, operaciones portuarias.",
+    "description": "Channel 14, port operations.",
     "frequencyHz": 156700000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
@@ -575,7 +575,7 @@
   },
   {
     "name": "MAR CH16",
-    "description": "Canal 16, socorro, seguridad y llamada internacional.",
+    "description": "Channel 16, distress, safety and international calling.",
     "frequencyHz": 156800000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,
@@ -663,7 +663,7 @@
   },
   {
     "name": "ECAO BCN N",
-    "description": "Canal militar ECAO Barcelona, sector norte.",
+    "description": "Military ECAO Barcelona channel, north sector.",
     "frequencyHz": 125675000,
     "mode": "AM",
     "filterBandwidthHz": 12000,
@@ -674,7 +674,7 @@
   },
   {
     "name": "ECAO BCN S",
-    "description": "Canal militar ECAO Barcelona, sector sur.",
+    "description": "Military ECAO Barcelona channel, south sector.",
     "frequencyHz": 128000000,
     "mode": "AM",
     "filterBandwidthHz": 12000,
@@ -685,7 +685,7 @@
   },
   {
     "name": "ECAO BCN 138",
-    "description": "Canal militar ECAO Barcelona en VHF.",
+    "description": "Military ECAO Barcelona channel on VHF.",
     "frequencyHz": 138625000,
     "mode": "AM",
     "filterBandwidthHz": 12000,
@@ -696,7 +696,7 @@
   },
   {
     "name": "ECAO BCN 141",
-    "description": "Canal militar ECAO Barcelona en VHF.",
+    "description": "Military ECAO Barcelona channel on VHF.",
     "frequencyHz": 141900000,
     "mode": "AM",
     "filterBandwidthHz": 12000,
@@ -707,7 +707,7 @@
   },
   {
     "name": "ECAO BCN 240",
-    "description": "Canal militar ECAO Barcelona en UHF.",
+    "description": "Military ECAO Barcelona channel on UHF.",
     "frequencyHz": 240550000,
     "mode": "AM",
     "filterBandwidthHz": 25000,
@@ -729,7 +729,7 @@
   },
   {
     "name": "ECAO BCN 249",
-    "description": "Canal militar ECAO Barcelona en UHF.",
+    "description": "Military ECAO Barcelona channel on UHF.",
     "frequencyHz": 249700000,
     "mode": "AM",
     "filterBandwidthHz": 25000,
@@ -751,7 +751,7 @@
   },
   {
     "name": "BCN MIL 259",
-    "description": "Barcelona Control militar.",
+    "description": "Barcelona military control.",
     "frequencyHz": 259750000,
     "mode": "AM",
     "filterBandwidthHz": 25000,
@@ -762,7 +762,7 @@
   },
   {
     "name": "BCN MIL 276",
-    "description": "Barcelona Control militar.",
+    "description": "Barcelona military control.",
     "frequencyHz": 276225000,
     "mode": "AM",
     "filterBandwidthHz": 25000,
@@ -773,7 +773,7 @@
   },
   {
     "name": "BCN MIL 279",
-    "description": "Barcelona Control militar.",
+    "description": "Barcelona military control.",
     "frequencyHz": 279000000,
     "mode": "AM",
     "filterBandwidthHz": 25000,
@@ -784,7 +784,7 @@
   },
   {
     "name": "ECAO BCN 335",
-    "description": "Canal militar ECAO Barcelona en UHF.",
+    "description": "Military ECAO Barcelona channel on UHF.",
     "frequencyHz": 335575000,
     "mode": "AM",
     "filterBandwidthHz": 25000,
@@ -795,7 +795,7 @@
   },
   {
     "name": "ECAO BCN 359",
-    "description": "Canal militar ECAO Barcelona en UHF.",
+    "description": "Military ECAO Barcelona channel on UHF.",
     "frequencyHz": 359275000,
     "mode": "AM",
     "filterBandwidthHz": 25000,
@@ -806,7 +806,7 @@
   },
   {
     "name": "BCN MIL 363",
-    "description": "Barcelona Control militar.",
+    "description": "Barcelona military control.",
     "frequencyHz": 363550000,
     "mode": "AM",
     "filterBandwidthHz": 25000,
@@ -817,7 +817,7 @@
   },
   {
     "name": "BCN MIL 374",
-    "description": "Barcelona Control militar.",
+    "description": "Barcelona military control.",
     "frequencyHz": 374450000,
     "mode": "AM",
     "filterBandwidthHz": 25000,
@@ -828,7 +828,7 @@
   },
   {
     "name": "BCN MIL 398",
-    "description": "Barcelona Control militar publicado por ENAIRE.",
+    "description": "Barcelona military control published by ENAIRE.",
     "frequencyHz": 398375000,
     "mode": "AM",
     "filterBandwidthHz": 25000,
@@ -838,7 +838,7 @@
     "priority": false
   },
   {
-    "name": "ISS VOZ SSTV",
+    "name": "ISS VOICE SSTV",
     "description": "ARISS voice downlink, school contacts and SSTV campaigns.",
     "frequencyHz": 145800000,
     "mode": "NFM",
@@ -860,8 +860,8 @@
     "priority": false
   },
   {
-    "name": "ISS VOZ UHF",
-    "description": "Bajada UHF de voz del repetidor cruzado de ARISS.",
+    "name": "ISS VOICE UHF",
+    "description": "ARISS cross-band repeater UHF voice downlink.",
     "frequencyHz": 437800000,
     "mode": "NFM",
     "filterBandwidthHz": 25000,
@@ -872,7 +872,7 @@
   },
   {
     "name": "ISS APRS UHF",
-    "description": "APRS y packet UHF indicado actualmente por ARISS.",
+    "description": "UHF APRS and packet currently indicated by ARISS.",
     "frequencyHz": 437825000,
     "mode": "NFM",
     "filterBandwidthHz": 16000,

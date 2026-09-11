@@ -46,7 +46,7 @@ func NewAISPanel(screen *MainScreen) *AISPanel {
 		if screen.receiver != nil {
 			screen.receiver.ClearAIS()
 		}
-		p.feedback = "Lista limpiada"
+		p.feedback = "List cleared"
 	})
 	clearButton.SetColors(actionClearFill, colors.red, colors.text)
 	p.apply()
@@ -181,7 +181,7 @@ func (p *AISPanel) DrawPanel() {
 	cols := []struct {
 		x    float32
 		name string
-	}{{40, "SHIP / MMSI"}, {310, "LAST"}, {410, "LATITUDE"}, {535, "LONGITUDE"}, {665, "VEL. kn"}, {770, "TRACK"}, {880, "STATUS"}, {1090, "DESTINATION"}}
+	}{{40, "SHIP / MMSI"}, {310, "LAST"}, {410, "LATITUDE"}, {535, "LONGITUDE"}, {665, "SPD kn"}, {770, "TRACK"}, {880, "STATUS"}, {1090, "DESTINATION"}}
 	for _, c := range cols {
 		simpleui.DrawText(c.name, c.x, toolY+78, 12, colors.muted)
 	}

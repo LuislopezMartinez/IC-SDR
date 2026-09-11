@@ -259,7 +259,7 @@ func (v *satelliteMap) drawMap(b rl.Rectangle) {
 	rl.DrawLine(int32(legendBar.X), int32(legendBar.Y), int32(legendBar.X+legendBar.Width), int32(legendBar.Y), colors.border)
 	legendY := legendBar.Y + 7
 	drawMapToggle(rl.Vector2{X: b.X + 7, Y: legendY + 5}, true)
-	simpleui.DrawText("mostrar/ocultar", b.X+19, legendY, 11, colors.muted)
+	simpleui.DrawText("show/hide", b.X+19, legendY, 11, colors.muted)
 	drawVisibilityIndicator(rl.Vector2{X: b.X + 151, Y: legendY + 5}, true)
 	simpleui.DrawText("visible from the station", b.X+163, legendY, 11, colors.muted)
 	drawVisibilityIndicator(rl.Vector2{X: b.X + 355, Y: legendY + 5}, false)
@@ -278,7 +278,7 @@ func (v *satelliteMap) drawDetails(b rl.Rectangle) {
 		simpleui.DrawText("Click a satellite on the map or in the catalog", b.X+14, b.Y+48, 13, colors.muted)
 		return
 	}
-	eye := "BAJO EL HORIZONTE"
+	eye := "BELOW THE HORIZON"
 	c := colors.muted
 	if s.Visible {
 		eye = "VISIBLE FROM " + v.snapshot.Station.Name
@@ -303,12 +303,12 @@ simpleui.DrawText(fmt.Sprintf("Latitude      %.4f°", s.Latitude), x, b.Y+72, 13
 	simpleui.DrawText("FROM "+v.snapshot.Station.Name, x, b.Y+45, 11, colors.muted)
 simpleui.DrawText(fmt.Sprintf("Azimuth       %.1f°", s.Azimuth), x, b.Y+72, 13, colors.text)
 		simpleui.DrawText(fmt.Sprintf("Elevation    %.1f°", s.Elevation), x, b.Y+98, 13, colors.text)
-	simpleui.DrawText(fmt.Sprintf("Distancia   %.0f km", s.RangeKM), x, b.Y+124, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf("Distance     %.0f km", s.RangeKM), x, b.Y+124, 13, colors.text)
 
 	x = b.X + 808
 	simpleui.DrawText("RADIO / TELEMETRY", x, b.Y+45, 11, colors.muted)
 	simpleui.DrawText(sondeClip(s.Signal, 28), x, b.Y+72, 13, colors.text)
-	simpleui.DrawText("Modo          "+s.Mode, x, b.Y+98, 13, colors.text)
+	simpleui.DrawText("Mode          "+s.Mode, x, b.Y+98, 13, colors.text)
 	frequency := "Downlink    --"
 	if s.DownlinkHz > 0 {
 		frequency = fmt.Sprintf("Downlink    %.6f MHz", float64(s.DownlinkHz)/1e6)

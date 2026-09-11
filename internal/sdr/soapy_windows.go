@@ -64,13 +64,13 @@ func openSoapy(config Config) (*soapyDevice, error) {
 	candidates := deviceCandidates(config)
 	var failures []error
 	for _, candidate := range candidates {
-		config.trace("SoapySDR: probando driver=%s serial=%q", candidate.Driver, candidate.Serial)
+		config.trace("SoapySDR: trying driver=%s serial=%q", candidate.Driver, candidate.Serial)
 		device, err := openSoapyCandidate(candidate)
 		if err == nil {
-			config.trace("SoapySDR: driver %s abierto", candidate.Driver)
+			config.trace("SoapySDR: driver %s opened", candidate.Driver)
 			return device, nil
 		}
-		config.trace("SoapySDR: driver %s rechazado: %v", candidate.Driver, err)
+		config.trace("SoapySDR: driver %s rejected: %v", candidate.Driver, err)
 		failures = append(failures, fmt.Errorf("%s: %w", candidate.Driver, err))
 	}
 	return nil, fmt.Errorf("no RSP or RTL-SDR found: %w", errors.Join(failures...))
@@ -120,16 +120,16 @@ func openSoapyCandidate(config Config) (result *soapyDevice, err error) {
 	if err = api.check(api.setFrequency(device, soapyRX, 0, float64(config.FrequencyHz), 0), "set frequency"); err != nil {
 		return nil, err
 	}
-	config.trace("SoapySDR/%s: creando stream CF32", config.Driver)
+	config.trace("SoapySDR/%s: creating CF32 stream", config.Driver)
 	result.stream = api.setupStream(device, soapyRX, "CF32", 0, 0, 0)
 	if result.stream == 0 {
 		return nil, fmt.Errorf("setup CF32 stream: %s", api.deviceError())
 	}
-	config.trace("SoapySDR/%s: activando stream", config.Driver)
+	config.trace("SoapySDR/%s: activating stream", config.Driver)
 	if err = api.check(api.activateStream(device, result.stream, 0, 0, 0), "activate stream"); err != nil {
 		return nil, err
 	}
-	config.trace("SoapySDR/%s: stream activo", config.Driver)
+	config.trace("SoapySDR/%s: stream active", config.Driver)
 	return result, nil
 }
 
@@ -144,7 +144,7 @@ func loadSoapy(config Config) (*soapyAPI, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load %s: %w", corePath, err)
 	}
-	config.trace("SoapySDR/%s: SoapySDR.dll cargada", config.Driver)
+	config.trace("SoapySDR/%s: SoapySDR.dll loaded", config.Driver)
 	api := &soapyAPI{core: core}
 	moduleName := "rtlsdrSupport.dll"
 	if config.Driver == "sdrplay" {
@@ -168,7 +168,7 @@ func loadSoapy(config Config) (*soapyAPI, error) {
 				api.close()
 				return nil, fmt.Errorf("load RTL-SDR dependency %s: %w", name, loadErr)
 			}
-			config.trace("SoapySDR/rtlsdr: %s cargada", name)
+			config.trace("SoapySDR/rtlsdr: %s loaded", name)
 			api.dependencies = append(api.dependencies, handle)
 		}
 	}

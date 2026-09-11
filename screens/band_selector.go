@@ -144,7 +144,7 @@ func (selector *BandSelector) DrawOverlay() {
 	rl.DrawRectangleRounded(rl.Rectangle{X: 130, Y: 70, Width: 10, Height: 530}, .5, 8, accent)
 	simpleui.DrawTextStyled("BAND SELECTION", 170, 91, 27, simpleui.FontRegular, colors.text)
 
-	labels := []string{"RADIOAFICIONADO / HAM", "COMERCIALES", "ISM / LIBRE"}
+	labels := []string{"AMATEUR / HAM", "COMMERCIAL", "ISM / UNLICENSED"}
 	for index, label := range labels {
 		bounds := selector.categoryBounds(index)
 		active := []string{"HAM", "COMMERCIAL", "ISM"}[index] == selector.category

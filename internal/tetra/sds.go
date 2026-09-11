@@ -21,7 +21,7 @@ func parseSDS(bits []byte, ssi uint32, now time.Time) (Message, *Position, bool)
 		if !ok {
 			return Message{}, nil, false
 		}
-		return Message{Time: now, Kind: "SDS TEXTO", Text: fmt.Sprintf("SSI %08d · %s", ssi, text)}, nil, true
+		return Message{Time: now, Kind: "SDS TEXT", Text: fmt.Sprintf("SSI %08d · %s", ssi, text)}, nil, true
 	case 10: // Location Information Protocol
 		position, ok := parseShortLIP(payload, ssi, now)
 		if !ok {

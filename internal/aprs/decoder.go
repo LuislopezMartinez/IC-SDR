@@ -133,7 +133,7 @@ func freePort() (int, error) {
 		_ = listener.Close()
 		return port, nil
 	}
-	return 0, fmt.Errorf("no hay un puerto KISS libre entre 18101 y 18199")
+	return 0, fmt.Errorf("no free KISS port between 18101 and 18199")
 }
 func (d *Decoder) runtimeConfig(port int) (string, error) {
 	data, err := os.ReadFile(d.configTemplate)
@@ -224,7 +224,7 @@ func (d *Decoder) connectKISS(port int, session uint64) {
 		}
 		d.mu.Lock()
 		d.kiss = connection
-		d.detail = "KISS conectado · esperando AX.25"
+		d.detail = "KISS connected · waiting for AX.25"
 		d.mu.Unlock()
 		d.readKISS(connection, session)
 		_ = connection.Close()
@@ -307,7 +307,7 @@ func (d *Decoder) add(packet Packet) {
 	if len(d.packets) > 500 {
 		d.packets = d.packets[:500]
 	}
-	d.state = "RECIBIENDO"
+	d.state = "RECEIVING"
 	d.detail = packet.Source + " > " + packet.Destination
 	d.mu.Unlock()
 	d.packetCount.Add(1)

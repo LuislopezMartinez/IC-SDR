@@ -73,12 +73,12 @@ func (p *SubtonePanel) saveMemory() {
 }
 func (p *SubtonePanel) Draw() {
 	drawPanel(526, 16, 430, 72)
-	simpleui.DrawTextStyled("DETECTOR DE TONOS", 538, 20, 12, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled("TONE DETECTOR", 538, 20, 12, simpleui.FontSemiBold, colors.cyan)
 	s := p.status()
 	result := "SEARCHING…"
 	color := colors.muted
 	if p.mode == "OFF" {
-		result = "DESACTIVADO"
+		result = "DISABLED"
 	} else if p.screen.mode.SelectedText() != "NFM" {
 		result = "ONLY AVAILABLE IN NFM"
 	} else if s.Detected {

@@ -260,7 +260,7 @@ func drawAircraftSymbol(p rl.Vector2, size, angle float32, c rl.Color) {
 }
 func (v *aircraftMap) details() {
 	x := float32(1015)
-	simpleui.DrawText("DETALLE DE AERONAVE", x, 88, 14, colors.orange)
+	simpleui.DrawText("AIRCRAFT DETAILS", x, 88, 14, colors.orange)
 	if v.selected < 0 || v.selected >= len(v.list) {
 		simpleui.DrawText("Click an aircraft", x, 125, 13, colors.muted)
 		return

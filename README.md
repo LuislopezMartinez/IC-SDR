@@ -93,4 +93,4 @@ Settings, memories, recordings, captures, exports and logs are stored under `DAT
 
 IC-SDR is under active development. Available features may vary depending on the receiver, drivers and installed decoding tools.
 
-This tree is an English-language fork of [LuislopezMartinez/IC-SDR](https://github.com/LuislopezMartinez/IC-SDR). The desktop UI, logs, and default memory labels are in English. Old Spanish settings files (`PAQUETES`, `SONDAS`, `SIN GRUPO`, and similar) are still accepted and mapped on load.
+This tree is an English-language fork of [LuislopezMartinez/IC-SDR](https://github.com/LuislopezMartinez/IC-SDR). UI, logs, decoder status, default memories, docs, and tests are in English. Old Spanish settings files (`PAQUETES`, `SONDAS`, `SIN GRUPO`, and similar) are still accepted and mapped on load.

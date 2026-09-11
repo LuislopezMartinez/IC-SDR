@@ -42,7 +42,7 @@ func NewAircraftPanel(screen *MainScreen) *AircraftPanel {
 		if screen.receiver != nil {
 			screen.receiver.ClearAircraft()
 		}
-		p.feedback = "Lista limpiada"
+		p.feedback = "List cleared"
 	})
 	clearButton.SetColors(actionClearFill, colors.red, colors.text)
 	p.SetVisible(false)
@@ -210,12 +210,12 @@ func (p *AircraftPanel) DrawPanel() {
 	if status.Error != "" {
 		simpleui.DrawText(sondeClip(status.Error, 72), 880, toolY+38, 12, colors.red)
 	} else {
-		simpleui.DrawText("1090: ADS-B/Mode S mundial · 978 UAT: principalmente EE. UU.", 880, toolY+38, 12, colors.muted)
+		simpleui.DrawText("1090: ADS-B/Mode S worldwide · 978 UAT: mainly USA", 880, toolY+38, 12, colors.muted)
 	}
 	cols := []struct {
 		x    float32
 		name string
-	}{{40, "FLIGHT / ICAO"}, {260, "SOURCE"}, {375, "LAST"}, {480, "ALT ft"}, {590, "VEL kt"}, {700, "TRACK"}, {810, "V/S fpm"}, {950, "LATITUDE"}, {1080, "LONGITUDE"}}
+	}{{40, "FLIGHT / ICAO"}, {260, "SOURCE"}, {375, "LAST"}, {480, "ALT ft"}, {590, "SPD kt"}, {700, "TRACK"}, {810, "V/S fpm"}, {950, "LATITUDE"}, {1080, "LONGITUDE"}}
 	for _, c := range cols {
 		simpleui.DrawText(c.name, c.x, toolY+78, 12, colors.muted)
 	}

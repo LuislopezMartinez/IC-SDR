@@ -176,7 +176,7 @@ func (d *Decoder) transport(listener net.Listener) {
 	defer connection.Close()
 	_, _ = connection.Write([]byte{'R', 'T', 'L', '0', 0, 0, 0, 5, 0, 0, 0, 0})
 	d.mu.Lock()
-	d.state = "DECODIFICANDO"
+	d.state = "DECODING"
 	d.mu.Unlock()
 	for {
 		select {

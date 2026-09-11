@@ -139,7 +139,7 @@ func (d *Decoder) Configure(enabled bool) {
 				d.state = "ERROR"
 				d.lastError = err.Error()
 			} else {
-				d.state = "FINALIZADO"
+				d.state = "FINISHED"
 			}
 		}
 		d.mu.Unlock()
@@ -235,7 +235,7 @@ func (d *Decoder) mergeLocked(m message) {
 	v.Messages++
 	d.vessels[m.MMSI] = v
 	d.messages++
-	d.state = "RECIBIENDO"
+	d.state = "RECEIVING"
 }
 func (d *Decoder) ProcessIQ(iq []float32) {
 	d.mu.Lock()

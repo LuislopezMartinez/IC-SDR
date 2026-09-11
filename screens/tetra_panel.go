@@ -66,7 +66,7 @@ func NewTETRAPanel(screen *MainScreen) *TETRAPanel {
 	p.clearOnlySwitch.SetTrackColors(colors.red, colors.green)
 	p.controls = append(p.controls, p.clearOnlySwitch)
 	p.autoCenter = true
-	p.autoCenterSwitch = simpleui.NewSwitch("tetraAutoCenter", 1175, toolY+28, 140, 34, "AUTO CENTRO", true, 12)
+	p.autoCenterSwitch = simpleui.NewSwitch("tetraAutoCenter", 1175, toolY+28, 140, 34, "AUTO CENTER", true, 12)
 	p.autoCenterSwitch.OnChange(func(active bool) { p.autoCenter = active })
 	p.autoCenterSwitch.SetTrackColors(colors.panelAlt, colors.green)
 	p.controls = append(p.controls, p.autoCenterSwitch)
@@ -380,7 +380,7 @@ func (p *TETRAPanel) DrawPanel() {
 	if status.ActiveAudioSlot > 0 {
 		label, color := fmt.Sprintf("TARGET TS%d · WAITING FOR TCH", status.ActiveAudioSlot), colors.orange
 		if status.AudioFrames > 0 && time.Since(status.LastAudio) < time.Second {
-			label, color = fmt.Sprintf("REPRODUCIENDO TS%d", status.ActiveAudioSlot), colors.green
+			label, color = fmt.Sprintf("PLAYING TS%d", status.ActiveAudioSlot), colors.green
 		}
 		simpleui.DrawText(label, 1120, toolY+174, 12, color)
 	}
@@ -393,7 +393,7 @@ func (p *TETRAPanel) DrawPanel() {
 	drawTETRAStatusField("LEVEL", fmt.Sprintf("%6.1f dBFS", status.LevelDBFS), 555, toolY+72, 125)
 	drawTETRAStatusField("CALIDAD", fmt.Sprintf("%3.0f %%", status.Quality), 690, toolY+72, 115)
 	drawTETRAStatusField("AFC", fmt.Sprintf("%+6.0f Hz", status.FrequencyErrorHz), 815, toolY+72, 120)
-	drawTETRAStatusField("CENTRO", fmt.Sprintf("%+6.0f Hz", p.centerError), 945, toolY+72, 145)
+	drawTETRAStatusField("CENTER", fmt.Sprintf("%+6.0f Hz", p.centerError), 945, toolY+72, 145)
 	simpleui.DrawText(fmt.Sprintf("18 ksym/s · BER %5.2f%% · FER %5.1f%% · SYNC %d · NTS %d · AACH %d/%d · SCH %d/%d · MAC %d · CMCE %d", status.BER, status.FER, status.SyncHits, status.NormalBursts, status.AACHValid, status.AACHRejected, status.SCHValid, status.SCHCRCFailures, status.MACResources, status.CMCEEvents), toolContentX, toolY+99, 13, colors.muted)
 	if !status.LastSync.IsZero() {
 		simpleui.DrawText("LAST SYNC  "+status.LastSync.Format("15:04:05"), toolContentX, toolY+124, 13, colors.green)

@@ -453,6 +453,10 @@ func englishMemoryGroup(name string) string {
 		return "MARINE VHF"
 	case "MIL AEREA BCN":
 		return "MIL AIR BCN"
+	case "REPETIDORES":
+		return "REPEATERS"
+	case "APRS ESP":
+		return "APRS SPAIN"
 	default:
 		return name
 	}
@@ -1044,8 +1048,8 @@ func (p *MemoryPanel) drawSaveModalContent() {
 	detail := fmt.Sprintf("%.6f MHz  ·  %s  ·  %s", float64(p.pendingMemory.FrequencyHz)/1e6, p.pendingMemory.Mode, formatFilterBandwidth(p.pendingMemory.FilterBandwidthHz))
 	drawCentered(detail, rl.Rectangle{X: 490, Y: 374, Width: 620, Height: 28}, 16, colors.cyan)
 	if len(p.duplicateNames) > 0 {
-		drawCentered("THIS FREQUENCY IS ALREADY STONET", rl.Rectangle{X: 490, Y: 420, Width: 620, Height: 28}, 16, colors.orange)
-		drawCentered("Existente: "+strings.Join(p.duplicateNames, ", "), rl.Rectangle{X: 490, Y: 452, Width: 620, Height: 24}, 13, colors.text)
+		drawCentered("THIS FREQUENCY IS ALREADY STORED", rl.Rectangle{X: 490, Y: 420, Width: 620, Height: 28}, 16, colors.orange)
+		drawCentered("Existing: "+strings.Join(p.duplicateNames, ", "), rl.Rectangle{X: 490, Y: 452, Width: 620, Height: 24}, 13, colors.text)
 		drawCentered("A second memory will be saved on the same frequency.", rl.Rectangle{X: 490, Y: 478, Width: 620, Height: 22}, 12, colors.muted)
 	}
 }
@@ -1146,7 +1150,7 @@ func (p *MemoryPanel) DrawPanel() {
 		drawMemoryText(fmt.Sprintf("%d", count), 205, y, countColor)
 	}
 	drawPanel(245, memoryPanelTop, 1100, memoryPanelH)
-	headers := []string{"ACT", "NAME", "FREQUENCY", "MODO", "FILTER", "STEP", "PRI"}
+	headers := []string{"ACT", "NAME", "FREQUENCY", "MODE", "FILTER", "STEP", "PRI"}
 	xs := []float32{255, 300, 600, 800, 900, 1030, 1180}
 	for i, h := range headers {
 		drawColumnHeader(h, xs[i], memoryHeaderY, colors.text)
@@ -1434,13 +1438,13 @@ func (p *MemoryPanel) DrawMarkerTooltip(x, y, w, h float32) bool {
 		description = "No description"
 	}
 	simpleui.DrawTextStyled(trimMemory(description, 51), cardX+14, cardY+91, 13, simpleui.FontRegular, mainText)
-	status := "SCAN INACTIVO"
+	status := "SCAN INACTIVE"
 	if m.ScanEnabled {
-		status = "SCAN ACTIVO"
+		status = "SCAN ACTIVE"
 	}
 	priority := ""
 	if m.Priority {
-		priority = "  ·  PRIORITARIA"
+		priority = "  ·  PRIORITY"
 	}
 	simpleui.DrawTextStyled(memoryGroup(m)+"  ·  "+status+priority, cardX+14, cardY+118, 12, simpleui.FontSemiBold, accentText)
 	return true

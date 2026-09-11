@@ -63,7 +63,7 @@ func NewRTL433Panel(screen *MainScreen) *RTL433Panel {
 			screen.receiver.ClearRTL433Events()
 		}
 		p.selected = -1
-		p.feedback = "CAPTURES CLEANET"
+		p.feedback = "CAPTURES CLEARED"
 		p.feedbackUntil = time.Now().Add(2 * time.Second)
 	})
 	p.controls = append(p.controls, table, export, clearButton)

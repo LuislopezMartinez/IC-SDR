@@ -128,7 +128,7 @@ func (v *rtl433Viewer) draw() {
 		simpleui.DrawText(short(e.Summary, 27), 1120, y-1, 13, colors.text)
 	}
 	drawPanel(20, 610, 1360, 125)
-	simpleui.DrawTextStyled("DETALLE JSON", 32, 620, 13, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled("JSON DETAIL", 32, 620, 13, simpleui.FontSemiBold, colors.cyan)
 	if v.selected >= 0 && v.selected < len(v.events) {
 		drawWrapped(v.events[v.selected].Raw, 32, 647, 1335, 15, colors.text)
 	} else {

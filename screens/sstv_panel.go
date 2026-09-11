@@ -42,7 +42,7 @@ func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
 	for i := range p.candidateModes {
 		i := i
 		x := float32(40 + (i+1)*238)
-		p.candidateModes[i] = simpleui.NewDropdown(fmt.Sprintf("sstvCandidate%d", i), x+44, toolY+34, 182, 28, "MODO", sstv.ValidModes, uiMinimumFontSize)
+		p.candidateModes[i] = simpleui.NewDropdown(fmt.Sprintf("sstvCandidate%d", i), x+44, toolY+34, 182, 28, "MODE", sstv.ValidModes, uiMinimumFontSize)
 		p.candidateModes[i].SetSelected(sstvModeIndex(screen.sstvCandidateModes[i]))
 		p.candidateModes[i].SetMaxVisibleItems(5)
 		p.candidateModes[i].OnChange(func(_ int, mode string) {
@@ -54,7 +54,7 @@ func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
 		})
 	}
 	p.auto = p.button("sstvAuto", 1166, 657, 116, 36, "AUTO VIS", colors.blue)
-	p.force = p.button("sstvForce", 1292, 657, 126, 36, "FORZAR RX", colors.orange)
+	p.force = p.button("sstvForce", 1292, 657, 126, 36, "FORCE RX", colors.orange)
 	p.force.SetColors(colors.orange, colors.cyan, colors.background)
 	p.stop = p.button("sstvStop", 1428, 657, 128, 36, "STOP", colors.red)
 	p.restart = p.button("sstvRestart", 1006, 703, 128, 36, "RESTART", colors.panelAlt)
@@ -85,7 +85,7 @@ func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
 		if screen.receiver != nil {
 			screen.receiver.RestartSSTV()
 		}
-		p.flash("Decoder reiniciado")
+		p.flash("Decoder restarted")
 	})
 	p.save.OnClick(func() {
 		if screen.receiver == nil {
@@ -96,7 +96,7 @@ func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
 			p.flash(err.Error())
 			return
 		}
-		p.flash("Guardada: " + filepath.Base(path))
+		p.flash("Saved: " + filepath.Base(path))
 	})
 	p.folder.OnClick(func() {
 		if screen.receiver == nil {

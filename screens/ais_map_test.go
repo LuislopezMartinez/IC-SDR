@@ -45,12 +45,12 @@ func TestAISMapKeepsSelectedVesselWhenSnapshotOrderChanges(t *testing.T) {
 	lat, lon := 43.36, -8.41
 	v := aisMap{
 		path: path, selected: 0, selectedMMSI: 224123456,
-		vessels: []ais.Vessel{{MMSI: 224123456, Name: "ELEGIDO", Latitude: &lat, Longitude: &lon}},
+		vessels: []ais.Vessel{{MMSI: 224123456, Name: "SELECTED", Latitude: &lat, Longitude: &lon}},
 		tracks:  make(map[uint32][]geoPoint),
 	}
 	updated := []ais.Vessel{
-		{MMSI: 224999999, Name: "NUEVO", Latitude: &lat, Longitude: &lon},
-		{MMSI: 224123456, Name: "ELEGIDO", Latitude: &lat, Longitude: &lon},
+		{MMSI: 224999999, Name: "NEW", Latitude: &lat, Longitude: &lon},
+		{MMSI: 224123456, Name: "SELECTED", Latitude: &lat, Longitude: &lon},
 	}
 	data, _ := json.Marshal(updated)
 	if err := os.WriteFile(path, data, 0644); err != nil {

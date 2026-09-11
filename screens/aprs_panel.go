@@ -72,7 +72,7 @@ func NewAPRSPanel(screen *MainScreen) *APRSPanel {
 			screen.receiver.ClearAPRSPackets()
 		}
 		p.scroll, p.selected = 0, -1
-		p.say("HISTORY CLEANET")
+		p.say("HISTORY CLEARED")
 	})
 	p.controls = append(p.controls, europe, popout, export, clearButton)
 	p.SetVisible(false)
@@ -247,7 +247,7 @@ func (p *APRSPanel) DrawPanel() {
 	}
 	simpleui.DrawTextStyled("APRS RX · AFSK 1200 / AX.25", 40, 638, 16, simpleui.FontSemiBold, rl.Color{R: 55, G: 215, B: 195, A: 255})
 	stateColor := colors.orange
-	if status.State == "RECIBIENDO" {
+	if status.State == "RECEIVING" {
 		stateColor = colors.green
 	} else if status.State == "ERROR" {
 		stateColor = colors.red
@@ -353,7 +353,7 @@ func (p *APRSPanel) drawRadar() {
 		rl.DrawCircle(int32(x), int32(y), 4, colors.green)
 		simpleui.DrawText(v.Source, x+7, y-6, 12, colors.text)
 	}
-	simpleui.DrawText("VISTA RELATIVA OFFLINE", 290, 725, 12, colors.cyan)
+	simpleui.DrawText("RELATIVE VIEW OFFLINE", 290, 725, 12, colors.cyan)
 	simpleui.DrawText(fmt.Sprintf("%d stations with position", len(packets)), 290, 748, 13, colors.text)
 	simpleui.DrawText("No Internet connection", 290, 772, 12, colors.muted)
 }

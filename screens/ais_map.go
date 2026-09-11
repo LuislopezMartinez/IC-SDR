@@ -295,7 +295,7 @@ func (v *aisMap) draw() {
 		simpleui.DrawText(sondeClip(name, 19), p.X+12, p.Y-7, 10, colors.text)
 	}
 	v.drawScale(b)
-	simpleui.DrawText("MAPA AIS EN VIVO", 24, 20, 24, colors.cyan)
+	simpleui.DrawText("LIVE AIS MAP", 24, 20, 24, colors.cyan)
 	simpleui.DrawText(fmt.Sprintf("%d ships with signal · drag to pan · wheel to zoom", len(v.vessels)), 310, 29, 13, colors.muted)
 	v.drawDetails()
 	simpleui.DrawText("Natural Earth · built-in cartography · no Internet connection", 1015, 742, 9, colors.muted)
@@ -303,7 +303,7 @@ func (v *aisMap) draw() {
 
 func (v *aisMap) drawDetails() {
 	x := float32(1015)
-	simpleui.DrawText("DETALLE DEL BARCO", x, 88, 14, colors.orange)
+	simpleui.DrawText("SHIP DETAILS", x, 88, 14, colors.orange)
 	if v.selected < 0 || v.selected >= len(v.vessels) {
 		simpleui.DrawText("Click a ship on the map", x, 125, 13, colors.muted)
 		simpleui.DrawText("to inspect its details.", x, 148, 13, colors.muted)

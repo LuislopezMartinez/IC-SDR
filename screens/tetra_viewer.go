@@ -115,7 +115,7 @@ func (v *tetraViewer) draw() {
 }
 
 func (v *tetraViewer) drawNeighbours() {
-	simpleui.DrawTextStyled("CELLS VECINAS · D-NWRK-BROADCAST", 48, 175, 18, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled("NEIGHBOUR CELLS · D-NWRK-BROADCAST", 48, 175, 18, simpleui.FontSemiBold, colors.cyan)
 	if len(v.snapshot.Neighbours) == 0 {
 		simpleui.DrawText("Waiting for neighbour cell announcements…", 48, 235, 14, colors.muted)
 		return
@@ -123,7 +123,7 @@ func (v *tetraViewer) drawNeighbours() {
 	columns := []struct {
 		x    float32
 		text string
-	}{{48, "CELL"}, {145, "FREQUENCY"}, {350, "CARRIER"}, {480, "MCC"}, {560, "MNC"}, {650, "LA"}, {750, "SYNC"}, {850, "SERVICE"}, {990, "VOZ"}, {1090, "UPDATED"}}
+	}{{48, "CELL"}, {145, "FREQUENCY"}, {350, "CARRIER"}, {480, "MCC"}, {560, "MNC"}, {650, "LA"}, {750, "SYNC"}, {850, "SERVICE"}, {990, "VOICE"}, {1090, "UPDATED"}}
 	for _, column := range columns {
 		simpleui.DrawTextStyled(column.text, column.x, 215, 12, simpleui.FontSemiBold, colors.cyan)
 	}
@@ -135,7 +135,7 @@ func (v *tetraViewer) drawNeighbours() {
 		if i%2 == 0 {
 			rl.DrawRectangle(38, int32(y-3), 1300, 27, colors.panel)
 		}
-		frequency := "DESCONOCIDA"
+		frequency := "UNKNOWN"
 		if n.FrequencyHz > 0 {
 			frequency = fmt.Sprintf("%.6f MHz", float64(n.FrequencyHz)/1e6)
 		}
@@ -186,9 +186,9 @@ func (v *tetraViewer) drawGroups() {
 				rl.DrawRectangle(38, int32(y-3), 1300, 27, colors.panel)
 			}
 			stateColor := colors.muted
-			activity := "FINALIZADA"
+			activity := "ENDED"
 			if call.Active {
-				stateColor, activity = colors.green, "ACTIVA"
+				stateColor, activity = colors.green, "ACTIVE"
 			}
 			cipher := "CLEAR"
 			cipherColor := colors.green
@@ -221,7 +221,7 @@ func (v *tetraViewer) drawGroups() {
 		simpleui.DrawTextStyled(fmt.Sprintf("%08d", g.ID), 48, y, 14, simpleui.FontMono, colors.text)
 		simpleui.DrawText(g.Name, 270, y, 13, colors.text)
 		simpleui.DrawText(g.LastEvent, 530, y, 13, colors.cyan)
-		simpleui.DrawText(fmt.Sprintf("%d eventos", g.Calls), 790, y, 13, colors.text)
+		simpleui.DrawText(fmt.Sprintf("%d events", g.Calls), 790, y, 13, colors.text)
 		simpleui.DrawText(viewerTime(g.LastSeen), 1020, y, 13, colors.text)
 	}
 }
@@ -245,7 +245,7 @@ func (v *tetraViewer) drawMessages() {
 	}
 }
 func (v *tetraViewer) drawUsers() {
-	simpleui.DrawTextStyled("USERS DETECTADOS · MAC-RESOURCE", 48, 175, 18, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled("USERS DETECTED · MAC-RESOURCE", 48, 175, 18, simpleui.FontSemiBold, colors.cyan)
 	cols := []struct {
 		x     float32
 		label string
@@ -314,12 +314,12 @@ func (v *tetraViewer) drawNetwork() {
 }
 func (v *tetraViewer) drawEmpty(title string, count int, hint string) {
 	simpleui.DrawTextStyled(title, 48, 175, 18, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawText(fmt.Sprintf("%d elementos", count), 48, 212, 14, colors.text)
+	simpleui.DrawText(fmt.Sprintf("%d items", count), 48, 212, 14, colors.text)
 	simpleui.DrawText(hint, 48, 260, 14, colors.muted)
 	simpleui.DrawText("The window already receives the live snapshot and will keep this tab for the next protocol phase.", 48, 292, 13, colors.muted)
 }
 func (v *tetraViewer) drawGPS() {
-	simpleui.DrawTextStyled("POSICIONES GPS / LIP", 48, 175, 18, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled("GPS / LIP POSITIONS", 48, 175, 18, simpleui.FontSemiBold, colors.cyan)
 	mapBox := rl.Rectangle{X: 48, Y: 220, Width: 900, Height: 480}
 	rl.DrawRectangleRec(mapBox, rl.Color{R: 8, G: 17, B: 24, A: 255})
 	rl.DrawRectangleLinesEx(mapBox, 1, colors.border)
@@ -331,7 +331,7 @@ func (v *tetraViewer) drawGPS() {
 		y := mapBox.Y + mapBox.Height*float32(i)/6
 		rl.DrawLine(int32(mapBox.X), int32(y), int32(mapBox.X+mapBox.Width), int32(y), colors.grid)
 	}
-	simpleui.DrawText(fmt.Sprintf("%d posiciones", len(v.snapshot.Positions)), 990, 230, 15, colors.text)
+	simpleui.DrawText(fmt.Sprintf("%d positions", len(v.snapshot.Positions)), 990, 230, 15, colors.text)
 	if len(v.snapshot.Positions) == 0 {
 		simpleui.DrawText("Waiting for LIP messages", 990, 270, 13, colors.muted)
 		return
