@@ -50,8 +50,10 @@ type cprFrame struct {
 	at       time.Time
 }
 type trackState struct {
-	aircraft  Aircraft
-	even, odd *cprFrame
+	aircraft       Aircraft
+	even, odd      *cprFrame
+	refLat, refLon float64
+	hasRef         bool
 }
 
 type Decoder struct {
@@ -286,7 +288,11 @@ func (d *Decoder) stateFor(icao, source string) *trackState {
 	return t
 }
 func (d *Decoder) decode1090(raw []byte) {
-	if len(raw) != 14 || raw[0]>>3 != 17 {
+	if len(raw) != 14 {
+		return
+	}
+	df := raw[0] >> 3
+	if df != 17 && df != 18 {
 		return
 	}
 	icao := strings.ToUpper(hex.EncodeToString(raw[1:4]))
@@ -311,24 +317,19 @@ func (d *Decoder) decode1090(raw []byte) {
 		}
 		a.Callsign = strings.TrimSpace(strings.ReplaceAll(b.String(), "_", " "))
 		a.Category = fmt.Sprintf("TC %d", tc)
-	case tc >= 9 && tc <= 18:
-		q := bit(raw, 47, 1)
-		altCode := int(bit(raw, 40, 12))
-		if q == 1 {
-			alt := ((altCode & 0xFE0) >> 1) | (altCode & 0xF)
-			alt = alt*25 - 1000
-			a.Altitude = &alt
+	case tc >= 5 && tc <= 8:
+		t.applyCPR(a, int(bit(raw, 54, 17)), int(bit(raw, 71, 17)), bit(raw, 53, 1) == 1, true, now)
+	case (tc >= 9 && tc <= 18) || (tc >= 20 && tc <= 22):
+		if tc <= 18 {
+			q := bit(raw, 47, 1)
+			altCode := int(bit(raw, 40, 12))
+			if q == 1 {
+				alt := ((altCode & 0xFE0) >> 1) | (altCode & 0xF)
+				alt = alt*25 - 1000
+				a.Altitude = &alt
+			}
 		}
-		f := &cprFrame{lat: int(bit(raw, 54, 17)), lon: int(bit(raw, 71, 17)), odd: bit(raw, 53, 1) == 1, at: now}
-		if f.odd {
-			t.odd = f
-		} else {
-			t.even = f
-		}
-		if lat, lon, ok := decodeCPR(t.even, t.odd); ok {
-			a.Latitude = &lat
-			a.Longitude = &lon
-		}
+		t.applyCPR(a, int(bit(raw, 54, 17)), int(bit(raw, 71, 17)), bit(raw, 53, 1) == 1, false, now)
 	case tc == 19:
 		sub := int(bit(raw, 37, 3))
 		if sub == 1 || sub == 2 {
@@ -355,62 +356,35 @@ func (d *Decoder) decode1090(raw []byte) {
 		}
 	}
 }
-func mod(a, b int) int {
-	r := a % b
-	if r < 0 {
-		r += b
+func (t *trackState) applyCPR(a *Aircraft, cprlat, cprlon int, odd, surface bool, now time.Time) {
+	f := &cprFrame{lat: cprlat, lon: cprlon, odd: odd, at: now}
+	if odd {
+		t.odd = f
+	} else {
+		t.even = f
 	}
-	return r
+	maxAge := 10.0
+	if surface {
+		maxAge = 25
+	}
+	if t.even != nil && t.odd != nil && math.Abs(t.even.at.Sub(t.odd.at).Seconds()) <= maxAge {
+		if !surface {
+			if lat, lon, ok := decodeCPRAirborne(t.even.lat, t.even.lon, t.odd.lat, t.odd.lon, odd); ok {
+				t.setPosition(a, lat, lon)
+				return
+			}
+		}
+	}
+	if t.hasRef {
+		if lat, lon, ok := decodeCPRRelative(t.refLat, t.refLon, cprlat, cprlon, odd, surface); ok {
+			t.setPosition(a, lat, lon)
+		}
+	}
 }
-func cprNL(lat float64) int {
-	lat = math.Abs(lat)
-	if lat >= 87 {
-		return 1
-	}
-	nz := 15.
-	a := 1 - math.Cos(math.Pi/(2*nz))
-	b := math.Cos(lat * math.Pi / 180)
-	return int(math.Floor(2 * math.Pi / math.Acos(1-a/(b*b))))
-}
-func decodeCPR(e, o *cprFrame) (float64, float64, bool) {
-	if e == nil || o == nil || math.Abs(e.at.Sub(o.at).Seconds()) > 10 {
-		return 0, 0, false
-	}
-	ye, yo := float64(e.lat)/131072, float64(o.lat)/131072
-	j := int(math.Floor(59*ye - 60*yo + .5))
-	rlatE := 6 * (float64(mod(j, 60)) + ye)
-	rlatO := 360. / 59 * (float64(mod(j, 59)) + yo)
-	if rlatE >= 270 {
-		rlatE -= 360
-	}
-	if rlatO >= 270 {
-		rlatO -= 360
-	}
-	if cprNL(rlatE) != cprNL(rlatO) {
-		return 0, 0, false
-	}
-	latest := e
-	if o.at.After(e.at) {
-		latest = o
-	}
-	lat := rlatE
-	if latest.odd {
-		lat = rlatO
-	}
-	nl := cprNL(lat)
-	ni := nl
-	if latest.odd {
-		ni = nl - 1
-	}
-	if ni < 1 {
-		ni = 1
-	}
-	m := int(math.Floor(float64(e.lon)*(float64(nl)-1)/131072 - float64(o.lon)*float64(nl)/131072 + .5))
-	lon := 360. / float64(ni) * (float64(mod(m, ni)) + float64(latest.lon)/131072)
-	if lon > 180 {
-		lon -= 360
-	}
-	return lat, lon, true
+
+func (t *trackState) setPosition(a *Aircraft, lat, lon float64) {
+	a.Latitude, a.Longitude = &lat, &lon
+	t.refLat, t.refLon, t.hasRef = lat, lon, true
 }
 
 func (d *Decoder) read978(r io.Reader) {

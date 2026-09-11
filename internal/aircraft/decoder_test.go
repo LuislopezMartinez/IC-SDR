@@ -5,6 +5,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 )
 
 func decodeHex(t *testing.T, d *Decoder, value string) {
@@ -34,7 +35,7 @@ func TestDecodeADSBIdentificationAndPosition(t *testing.T) {
 	if pos == nil || pos.Latitude == nil || pos.Longitude == nil {
 		t.Fatalf("position not decoded: %+v", pos)
 	}
-	if math.Abs(*pos.Latitude-52.2572) > .001 || math.Abs(*pos.Longitude-3.91937) > .001 {
+	if math.Abs(*pos.Latitude-52.26578) > .001 || math.Abs(*pos.Longitude-3.93891) > .001 {
 		t.Fatalf("wrong CPR position %.5f %.5f", *pos.Latitude, *pos.Longitude)
 	}
 	var id *Aircraft
@@ -45,6 +46,30 @@ func TestDecodeADSBIdentificationAndPosition(t *testing.T) {
 	}
 	if id == nil || id.Callsign != "KLM1023" {
 		t.Fatalf("wrong callsign: %+v", id)
+	}
+}
+
+func TestDecodeADSBSouthernHemisphere(t *testing.T) {
+	d := New(2_048_000, "", "", "")
+	now := time.Date(2026, 9, 11, 0, 0, 0, 0, time.UTC)
+	for _, p := range []struct{ lat, lon float64 }{
+		{-33.8688, 151.2093},
+		{-45.8788, 170.5028},
+		{61.2181, -149.9003},
+	} {
+		d.Clear()
+		st := d.stateFor("7C0001", "1090 ADS-B")
+		ye, xe := encodeAirborne(p.lat, p.lon, false)
+		yo, xo := encodeAirborne(p.lat, p.lon, true)
+		st.applyCPR(&st.aircraft, ye, xe, false, false, now)
+		st.applyCPR(&st.aircraft, yo, xo, true, false, now.Add(time.Second))
+		list := d.Aircraft()
+		if len(list) != 1 || list[0].Latitude == nil || list[0].Longitude == nil {
+			t.Fatalf("missing position at %+v: %+v", p, list)
+		}
+		if math.Abs(*list[0].Latitude-p.lat) > 0.002 || math.Abs(wrap180(*list[0].Longitude-p.lon)) > 0.002 {
+			t.Fatalf("wrong position at %+v: %.5f %.5f", p, *list[0].Latitude, *list[0].Longitude)
+		}
 	}
 }
 
