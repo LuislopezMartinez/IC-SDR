@@ -47,6 +47,7 @@ type Status struct {
 type cprFrame struct {
 	lat, lon int
 	odd      bool
+	surface  bool
 	at       time.Time
 }
 type trackState struct {
@@ -69,6 +70,9 @@ type Decoder struct {
 	dropped                        uint64
 	messages                       int
 	tracks                         map[string]*trackState
+	magTail                        []uint16
+	receiverLat, receiverLon       float64
+	hasReceiverRef                 bool
 }
 
 func New(rate float64, exe1090, exe978, exeUATText string) *Decoder {
@@ -85,49 +89,52 @@ func (d *Decoder) Configure(enabled bool, mode string) {
 		mode = Mode1090
 	}
 	d.mode = mode
-	d.queue = make(chan []float32, 16)
+	d.queue = make(chan []float32, 64)
 	d.stop = make(chan struct{})
 	d.done = make(chan struct{})
+	d.magTail = nil
+	if mode == Mode1090 {
+		d.running = true
+		d.state = "WAITING FOR AIRCRAFT"
+		d.lastError = ""
+		d.detail = "native 1090 demod"
+		go func(stop, done chan struct{}) {
+			defer close(done)
+			for {
+				select {
+				case <-stop:
+					return
+				case iq := <-d.queue:
+					d.consume1090(iq)
+				}
+			}
+		}(d.stop, d.done)
+		return
+	}
 	var stdout io.ReadCloser
 	var err error
-	if mode == Mode1090 {
-		if d.exe1090 == "" {
-			d.fail(errors.New("dump1090 not configured"))
-			return
-		}
-		d.cmd = exec.Command(d.exe1090, "--ifile", "-", "--raw")
-		d.cmd.SysProcAttr = hiddenProcessAttributes()
-		d.stdin, err = d.cmd.StdinPipe()
-		if err == nil {
-			stdout, err = d.cmd.StdoutPipe()
-		}
-		if err == nil {
-			err = d.cmd.Start()
-		}
-	} else {
-		if d.exe978 == "" || d.exeUATText == "" {
-			d.fail(errors.New("dump978 not configured"))
-			return
-		}
-		d.cmd = exec.Command(d.exe978)
-		d.helper = exec.Command(d.exeUATText)
-		d.cmd.SysProcAttr = hiddenProcessAttributes()
-		d.helper.SysProcAttr = hiddenProcessAttributes()
-		d.stdin, err = d.cmd.StdinPipe()
-		var pipe io.ReadCloser
-		if err == nil {
-			pipe, err = d.cmd.StdoutPipe()
-		}
-		if err == nil {
-			d.helper.Stdin = pipe
-			stdout, err = d.helper.StdoutPipe()
-		}
-		if err == nil {
-			err = d.helper.Start()
-		}
-		if err == nil {
-			err = d.cmd.Start()
-		}
+	if d.exe978 == "" || d.exeUATText == "" {
+		d.fail(errors.New("dump978 not configured"))
+		return
+	}
+	d.cmd = exec.Command(d.exe978)
+	d.helper = exec.Command(d.exeUATText)
+	d.cmd.SysProcAttr = hiddenProcessAttributes()
+	d.helper.SysProcAttr = hiddenProcessAttributes()
+	d.stdin, err = d.cmd.StdinPipe()
+	var pipe io.ReadCloser
+	if err == nil {
+		pipe, err = d.cmd.StdoutPipe()
+	}
+	if err == nil {
+		d.helper.Stdin = pipe
+		stdout, err = d.helper.StdoutPipe()
+	}
+	if err == nil {
+		err = d.helper.Start()
+	}
+	if err == nil {
+		err = d.cmd.Start()
 	}
 	if err != nil {
 		if d.stdin != nil {
@@ -139,12 +146,9 @@ func (d *Decoder) Configure(enabled bool, mode string) {
 	d.running = true
 	d.state = "WAITING FOR AIRCRAFT"
 	d.lastError = ""
+	d.detail = "978 UAT"
 	go d.writeIQ()
-	if mode == Mode1090 {
-		go d.read1090(stdout)
-	} else {
-		go d.read978(stdout)
-	}
+	go d.read978(stdout)
 	cmd, helper, done := d.cmd, d.helper, d.done
 	go func() {
 		err := cmd.Wait()
@@ -173,10 +177,17 @@ func (d *Decoder) fail(err error) {
 	d.state = "ERROR"
 	d.lastError = err.Error()
 }
+func (d *Decoder) SetReference(lat, lon float64, ok bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.hasReceiverRef = ok && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
+	d.receiverLat, d.receiverLon = lat, lon
+}
+
 func (d *Decoder) stopProcess() {
 	d.mu.Lock()
 	cmd, helper, stdin, stop, done := d.cmd, d.helper, d.stdin, d.stop, d.done
-	active := cmd != nil
+	active := d.running || cmd != nil
 	d.running = false
 	d.cmd = nil
 	d.helper = nil
@@ -188,15 +199,21 @@ func (d *Decoder) stopProcess() {
 		d.mu.Unlock()
 		return
 	}
-	close(stop)
-	_ = stdin.Close()
-	if cmd.Process != nil {
+	if stop != nil {
+		close(stop)
+	}
+	if stdin != nil {
+		_ = stdin.Close()
+	}
+	if cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Kill()
 	}
 	if helper != nil && helper.Process != nil {
 		_ = helper.Process.Kill()
 	}
-	<-done
+	if done != nil {
+		<-done
+	}
 	d.mu.Lock()
 	d.state = "STOPPED"
 	d.mu.Unlock()
@@ -215,20 +232,42 @@ func (d *Decoder) ProcessIQ(iq []float32) {
 	}
 }
 func (d *Decoder) writeIQ() {
-	target := 2_000_000.
-	if d.mode == Mode978 {
-		target = 2_083_334
-	}
+	stop := d.stop
 	for {
 		select {
-		case <-d.stop:
+		case <-stop:
 			return
 		case iq := <-d.queue:
-			samples := resampleCU8(iq, d.rate, target)
+			samples := resampleCU8(iq, d.rate, 2_083_334)
 			if _, err := d.stdin.Write(samples); err != nil {
 				return
 			}
 		}
+	}
+}
+
+func (d *Decoder) consume1090(iq []float32) {
+	samples := resampleIQ(iq, d.rate, 2_000_000)
+	mag := magnitudes(samples)
+	if len(d.magTail) > 0 {
+		combined := make([]uint16, 0, len(d.magTail)+len(mag))
+		combined = append(combined, d.magTail...)
+		mag = append(combined, mag...)
+	}
+	frames := detectModeS(mag)
+	if len(mag) > modeSOverlapSamples {
+		d.magTail = append([]uint16(nil), mag[len(mag)-modeSOverlapSamples:]...)
+	} else {
+		d.magTail = append([]uint16(nil), mag...)
+	}
+	seen := map[string]struct{}{}
+	for _, raw := range frames {
+		key := hex.EncodeToString(raw)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		d.decode1090(raw)
 	}
 }
 func resampleCU8(iq []float32, inputRate, outputRate float64) []byte {
@@ -283,6 +322,9 @@ func (d *Decoder) stateFor(icao, source string) *trackState {
 	t := d.tracks[icao]
 	if t == nil {
 		t = &trackState{aircraft: Aircraft{ICAO: icao, Source: source}}
+		if d.hasReceiverRef {
+			t.refLat, t.refLon, t.hasRef = d.receiverLat, d.receiverLon, true
+		}
 		d.tracks[icao] = t
 	}
 	return t
@@ -357,7 +399,7 @@ func (d *Decoder) decode1090(raw []byte) {
 	}
 }
 func (t *trackState) applyCPR(a *Aircraft, cprlat, cprlon int, odd, surface bool, now time.Time) {
-	f := &cprFrame{lat: cprlat, lon: cprlon, odd: odd, at: now}
+	f := &cprFrame{lat: cprlat, lon: cprlon, odd: odd, surface: surface, at: now}
 	if odd {
 		t.odd = f
 	} else {
@@ -367,7 +409,7 @@ func (t *trackState) applyCPR(a *Aircraft, cprlat, cprlon int, odd, surface bool
 	if surface {
 		maxAge = 25
 	}
-	if t.even != nil && t.odd != nil && math.Abs(t.even.at.Sub(t.odd.at).Seconds()) <= maxAge {
+	if t.even != nil && t.odd != nil && t.even.surface == t.odd.surface && t.even.surface == surface && math.Abs(t.even.at.Sub(t.odd.at).Seconds()) <= maxAge {
 		if !surface {
 			if lat, lon, ok := decodeCPRAirborne(t.even.lat, t.even.lon, t.odd.lat, t.odd.lon, odd); ok {
 				t.setPosition(a, lat, lon)

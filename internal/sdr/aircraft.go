@@ -7,6 +7,11 @@ func (r *Receiver) ConfigureAircraft(enabled bool, mode string) {
 		r.aircraft.Configure(enabled, mode)
 	}
 }
+func (r *Receiver) SetAircraftReference(lat, lon float64, ok bool) {
+	if r.aircraft != nil {
+		r.aircraft.SetReference(lat, lon, ok)
+	}
+}
 func (r *Receiver) AircraftStatus() aircraft.Status {
 	if r.aircraft == nil {
 		return aircraft.Status{State: "UNAVAILABLE"}

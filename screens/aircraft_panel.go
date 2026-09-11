@@ -112,6 +112,8 @@ func (p *AircraftPanel) Leave() {
 }
 func (p *AircraftPanel) apply() {
 	if p.screen.receiver != nil {
+		lat, lon, ok := loadAircraftReceiverRef()
+		p.screen.receiver.SetAircraftReference(lat, lon, ok)
 		p.screen.receiver.ConfigureAircraft(p.enabled, p.mode)
 		if p.enabled && !p.screen.receiver.AircraftStatus().Running {
 			p.enabled = false
@@ -209,6 +211,8 @@ func (p *AircraftPanel) DrawPanel() {
 	simpleui.DrawText(fmt.Sprintf("AIR SURVEILLANCE · %s · %.3f MHz · %s · %d aircraft · %d messages", p.mode, float64(p.frequency())/1e6, status.State, len(list), status.Messages), 40, toolY+7, 12, colors.cyan)
 	if status.Error != "" {
 		simpleui.DrawText(sondeClip(status.Error, 72), 880, toolY+38, 12, colors.red)
+	} else if status.Detail != "" {
+		simpleui.DrawText(sondeClip(status.Detail, 72), 880, toolY+38, 12, colors.muted)
 	} else {
 		simpleui.DrawText("1090: ADS-B/Mode S worldwide · 978 UAT: mainly USA", 880, toolY+38, 12, colors.muted)
 	}
@@ -246,4 +250,24 @@ func (p *AircraftPanel) DrawPanel() {
 		simpleui.DrawText("Select a band and press START. OPEN MAP shows positions, altitude and trails in another window.", 40, toolY+110, 13, colors.muted)
 	}
 	simpleui.DrawText(sondeClip(p.feedback+"  Local reception from the SDR · no external tracking services", 150), 40, toolY+174, 12, colors.muted)
+}
+
+func loadAircraftReceiverRef() (float64, float64, bool) {
+	data, err := os.ReadFile(resources.WritablePath("config", "satellite-station.json"))
+	if err != nil {
+		return 0, 0, false
+	}
+	var station struct {
+		Latitude, Longitude float64
+	}
+	if json.Unmarshal(data, &station) != nil {
+		return 0, 0, false
+	}
+	if station.Latitude == 0 && station.Longitude == 0 {
+		return 0, 0, false
+	}
+	if station.Latitude < -90 || station.Latitude > 90 || station.Longitude < -180 || station.Longitude > 180 {
+		return 0, 0, false
+	}
+	return station.Latitude, station.Longitude, true
 }
