@@ -29,7 +29,7 @@ func TestReplaceLiveSnapshotUpdatesExistingFile(t *testing.T) {
 
 func TestAPRSPacketSnapshotSupportsPacketsWithoutPosition(t *testing.T) {
 	panel := &APRSPanel{snapshotPath: filepath.Join(t.TempDir(), "aprs.json")}
-	packets := []aprs.Packet{{Received: time.Now(), Source: "EA1TEST", Type: "STATUS", Coordinates: "—", Summary: "en ruta"}}
+	packets := []aprs.Packet{{Received: time.Now(), Source: "EA1TEST", Type: "STATUS", Coordinates: "—", Summary: "en route"}}
 	panel.writeSnapshot(packets)
 	data, err := os.ReadFile(panel.snapshotPath)
 	if err != nil {

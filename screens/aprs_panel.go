@@ -309,7 +309,7 @@ func (p *APRSPanel) drawTable(packets []aprs.Packet) {
 		simpleui.DrawText(short(packet.Destination, 12), 590, y, 12, colors.text)
 		path := packet.Path
 		if path == "" {
-			path = "DIRECTO"
+			path = "DIRECT"
 		}
 		simpleui.DrawText(short(path, 25), 700, y, 12, colors.text)
 		info := packet.Summary

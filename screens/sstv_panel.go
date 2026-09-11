@@ -218,7 +218,7 @@ func (p *SSTVPanel) DrawPanel() {
 	bar := rl.Rectangle{X: 1006, Y: 799, Width: 550, Height: 10}
 	rl.DrawRectangleRec(bar, colors.grid)
 	rl.DrawRectangleRec(rl.Rectangle{X: bar.X, Y: bar.Y, Width: bar.Width * float32(p.status.Progress) / 100, Height: bar.Height}, colors.green)
-	tone := fmt.Sprintf("TONO %.0f Hz  %.0f dB", p.status.ToneFrequency, p.status.ToneLevel)
+	tone := fmt.Sprintf("TONE %.0f Hz  %.0f dB", p.status.ToneFrequency, p.status.ToneLevel)
 	drawSmallText(tone, 1006, 812, colors.muted)
 	if p.feedback != "" && time.Now().Before(p.feedbackUntil) {
 		drawSmallText(p.feedback, 1240, 812, colors.cyan)

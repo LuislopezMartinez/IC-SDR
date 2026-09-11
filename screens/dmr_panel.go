@@ -48,7 +48,7 @@ func NewDMRPanel(screen *MainScreen) *DMRPanel {
 	p.ts2.OnClick(func() { p.selectSlot("TS2") })
 	p.resync.OnClick(func() {
 		if screen.receiver != nil && screen.receiver.ResyncDMR() {
-			p.add("SYSTEM", "--", "Reinicio manual solicitado")
+			p.add("SYSTEM", "--", "Manual resync requested")
 		}
 	})
 	p.clear.OnClick(func() { p.events = nil })

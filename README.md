@@ -9,7 +9,7 @@ IC-SDR brings together reception, demodulation, spectrum analysis and digital si
 > [!IMPORTANT]
 > IC-SDR is designed specifically for **Windows**. The binary and all components required for portable distribution are located in the `dist/IC-SDR-Go` folder after generating the package.
 
-![IC-SDR main interface](docs/images/ic-sdr-principal.png)
+![IC-SDR main interface](docs/images/ic-sdr-main.png)
 
 ## Features
 

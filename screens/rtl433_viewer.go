@@ -21,7 +21,7 @@ func RunRTL433Viewer(snapshotPath string) {
 	// complete text canvas from being bilinearly blurred during enlargement.
 	simpleui.SetCanvasFilter(rl.FilterPoint)
 	simpleui.SetTextScale(1.35)
-	simpleui.SetTitle("IC-SDR · Capturas RTL_433")
+	simpleui.SetTitle("IC-SDR · RTL_433 Captures")
 	simpleui.SetMinimumSize(900, 520)
 	v := &rtl433Viewer{path: snapshotPath, selected: -1}
 	export := simpleui.NewButton("viewerExport", 1160, 18, 210, 44, "EXPORT CSV", 15)
@@ -72,7 +72,7 @@ func (v *rtl433Viewer) draw() {
 		v.feedbackUntil = time.Now().Add(2 * time.Second)
 	}
 	rl.DrawRectangle(0, 0, 1400, 760, colors.background)
-	simpleui.DrawTextStyled("CAPTURAS RTL_433", 28, 24, 22, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled("RTL_433 CAPTURES", 28, 24, 22, simpleui.FontSemiBold, colors.cyan)
 	simpleui.DrawText(fmt.Sprintf("%d devices · real-time updates", len(v.events)), 28, 54, 13, colors.muted)
 	if time.Now().Before(v.feedbackUntil) {
 		simpleui.DrawTextStyled(v.feedback, 850, 34, 13, simpleui.FontSemiBold, colors.green)

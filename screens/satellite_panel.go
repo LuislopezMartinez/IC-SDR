@@ -75,7 +75,7 @@ func NewSatellitePanel(screen *MainScreen) *SatellitePanel {
 	tune.SetColors(actionStartFill, colors.green, colors.text)
 	update := button("satelliteUpdate", "UPDATE", 1435, 140, p.update)
 	update.SetColors(actionExportFill, colors.blue, colors.text)
-	mapButton := button("satelliteMap", "▦  MAPA", 1290, 285, p.openMap)
+	mapButton := button("satelliteMap", "▦  MAP", 1290, 285, p.openMap)
 	mapButton.SetBounds(rl.Rectangle{X: 1290, Y: toolY + 78, Width: 285, Height: 30})
 	mapButton.SetColors(colors.blue, colors.border, colors.text)
 	station := p.tracker.Station()
@@ -472,5 +472,5 @@ func (p *SatellitePanel) DrawPanel() {
 
 	simpleui.DrawText("CURRENT SELECTION", 470, toolY+119, 10, colors.muted)
 	simpleui.DrawText(fmt.Sprintf("AZ %.1f°   EL %.1f°   ALT %.0f km   DIST %.0f km", selected.Azimuth, selected.Elevation, selected.AltitudeKM, selected.RangeKM), 495, toolY+142, 12, colors.text)
-	simpleui.DrawText(fmt.Sprintf("%s · %s · %d objetos · %s", freq, selected.Mode, len(snap.Satellites), snap.Source), 495, toolY+168, 11, colors.muted)
+	simpleui.DrawText(fmt.Sprintf("%s · %s · %d objects · %s", freq, selected.Mode, len(snap.Satellites), snap.Source), 495, toolY+168, 11, colors.muted)
 }

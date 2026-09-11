@@ -22,7 +22,7 @@ func RunTETRAViewer(path, settingsPath string) {
 	// the minimum window dimensions.
 	simpleui.SetCanvasFilter(rl.FilterBilinear)
 	simpleui.SetTextScale(1.55)
-	simpleui.SetTitle("IC-SDR · Monitor TETRA")
+	simpleui.SetTitle("IC-SDR · TETRA Monitor")
 	simpleui.SetMinimumSize(700, 390)
 	v := &tetraViewer{path: path, settingsPath: settingsPath}
 	simpleui.Run(v.draw)
@@ -75,7 +75,7 @@ func (v *tetraViewer) draw() {
 	v.read()
 	v.readSettings()
 	rl.DrawRectangle(0, 0, 1400, 780, colors.background)
-	simpleui.DrawTextStyled("MONITOR TETRA", 28, 22, 24, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled("TETRA MONITOR", 28, 22, 24, simpleui.FontSemiBold, colors.cyan)
 	state := v.snapshot.Status.State
 	if state == "" {
 		state = "WAITING FOR DATA"

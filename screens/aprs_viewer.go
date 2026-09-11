@@ -16,7 +16,7 @@ func RunAPRSViewer(path string) {
 	simpleui.SetMode(1450, 760, simpleui.Fit)
 	simpleui.SetCanvasFilter(rl.FilterPoint)
 	simpleui.SetTextScale(1.35)
-	simpleui.SetTitle("IC-SDR · Capturas APRS")
+	simpleui.SetTitle("IC-SDR · APRS Captures")
 	simpleui.SetMinimumSize(920, 520)
 	v := &aprsViewer{path: path, selected: -1}
 	export := simpleui.NewButton("aprsViewerExport", 1210, 18, 210, 44, "EXPORT CSV", 15)
@@ -110,7 +110,7 @@ func (v *aprsViewer) draw() {
 		simpleui.DrawText(short(p.Destination, 12), 420, y, 12, colors.text)
 		route := p.Path
 		if route == "" {
-			route = "DIRECTO"
+			route = "DIRECT"
 		}
 		simpleui.DrawText(short(route, 24), 530, y, 12, colors.text)
 		simpleui.DrawText(short(p.Coordinates, 22), 750, y, 12, colors.text)

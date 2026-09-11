@@ -20,7 +20,7 @@ func RunAISMap(path string) {
 	simpleui.SetMode(1360, 800, simpleui.Fit)
 	simpleui.SetCanvasFilter(rl.FilterBilinear)
 	simpleui.SetTextScale(1.25)
-	simpleui.SetTitle("IC-SDR · Mapa AIS")
+	simpleui.SetTitle("IC-SDR · AIS Map")
 	simpleui.SetMinimumSize(900, 540)
 	v := &aisMap{path: path, centerLat: 40.2, centerLon: -3.7, lonSpan: 14, selected: -1, tracks: make(map[uint32][]geoPoint)}
 	center := simpleui.NewButton("aisCenterFleet", 1040, 18, 145, 42, "CENTER FLEET", 13)

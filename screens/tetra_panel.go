@@ -57,7 +57,7 @@ func NewTETRAPanel(screen *MainScreen) *TETRAPanel {
 		p.feedback = "COUNTERS RESET"
 	})
 	clear.SetColors(actionClearFill, colors.red, colors.text)
-	p.listenSelector = simpleui.NewDropdown("tetraListenSlot", 1120, toolY+137, 175, 34, "ESCUCHA", []string{"AUTO", "TS1", "TS2", "TS3", "TS4"}, 13)
+	p.listenSelector = simpleui.NewDropdown("tetraListenSlot", 1120, toolY+137, 175, 34, "LISTEN", []string{"AUTO", "TS1", "TS2", "TS3", "TS4"}, 13)
 	p.listenSelector.SetSelected(0)
 	p.listenSelector.OnChange(func(index int, _ string) { p.listenSlot = index; p.applyAudioPolicy() })
 	p.controls = append(p.controls, p.listenSelector)
@@ -72,7 +72,7 @@ func NewTETRAPanel(screen *MainScreen) *TETRAPanel {
 	p.controls = append(p.controls, p.autoCenterSwitch)
 	viewer := button("tetraViewer", "DATA", 1325, 80, p.openViewer)
 	viewer.SetColors(colors.blue, colors.border, colors.text)
-	p.topmostSwitch = simpleui.NewSwitch("tetraViewerTopmost", 1415, toolY+28, 140, 34, "1er PLANO", p.viewerTopmost, 12)
+	p.topmostSwitch = simpleui.NewSwitch("tetraViewerTopmost", 1415, toolY+28, 140, 34, "ON TOP", p.viewerTopmost, 12)
 	p.topmostSwitch.SetTrackColors(colors.panelAlt, colors.green)
 	p.topmostSwitch.OnChange(func(active bool) {
 		p.viewerTopmost = active
