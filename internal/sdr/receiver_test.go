@@ -68,3 +68,42 @@ func TestDMRPublishesRFLevelForSMeter(t *testing.T) {
 		t.Fatalf("DMR SignalDBm=%v, want -83", level)
 	}
 }
+
+func TestDigitalToAnalogModeChangeClearsSharedAudio(t *testing.T) {
+	receiver := NewReceiver(Config{FrequencyHz: 100_000_000, SampleRate: 2_048_000, FFTSize: 4096})
+	receiver.mu.Lock()
+	receiver.demodMode = "DMR BETA"
+	receiver.audioRead, receiver.audioWrite, receiver.audioCount = 0, 3, 3
+	receiver.stats.AudioBuffered = 3
+	receiver.mu.Unlock()
+
+	receiver.SetDemodulator("NFM", 100_000_000, 12_500)
+
+	if got := receiver.AudioBufferedSamples(); got != 0 {
+		t.Fatalf("stale DMR audio remained after selecting NFM: %d samples", got)
+	}
+	receiver.mu.RLock()
+	buffered := receiver.stats.AudioBuffered
+	receiver.mu.RUnlock()
+	if buffered != 0 {
+		t.Fatalf("published buffered count was not reset: %d", buffered)
+	}
+}
+
+func TestStopAllDecodersStopsTETRAAndClearsAudio(t *testing.T) {
+	receiver := NewReceiver(Config{FrequencyHz: 100_000_000, SampleRate: 2_048_000, FFTSize: 4096})
+	receiver.tetra.Configure(true)
+	if !receiver.tetra.Snapshot().Running {
+		t.Fatal("TETRA did not start for the lifecycle test")
+	}
+	receiver.enqueueDigitalAudio([]float32{.1, .2, .3})
+
+	receiver.StopAllDecoders()
+
+	if receiver.tetra.Snapshot().Running {
+		t.Fatal("TETRA remained active after StopAllDecoders")
+	}
+	if got := receiver.AudioBufferedSamples(); got != 0 {
+		t.Fatalf("decoder audio remained after StopAllDecoders: %d", got)
+	}
+}

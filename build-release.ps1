@@ -7,9 +7,44 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
 $distRoot = [System.IO.Path]::GetFullPath((Join-Path $projectRoot 'dist\IC-SDR-Go'))
 $expectedDist = [System.IO.Path]::GetFullPath((Join-Path $projectRoot 'dist\IC-SDR-Go'))
+$digitalVoiceRuntime = Join-Path $projectRoot 'ORIGEN\IC_SDR\tools\digital_voice\runtime'
+$digitalVoiceManifestPath = Join-Path $digitalVoiceRuntime 'runtime-version.json'
 
 if ($distRoot -ne $expectedDist -or -not $distRoot.StartsWith($projectRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Ruta de distribución no segura: $distRoot"
+}
+
+# Keep the external runtime and its DLL set versioned as one unit. This catches
+# accidental mixes of an updated executable with stale mbe/codec libraries.
+if (-not (Test-Path -LiteralPath $digitalVoiceManifestPath)) {
+    throw "Falta el manifiesto de DSD-neo: $digitalVoiceManifestPath"
+}
+$digitalVoiceManifest = Get-Content -LiteralPath $digitalVoiceManifestPath -Raw | ConvertFrom-Json
+if ($digitalVoiceManifest.version -ne '2.9.0') {
+    throw "Versión de DSD-neo no admitida: $($digitalVoiceManifest.version). Se esperaba 2.9.0."
+}
+$digitalVoiceExe = Join-Path $digitalVoiceRuntime 'bin\dsd-neo.exe'
+foreach ($required in @($digitalVoiceExe, (Join-Path $digitalVoiceRuntime 'bin\mbe-neo.dll'), (Join-Path $digitalVoiceRuntime 'bin\codec2.dll'), (Join-Path $digitalVoiceRuntime 'bin\libexpat.dll'))) {
+    if (-not (Test-Path -LiteralPath $required)) { throw "Falta un componente requerido de DSD-neo 2.9.0: $required" }
+}
+$digitalVoiceExeHash = (Get-FileHash -LiteralPath $digitalVoiceExe -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($digitalVoiceExeHash -ne $digitalVoiceManifest.executableSha256.ToLowerInvariant()) {
+    throw "El ejecutable DSD-neo no coincide con el manifiesto: $digitalVoiceExeHash"
+}
+
+# Windows locks the executable, runtime DLLs and startup.log while IC-SDR is
+# running. Detect that state before copying user data or deleting anything so
+# a release attempt cannot leave a half-rebuilt portable directory.
+$runningFromDist = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+    try {
+        $_.Path -and [System.IO.Path]::GetFullPath($_.Path).StartsWith($distRoot, [System.StringComparison]::OrdinalIgnoreCase)
+    } catch {
+        $false
+    }
+})
+if ($runningFromDist.Count -gt 0) {
+    $processList = ($runningFromDist | ForEach-Object { "{0} (PID {1})" -f $_.ProcessName, $_.Id }) -join ', '
+    throw "IC-SDR sigue abierto y Windows mantiene bloqueada la distribución: $processList. Cierre la aplicación y vuelva a ejecutar build-release.ps1."
 }
 
 $mutableData = @('cache', 'captures', 'config', 'exports', 'logs', 'recordings')
@@ -39,6 +74,7 @@ if ($LASTEXITCODE -ne 0) { throw 'No se pudo compilar IC-SDR-Go.exe.' }
 $copies = @(
     @{ Source = 'ORIGEN\IC_SDR\runtime\windows-x64'; Destination = 'DATA\runtime\windows-x64' },
     @{ Source = 'ORIGEN\IC_SDR\tools\dmr\runtime'; Destination = 'DATA\tools\dmr\runtime' },
+    @{ Source = 'ORIGEN\IC_SDR\tools\digital_voice\runtime'; Destination = 'DATA\tools\digital_voice\runtime' },
     @{ Source = 'ORIGEN\IC_SDR\tools\rtl_433\runtime'; Destination = 'DATA\tools\rtl_433\runtime' },
     @{ Source = 'ORIGEN\IC_SDR\tools\radiosonde\runtime'; Destination = 'DATA\tools\radiosonde\runtime' },
 	@{ Source = 'ORIGEN\IC_SDR\tools\ais\runtime'; Destination = 'DATA\tools\ais\runtime' },

@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.3.1](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.3.1)**
+**Versión actual: [v0.4.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.4.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -34,8 +34,26 @@ IC-SDR integra herramientas para recibir y visualizar:
 - **DMR** — recepción de radio digital.
 - **SSTV** — televisión de barrido lento.
 - **TETRA** — recepción y análisis de señales TETRA.
+- **Digital Auto** — detección y decodificación de DMR, P25 I/II, NXDN,
+  D-STAR, YSF, dPMR, ProVoice, M17 y X2-TDMA mediante DSD-neo.
 
 ![Decodificación RTL_433 en IC-SDR](docs/images/ic-sdr-rtl433.png)
+
+## Novedades de v0.4.0
+
+- Nuevo decodificador **Digital Auto** con selección simultánea de protocolos,
+  detección de llamadas y reproducción de voz digital.
+- Panel dedicado con protocolo, slot, origen, destino, estado de cifrado,
+  nivel de entrada, SNR, BER y datos específicos de la red.
+- Predicción de próximas pasadas de satélites con AOS, máxima aproximación,
+  LOS, elevación máxima y distancia mínima.
+- Reinicio seguro de decodificadores, audio y escáner al cambiar de banda o
+  modo, evitando audio residual y estados bloqueados.
+- Correcciones en la reproducción al alternar entre audio analógico y digital.
+- Corrección de la selección visual de dígitos en el control de frecuencia.
+- Mejoras de contraste y legibilidad en el medidor de señal y el escáner.
+- Validación del runtime DSD-neo 2.9.0 al construir la distribución portable.
+- Nuevas pruebas para voz digital, predicción orbital, receptor y reproducción.
 
 ## Novedades de v0.3.1
 

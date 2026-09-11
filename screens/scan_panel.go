@@ -54,6 +54,12 @@ func (p *ScanPanel) Enter() {
 	}
 }
 
+func (p *ScanPanel) Stop() {
+	p.running, p.listening = false, false
+	p.consecutiveHits, p.currentMemory, p.activePeakHz = 0, -1, -1
+	p.status = "READY"
+}
+
 func (p *ScanPanel) Update(spectrum []float32) {
 	if !p.running || len(spectrum) == 0 || p.screen.stats.SampleRate <= 0 {
 		return
@@ -553,9 +559,12 @@ func (p *ScanPanel) frequencyX(hz int64, x, w float32) float32 {
 }
 func drawScanTag(text string, x, y float32) {
 	width := simpleui.MeasureTextStyled(text, 12, simpleui.FontSemiBold).X + 16
-	rl.DrawRectangleRounded(rl.Rectangle{X: x - width/2, Y: y, Width: width, Height: 24}, .2, 6, rl.Color{R: 5, G: 20, B: 28, A: 235})
-	rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: x - width/2, Y: y, Width: width, Height: 24}, .2, 6, 1, colors.cyan)
-	simpleui.DrawTextStyled(text, x-width/2+8, y+5, 12, simpleui.FontSemiBold, colors.cyan)
+	bounds := rl.Rectangle{X: x - width/2, Y: y, Width: width, Height: 24}
+	background := mixColor(colors.panel, colors.blue, .16)
+	textColor := simpleui.EnsureTextContrast(colors.cyan, background)
+	rl.DrawRectangleRounded(bounds, .2, 6, background)
+	rl.DrawRectangleRoundedLinesEx(bounds, .2, 6, 1, colors.cyan)
+	simpleui.DrawTextStyled(text, x-width/2+8, y+5, 12, simpleui.FontSemiBold, textColor)
 }
 func (p *ScanPanel) drawCompact(x, y float32) {
 	bounds := rl.Rectangle{X: x, Y: y, Width: 315, Height: 28}

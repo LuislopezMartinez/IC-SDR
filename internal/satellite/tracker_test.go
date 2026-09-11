@@ -39,3 +39,27 @@ func TestFallbackContainsISSAndQO100(t *testing.T) {
 		t.Fatalf("fallback catalog = %v", seen)
 	}
 }
+
+func TestPredictPassReturnsOrderedApproachData(t *testing.T) {
+	iss := fallbackCatalog()[0]
+	station := Station{Name: "Madrid", Latitude: 40.4168, Longitude: -3.7038, AltitudeMeters: 657}
+	prediction := predictPass(iss.Elements, station, iss.Elements.Epoch)
+	if !prediction.Found || prediction.Continuous {
+		t.Fatalf("expected an ISS pass, got %+v", prediction)
+	}
+	if prediction.AOS.After(prediction.TCA) || prediction.TCA.After(prediction.LOS) {
+		t.Fatalf("pass events are not ordered: %+v", prediction)
+	}
+	if prediction.MinRangeKM <= 0 || prediction.MaxElevation < 0 {
+		t.Fatalf("invalid closest approach: %+v", prediction)
+	}
+}
+
+func TestPredictPassClassifiesGeostationaryVisibility(t *testing.T) {
+	qo100 := fallbackCatalog()[1]
+	station := Station{Name: "Madrid", Latitude: 40.4168, Longitude: -3.7038, AltitudeMeters: 657}
+	prediction := predictPass(qo100.Elements, station, qo100.Elements.Epoch)
+	if !prediction.Found || !prediction.Continuous {
+		t.Fatalf("expected continuous geostationary state, got %+v", prediction)
+	}
+}

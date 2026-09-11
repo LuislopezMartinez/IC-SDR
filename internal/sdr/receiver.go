@@ -10,6 +10,7 @@ import (
 	"go-zero/internal/aircraft"
 	"go-zero/internal/ais"
 	"go-zero/internal/aprs"
+	"go-zero/internal/digitalvoice"
 	"go-zero/internal/dmr"
 	"go-zero/internal/dsp"
 	"go-zero/internal/radiosonde"
@@ -38,6 +39,7 @@ type Config struct {
 	// instead of inheriting an arbitrary AGC state from the driver.
 	InitialHardware                                  *HardwareSettings
 	DMRExecutable                                    string
+	DigitalVoiceExecutable                           string
 	RTL433Executable                                 string
 	APRSExecutable, APRSConfig, APRSWorkingDirectory string
 	SSTVExecutable, SSTVOutputDirectory              string
@@ -83,6 +85,7 @@ type Receiver struct {
 	wfm        *dsp.NFMDemodulator
 	ssb        *dsp.SSBDemodulator
 	dmr        *dmr.Decoder
+	digital    *digitalvoice.Bank
 	rtl433     *rtl433.Decoder
 	aprs       *aprs.Decoder
 	sstv       *sstv.Decoder
@@ -159,6 +162,7 @@ func NewReceiver(config Config) *Receiver {
 	}
 	receiver.centerHz.Store(config.FrequencyHz)
 	receiver.dmr = dmr.New(config.SampleRate, config.DMRExecutable, receiver.enqueueDigitalAudio)
+	receiver.digital = digitalvoice.NewBank(config.SampleRate, config.DigitalVoiceExecutable, receiver.enqueueDigitalAudio)
 	receiver.rtl433 = rtl433.New(config.SampleRate, config.RTL433Executable)
 	receiver.radiosonde = radiosonde.New(config.SampleRate, config.RadiosondeDirectory)
 	receiver.ais = ais.New(config.SampleRate, config.AISExecutable)
@@ -225,6 +229,9 @@ func (receiver *Receiver) Close() {
 	receiver.closeOnce.Do(func() {
 		if receiver.dmr != nil {
 			receiver.dmr.Stop()
+		}
+		if receiver.digital != nil {
+			receiver.digital.Close()
 		}
 		if receiver.sstv != nil {
 			receiver.sstv.Close()
@@ -312,15 +319,23 @@ func (receiver *Receiver) SubtoneStatus() dsp.SubtoneStatus {
 }
 func (receiver *Receiver) SetDemodulator(mode string, tunedHz int64, bandwidthHz int) {
 	receiver.mu.Lock()
+	previousMode := receiver.demodMode
 	receiver.demodMode = mode
 	receiver.tunedHz = tunedHz
 	receiver.demodBandwidthHz = max(bandwidthHz, 1_000)
-	if mode != "AM" && mode != "NFM" && mode != "WFM" && mode != "USB" && mode != "LSB" {
+	// Every demodulator owns the samples it placed in the common output ring.
+	// Keeping that ring across a mode change lets a digital tail leak into the
+	// newly selected analog path.
+	if previousMode != mode || (mode != "AM" && mode != "NFM" && mode != "WFM" && mode != "USB" && mode != "LSB") {
 		receiver.audioRead, receiver.audioWrite, receiver.audioCount = 0, 0, 0
+		receiver.stats.AudioBuffered = 0
 	}
 	receiver.mu.Unlock()
 	if receiver.dmr != nil {
 		receiver.dmr.Configure(mode == "DMR BETA", float64(tunedHz-receiver.centerHz.Load()), bandwidthHz)
+	}
+	if receiver.digital != nil && mode == "DIGITAL AUTO" {
+		receiver.digital.Configure(float64(tunedHz-receiver.centerHz.Load()), max(bandwidthHz, 15_000))
 	}
 	if receiver.tetra != nil {
 		receiver.tetra.SetTuningOffset(float64(tunedHz - receiver.centerHz.Load()))
@@ -332,6 +347,66 @@ func (receiver *Receiver) DMRStatus() dmr.Status {
 		return dmr.Status{State: "OFF", ColorCode: -1, Slot1: "--", Slot2: "--"}
 	}
 	return receiver.dmr.Snapshot()
+}
+
+func (receiver *Receiver) DigitalVoiceStatus() digitalvoice.Status {
+	if receiver.digital == nil {
+		return digitalvoice.Status{State: "NO DISPONIBLE", Detail: "Runtime DSD-neo no configurado"}
+	}
+	return receiver.digital.Snapshot()
+}
+
+func (receiver *Receiver) StartDigitalVoice(mode string) error {
+	if receiver.digital == nil {
+		return fmt.Errorf("decodificador digital no disponible")
+	}
+	return receiver.digital.Start(mode)
+}
+
+func (receiver *Receiver) StopDigitalVoice() {
+	if receiver.digital != nil {
+		receiver.digital.Stop()
+	}
+}
+
+// StopAllDecoders establishes a clean analog baseline before a band change.
+// It stops every IQ/audio consumer first and only then clears the shared audio
+// ring, preventing a late decoder tail from surviving the retune.
+func (receiver *Receiver) StopAllDecoders() {
+	if receiver.dmr != nil {
+		receiver.dmr.Stop()
+	}
+	if receiver.digital != nil {
+		receiver.digital.Stop()
+	}
+	if receiver.sstv != nil {
+		receiver.sstv.Configure(false)
+	}
+	if receiver.rtl433 != nil {
+		receiver.rtl433.Stop()
+	}
+	if receiver.radiosonde != nil {
+		receiver.radiosonde.Configure(false, "", 0, receiver.centerHz.Load())
+	}
+	if receiver.ais != nil {
+		receiver.ais.Configure(false)
+	}
+	if receiver.aircraft != nil {
+		receiver.aircraft.Configure(false, "")
+	}
+	if receiver.aprs != nil {
+		receiver.aprs.Stop()
+	}
+	if receiver.tetra != nil {
+		receiver.tetra.Configure(false)
+	}
+	receiver.mu.Lock()
+	receiver.audioRead, receiver.audioWrite, receiver.audioCount = 0, 0, 0
+	receiver.stats.AudioBuffered = 0
+	receiver.stats.SquelchOpen = false
+	receiver.squelchHoldRemaining, receiver.squelchCloseRemaining = 0, 0
+	receiver.squelchClosing = false
+	receiver.mu.Unlock()
 }
 func (receiver *Receiver) SetDMRAutoCenter(enabled bool) {
 	if receiver.dmr != nil {
@@ -509,6 +584,9 @@ func (receiver *Receiver) AudioPlaybackState() (mode string, digitalSignalActive
 	} else if mode == "TETRA" && receiver.tetra != nil {
 		status := receiver.tetra.Snapshot()
 		digitalSignalActive = !status.LastAudio.IsZero() && time.Since(status.LastAudio) < time.Second
+	} else if mode == "DIGITAL AUTO" && receiver.digital != nil {
+		status := receiver.digital.Snapshot()
+		digitalSignalActive = status.VoiceActive && !status.LastVoice.IsZero() && time.Since(status.LastVoice) < time.Second
 	}
 	return
 }
@@ -668,6 +746,16 @@ func (receiver *Receiver) processAudio(iq []float32) {
 			status := receiver.dmr.Snapshot()
 			receiver.mu.Lock()
 			receiver.stats.SquelchOpen = status.SignalActive
+			receiver.mu.Unlock()
+		}
+		return
+	}
+	if mode == "DIGITAL AUTO" {
+		if receiver.digital != nil {
+			receiver.digital.ProcessIQ(iq)
+			status := receiver.digital.Snapshot()
+			receiver.mu.Lock()
+			receiver.stats.SquelchOpen = status.VoiceActive
 			receiver.mu.Unlock()
 		}
 		return

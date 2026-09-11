@@ -44,6 +44,17 @@ type Satellite struct {
 
 type Point struct{ Latitude, Longitude float64 }
 
+type PassPrediction struct {
+	Found        bool      `json:"found"`
+	Continuous   bool      `json:"continuous,omitempty"`
+	InProgress   bool      `json:"inProgress,omitempty"`
+	AOS          time.Time `json:"aos,omitempty"`
+	TCA          time.Time `json:"tca,omitempty"`
+	LOS          time.Time `json:"los,omitempty"`
+	MinRangeKM   float64   `json:"minRangeKm,omitempty"`
+	MaxElevation float64   `json:"maxElevation,omitempty"`
+}
+
 type State struct {
 	Name, Group, Signal, Mode                                    string
 	NORAD                                                        int
@@ -51,6 +62,7 @@ type State struct {
 	Latitude, Longitude, AltitudeKM, Azimuth, Elevation, RangeKM float64
 	Visible                                                      bool
 	Trajectory                                                   []Point
+	NextPass                                                     PassPrediction `json:"nextPass,omitempty"`
 }
 
 type Snapshot struct {
@@ -174,10 +186,108 @@ func (t *Tracker) Snapshot(at time.Time) Snapshot {
 				la, lo, _ := position(sat.Elements, at.Add(time.Duration(m)*time.Minute))
 				state.Trajectory = append(state.Trajectory, Point{la, lo})
 			}
+			state.NextPass = predictPass(sat.Elements, station, at)
 		}
 		states = append(states, state)
 	}
 	return Snapshot{Updated: at, Source: source, Station: station, SelectedNORAD: selected, Satellites: states}
+}
+
+// predictPass finds the next useful closest approach above the observer's
+// horizon. A currently setting pass is skipped because its TCA has elapsed.
+func predictPass(elements Elements, station Station, now time.Time) PassPrediction {
+	const step = 30 * time.Second
+	end := now.Add(48 * time.Hour)
+	look := func(at time.Time) (float64, float64) {
+		lat, lon, alt := position(elements, at)
+		_, elevation, distance := lookAngles(station, lat, lon, alt)
+		return elevation, distance
+	}
+
+	elevation, _ := look(now)
+	inProgress := elevation >= 0
+	if inProgress {
+		nextElevation, _ := look(now.Add(step))
+		if nextElevation < elevation {
+			wentBelow := false
+			for at := now.Add(step); at.Before(end); at = at.Add(step) {
+				elevation, _ = look(at)
+				if elevation < 0 {
+					now = at
+					inProgress = false
+					wentBelow = true
+					break
+				}
+			}
+			if !wentBelow {
+				return PassPrediction{Found: true, Continuous: true, InProgress: true}
+			}
+		} else {
+			aos := now
+			for at := now.Add(-step); at.After(now.Add(-12 * time.Hour)); at = at.Add(-step) {
+				previous, _ := look(at)
+				if previous < 0 {
+					aos = refineHorizon(at, at.Add(step), look)
+					break
+				}
+				aos = at
+			}
+			if now.Sub(aos) >= 12*time.Hour-step {
+				return PassPrediction{Found: true, Continuous: true, InProgress: true}
+			}
+			return finishPass(aos, now, end, true, look)
+		}
+	}
+
+	previousTime := now
+	previousElevation, _ := look(previousTime)
+	for at := now.Add(step); !at.After(end); at = at.Add(step) {
+		currentElevation, _ := look(at)
+		if previousElevation < 0 && currentElevation >= 0 {
+			aos := refineHorizon(previousTime, at, look)
+			return finishPass(aos, aos, end, false, look)
+		}
+		previousTime, previousElevation = at, currentElevation
+	}
+	if math.Abs(elements.MeanMotion-1) < .1 {
+		return PassPrediction{Found: true, Continuous: true}
+	}
+	return PassPrediction{}
+}
+
+func finishPass(aos, scanStart, end time.Time, inProgress bool, look func(time.Time) (float64, float64)) PassPrediction {
+	const step = 30 * time.Second
+	bestTime := scanStart
+	bestElevation, bestRange := look(scanStart)
+	maxElevation := bestElevation
+	previousTime := scanStart
+	for at := scanStart.Add(step); !at.After(end); at = at.Add(step) {
+		elevation, distance := look(at)
+		if distance < bestRange {
+			bestRange, bestTime = distance, at
+		}
+		maxElevation = math.Max(maxElevation, elevation)
+		if elevation < 0 {
+			los := refineHorizon(previousTime, at, look)
+			return PassPrediction{Found: true, InProgress: inProgress, AOS: aos, TCA: bestTime, LOS: los, MinRangeKM: bestRange, MaxElevation: maxElevation}
+		}
+		previousTime = at
+	}
+	return PassPrediction{Found: true, Continuous: true, InProgress: inProgress}
+}
+
+func refineHorizon(low, high time.Time, look func(time.Time) (float64, float64)) time.Time {
+	lowElevation, _ := look(low)
+	for i := 0; i < 16; i++ {
+		mid := low.Add(high.Sub(low) / 2)
+		midElevation, _ := look(mid)
+		if (lowElevation < 0) == (midElevation < 0) {
+			low, lowElevation = mid, midElevation
+		} else {
+			high = mid
+		}
+	}
+	return low.Add(high.Sub(low) / 2)
 }
 
 func parseTLE(r interface{ Read([]byte) (int, error) }, group string) ([]Satellite, error) {

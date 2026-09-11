@@ -156,6 +156,7 @@ type MainScreen struct {
 	memoryPanel            *MemoryPanel
 	scanPanel              *ScanPanel
 	dmrPanel               *DMRPanel
+	digitalVoicePanel      *DigitalVoicePanel
 	aprsPanel              *APRSPanel
 	aprsView               string
 	rtl433Panel            *RTL433Panel
@@ -268,6 +269,8 @@ func (screen *MainScreen) CreateControls() {
 		screen.selectFilter(screen.filterSelector.Current(mode))
 		if mode == "DMR BETA" && screen.activeTool != "SCAN" {
 			screen.selectTool("DMR_MONITOR")
+		} else if mode != "DMR BETA" && screen.activeTool == "DMR_MONITOR" {
+			screen.selectTool("PBT_AUDIO")
 		}
 		screen.markSettingsDirty()
 	})
@@ -346,7 +349,6 @@ func (screen *MainScreen) CreateControls() {
 		modeLabel = "FIX"
 	}
 	screen.vfoModeSwitch = simpleui.NewSwitch("vfoMode", 1110, 159, 136, 28, modeLabel, !screen.centerMode, 12)
-	screen.vfoModeSwitch.SetTrackColors(rl.Color{R: 51, G: 61, B: 70, A: 255}, colors.orange)
 	screen.vfoModeSwitch.OnChange(func(fixed bool) {
 		screen.centerMode = !fixed
 		screen.vfoModeSwitch.SetLabel("FIX")
@@ -359,12 +361,11 @@ func (screen *MainScreen) CreateControls() {
 				screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
 				screen.waterfall.Reset()
 			}
-			screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+			screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 		}
 		screen.markSettingsDirty()
 	})
 	screen.memViewSwitch = simpleui.NewSwitch("memView", 972, 159, 128, 28, "MEM VIEW", screen.memoryViewEnabled, 12)
-	screen.memViewSwitch.SetTrackColors(rl.Color{R: 51, G: 61, B: 70, A: 255}, colors.blue)
 	screen.memViewSwitch.OnChange(screen.setMemoryView)
 	spanDown := simpleui.NewButton("spanDown", frequencyPanelX+16, frequencyPanelY+36, 36, 32, "-", 16)
 	spanUp := simpleui.NewButton("spanUp", frequencyPanelX+58, frequencyPanelY+36, 36, 32, "+", 16)
@@ -420,6 +421,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.audioPlayer.SetRecorder(screen.recorder)
 	screen.recorderPanel = NewRecorderPanel(screen, screen.recorder)
 	screen.utilitiesSidebar = NewUtilitiesSidebar(screen)
+	screen.digitalVoicePanel = NewDigitalVoicePanel(screen)
 	screen.audioPlayer.SetVolume(screen.volume / 100)
 	screen.audioPlayer.SetMuted(screen.muted)
 
@@ -463,6 +465,9 @@ func (screen *MainScreen) CreateControls() {
 		simpleui.Add(element)
 	}
 	for _, element := range screen.dmrPanel.controls {
+		simpleui.Add(element)
+	}
+	for _, element := range screen.digitalVoicePanel.controls {
 		simpleui.Add(element)
 	}
 	for _, element := range screen.aprsPanel.controls {
@@ -530,9 +535,12 @@ func (screen *MainScreen) CreateControls() {
 	if screen.activeTool == "TETRA" {
 		screen.tetraPanel.Enter()
 	}
+	if screen.activeTool == "DIGITAL_AUTO" {
+		screen.digitalVoicePanel.Enter()
+	}
 	if screen.receiver != nil {
 		screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
-		screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 		screen.receiver.SetDMRAutoCenter(screen.dmrAutoCenter)
 		screen.receiver.SetDMRAudioSlot(screen.dmrAudioSlot)
 	}
@@ -552,7 +560,7 @@ func (screen *MainScreen) Draw() {
 	screen.recorderPanel.Tick()
 	// Valid DMR voice frames are already gated by DSDcc; the RF squelch must
 	// never cut or omit decoded digital audio from a recording.
-	digitalAudio := screen.mode != nil && (screen.mode.SelectedText() == "DMR BETA" || screen.mode.SelectedText() == "TETRA")
+	digitalAudio := screen.mode != nil && (screen.mode.SelectedText() == "DMR BETA" || screen.mode.SelectedText() == "TETRA" || screen.activeTool == "DIGITAL_AUTO")
 	screen.audioPlayer.SetRecorderSquelch(screen.squelchEnabled && !digitalAudio, screen.stats.SquelchOpen)
 	screen.audioPlayer.Pump()
 	screen.uiSounds.EnsureLoaded()
@@ -589,6 +597,9 @@ func (screen *MainScreen) Draw() {
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.Tick()
 	}
+	if screen.digitalVoicePanel != nil {
+		screen.digitalVoicePanel.Tick()
+	}
 	screen.updateFrequencyInteraction()
 	screen.updateSpectrumDrag()
 	if screen.receiver != nil && rl.GetTime() >= screen.nextSpectrumUpdate {
@@ -605,10 +616,12 @@ func (screen *MainScreen) Draw() {
 	rl.DrawRectangle(0, 0, int32(designWidth), int32(designHeight), colors.background)
 	screen.drawHeader()
 	screen.drawSpectrum()
-	if screen.receiver != nil {
-		screen.waterfall.Update(screen.receiver, screen.stats.SampleRate, screen.spanHz)
+	if screen.activeTool != "DIGITAL_AUTO" {
+		if screen.receiver != nil {
+			screen.waterfall.Update(screen.receiver, screen.stats.SampleRate, screen.spanHz)
+		}
+		screen.drawWaterfall()
 	}
-	screen.drawWaterfall()
 	if screen.viewMode == 1 {
 		screen.drawLowerWorkspace()
 	}
@@ -647,6 +660,9 @@ func (screen *MainScreen) Close() {
 	}
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.Close()
+	}
+	if screen.digitalVoicePanel != nil {
+		screen.digitalVoicePanel.Close()
 	}
 	if screen.satellitePanel != nil {
 		screen.satellitePanel.Close()
@@ -729,7 +745,9 @@ func (screen *MainScreen) drawFrequencyDisplay() {
 			exponent = digitCount - seenDigits - 1
 			seenDigits++
 		}
-		selected := exponent == screen.frequencyDigitExponent
+		// Separators have exponent -1. They must remain plain text when no
+		// editable digit is selected (frequencyDigitExponent is also -1).
+		selected := exponent >= 0 && exponent == screen.frequencyDigitExponent
 		if selected {
 			rl.DrawRectangleRounded(rl.Rectangle{X: cursor - 2, Y: frequencyPanelY + 24, Width: characterWidth + 4, Height: 45}, .18, 5, rl.Color{R: 25, G: 125, B: 190, A: 150})
 		}
@@ -794,7 +812,7 @@ func (screen *MainScreen) updateAudioMeter() {
 }
 
 func drawCompactAudioMeter(x, y, width, height, db float32) {
-	rl.DrawRectangleRounded(rl.Rectangle{X: x, Y: y, Width: width, Height: height}, 1, 5, rl.Color{R: 38, G: 49, B: 57, A: 255})
+	rl.DrawRectangleRounded(rl.Rectangle{X: x, Y: y, Width: width, Height: height}, 1, 5, meterTrackColor())
 	fraction := min(max((db+60)/60, 0), 1)
 	color := colors.cyan
 	if db > -12 {
@@ -804,6 +822,10 @@ func drawCompactAudioMeter(x, y, width, height, db float32) {
 		color = colors.red
 	}
 	rl.DrawRectangleRounded(rl.Rectangle{X: x, Y: y, Width: width * fraction, Height: height}, 1, 5, color)
+}
+
+func meterTrackColor() rl.Color {
+	return mixColor(colors.panelAlt, colors.muted, .38)
 }
 
 func (screen *MainScreen) drawSquelchPanel() {
@@ -1040,6 +1062,10 @@ func (screen *MainScreen) drawTuningCursorLabel(cursorX, y, graphX, graphWidth f
 }
 
 func (screen *MainScreen) drawLowerWorkspace() {
+	if screen.activeTool == "DIGITAL_AUTO" {
+		screen.digitalVoicePanel.DrawPanel()
+		return
+	}
 	drawPanel(toolContentX, toolY, toolContentRight-toolContentX, toolH)
 	if screen.activeTool == "TETRA" && !screen.waterfallVisible {
 		screen.tetraPanel.DrawPanel()
@@ -1220,6 +1246,9 @@ func (screen *MainScreen) selectTool(tool string) {
 	if previous == "SATELLITES" && tool != "SATELLITES" && screen.satellitePanel != nil {
 		screen.satellitePanel.Leave()
 	}
+	if previous == "DIGITAL_AUTO" && tool != "DIGITAL_AUTO" && screen.digitalVoicePanel != nil {
+		screen.digitalVoicePanel.Leave()
+	}
 	// A tool can be selected while VIEW 2 is active and while the menu owns the
 	// mouse release. Discard any gesture begun on the old geometry, then publish
 	// the new tool before restoring VIEW 1 so visibility is calculated from the
@@ -1284,6 +1313,12 @@ func (screen *MainScreen) selectTool(tool string) {
 	}
 	if screen.dmrPanel != nil {
 		screen.dmrPanel.SetVisible(tool == "DMR_MONITOR")
+	}
+	if screen.digitalVoicePanel != nil {
+		screen.digitalVoicePanel.SetVisible(tool == "DIGITAL_AUTO")
+		if tool == "DIGITAL_AUTO" && previous != "DIGITAL_AUTO" {
+			screen.digitalVoicePanel.Enter()
+		}
 	}
 	if screen.rtl433Panel != nil {
 		screen.rtl433Panel.SetVisible(tool == "RTL_433")
@@ -1372,6 +1407,9 @@ func (screen *MainScreen) setViewMode(mode int) {
 	if screen.dmrPanel != nil {
 		screen.dmrPanel.SetVisible(showTool && screen.activeTool == "DMR_MONITOR")
 	}
+	if screen.digitalVoicePanel != nil {
+		screen.digitalVoicePanel.SetVisible(showTool && screen.activeTool == "DIGITAL_AUTO")
+	}
 	if screen.rtl433Panel != nil {
 		screen.rtl433Panel.SetVisible(showTool && screen.activeTool == "RTL_433")
 	}
@@ -1401,6 +1439,9 @@ func (screen *MainScreen) setViewMode(mode int) {
 
 func (screen *MainScreen) spectrumGeometry() (x, y, width, height float32) {
 	x, y, width, height = toolContentX, 215, toolContentRight-toolContentX, 235
+	if screen.activeTool == "DIGITAL_AUTO" && screen.viewMode == 1 {
+		height = 261
+	}
 	if screen.viewMode == 2 {
 		height = 470
 	}
@@ -1409,6 +1450,9 @@ func (screen *MainScreen) spectrumGeometry() (x, y, width, height float32) {
 
 func (screen *MainScreen) waterfallGeometry() (x, y, width, height float32) {
 	x, y, width, height = toolContentX, 450, toolContentRight-toolContentX, 170
+	if screen.activeTool == "DIGITAL_AUTO" && screen.viewMode == 1 {
+		y, height = 365, 111
+	}
 	if screen.viewMode == 2 {
 		y, height = 685, 141
 	}
@@ -1418,7 +1462,47 @@ func (screen *MainScreen) waterfallGeometry() (x, y, width, height float32) {
 	return
 }
 
+func (screen *MainScreen) stopAllDecodersForBandChange() {
+	if screen.scanPanel != nil {
+		screen.scanPanel.Stop()
+	}
+	if screen.digitalVoicePanel != nil {
+		screen.digitalVoicePanel.Leave()
+	}
+	if screen.rtl433Panel != nil {
+		screen.rtl433Panel.Leave()
+	}
+	if screen.radiosondePanel != nil {
+		screen.radiosondePanel.Leave()
+	}
+	if screen.aisPanel != nil {
+		screen.aisPanel.Leave()
+	}
+	if screen.aircraftPanel != nil {
+		screen.aircraftPanel.Leave()
+	}
+	if screen.aprsPanel != nil {
+		screen.aprsPanel.Leave()
+	}
+	if screen.sstvPanel != nil {
+		screen.sstvPanel.Leave()
+	}
+	if screen.tetraPanel != nil {
+		screen.tetraPanel.Leave()
+	}
+	if screen.receiver != nil {
+		screen.receiver.StopAllDecoders()
+	}
+	if screen.audioPlayer != nil {
+		screen.audioPlayer.ResetPlayback()
+	}
+	if screen.activeTool != "PBT_AUDIO" {
+		screen.selectTool("PBT_AUDIO")
+	}
+}
+
 func (screen *MainScreen) selectBand(band BandDefinition) {
+	screen.stopAllDecodersForBandChange()
 	screen.setFrequencyDigitExponent(-1)
 	screen.bandCategory = band.Category
 	screen.bandName = band.Name
@@ -1437,7 +1521,7 @@ func (screen *MainScreen) selectBand(band BandDefinition) {
 	screen.waterfall.Reset()
 	if screen.receiver != nil {
 		screen.receiver.SetCenterFrequency(band.FrequencyHz)
-		screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 	}
 	screen.markSettingsDirty()
 }
@@ -1464,7 +1548,7 @@ func (screen *MainScreen) selectTuningStep(stepHz int64) {
 		if centerChanged {
 			screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
 		}
-		screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 	}
 	screen.markSettingsDirty()
 }
@@ -1539,7 +1623,7 @@ func (screen *MainScreen) updateFrequencyInteraction() {
 			if centerChanged {
 				screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
 			}
-			screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+			screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 		}
 	}
 }
@@ -1663,7 +1747,7 @@ func (screen *MainScreen) selectFilter(preset FilterPreset) {
 		screen.filter.SetLabel(filterButtonLabel(preset))
 	}
 	if screen.receiver != nil {
-		screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 	}
 	screen.markSettingsDirty()
 }
@@ -1683,6 +1767,16 @@ func toolDisplayName(tool string) string {
 		}
 	}
 	return tool
+}
+
+func (screen *MainScreen) receiverDemodMode() string {
+	if screen.activeTool == "DIGITAL_AUTO" {
+		return "DIGITAL AUTO"
+	}
+	if screen.mode == nil {
+		return ""
+	}
+	return screen.mode.SelectedText()
 }
 
 func (screen *MainScreen) changeSpan(direction int) {
@@ -1716,7 +1810,7 @@ func (screen *MainScreen) changeSpan(direction int) {
 	}
 	if screen.receiver != nil {
 		screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
-		screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 	}
 	screen.markSettingsDirty()
 }
@@ -1755,7 +1849,7 @@ func (screen *MainScreen) updateSpectrumDrag() {
 				screen.tuneCenteredBySteps(steps)
 				if screen.receiver != nil {
 					screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
-					screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+					screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 				}
 			} else {
 				centerChanged := screen.tuneFixedBySteps(steps)
@@ -1763,7 +1857,7 @@ func (screen *MainScreen) updateSpectrumDrag() {
 					if centerChanged {
 						screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
 					}
-					screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+					screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 				}
 			}
 			screen.resetTETRAAfterManualSpectrumTune(previousFrequency)
@@ -1787,7 +1881,7 @@ func (screen *MainScreen) updateSpectrumDrag() {
 		screen.resetTETRAAfterManualSpectrumTune(previousFrequency)
 		screen.draggingSpectrum = false
 		if screen.receiver != nil {
-			screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+			screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 		}
 		return
 	}
@@ -1806,7 +1900,7 @@ func (screen *MainScreen) updateSpectrumDrag() {
 		// Match IC-SDR: the receiver coalesces retunes while IQ reads continue.
 		if screen.receiver != nil && (released || now >= screen.nextDragRetune) {
 			screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
-			screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+			screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 			screen.nextDragRetune = now + 1.0/60.0
 		}
 	}

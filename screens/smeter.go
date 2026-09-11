@@ -80,7 +80,7 @@ func (meter *SMeter) Draw(x, y, w, h float32) {
 		}
 		rl.DrawLineEx(rl.Vector2{X: px, Y: scaleY}, rl.Vector2{X: px, Y: scaleY + length}, 2, colors.red)
 	}
-	rl.DrawRectangleRounded(rl.Rectangle{X: left, Y: barY, Width: right - left, Height: 13}, .15, 3, rl.Color{R: 35, G: 43, B: 50, A: 255})
+	rl.DrawRectangleRounded(rl.Rectangle{X: left, Y: barY, Width: right - left, Height: 13}, .15, 3, meterTrackColor())
 	level := min(max(float32(db+121)/68, 0), 1)
 	segments := 32
 	gap := float32(2)
@@ -99,7 +99,9 @@ func (meter *SMeter) Draw(x, y, w, h float32) {
 		rl.DrawRectangleRounded(rl.Rectangle{X: sx, Y: barY, Width: segmentW, Height: 13}, .15, 2, color)
 	}
 	peakX := meterX(int(math.Round(float64(meter.peak))), left, right)
-	rl.DrawLineEx(rl.Vector2{X: peakX, Y: barY - 2}, rl.Vector2{X: peakX, Y: barY + 15}, 1, rl.Color{R: 255, G: 255, B: 255, A: 170})
+	peakColor := colors.text
+	peakColor.A = 190
+	rl.DrawLineEx(rl.Vector2{X: peakX, Y: barY - 2}, rl.Vector2{X: peakX, Y: barY + 15}, 1, peakColor)
 	text := fmt.Sprintf("%s   %d dBm", sMeterLabel(db), db)
 	tw := simpleui.MeasureTextStyled(text, 12, simpleui.FontMono).X
 	simpleui.DrawTextStyled(text, right-tw, y+h-22, 12, simpleui.FontMono, colors.text)

@@ -4,7 +4,7 @@ IC-SDR Go - distribución portable
 Copie la carpeta IC-SDR-Go completa y ejecute IC-SDR-Go.exe conservando DATA
 junto al ejecutable. El paquete incluye el runtime de Visual C++ que requieren
 SoapySDR y RTL-SDR, por lo que no necesita instalarlo por separado.
-DATA contiene los runtimes de SoapySDR/SDRplay, DMR, RTL_433 y APRS, así como
+DATA contiene los runtimes de SoapySDR/SDRplay, DMR, Digital Auto (DSD-neo 2.9.0), RTL_433 y APRS, así como
 sus datos auxiliares y licencias. No es necesario iniciar el programa desde una
 carpeta concreta.
 

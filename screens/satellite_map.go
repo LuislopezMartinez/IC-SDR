@@ -227,7 +227,10 @@ func (v *satelliteMap) drawMap(b rl.Rectangle) {
 		z := worldProject(float64(lat), 180, b)
 		rl.DrawLineEx(a, z, 1, withAlpha(colors.grid, 70))
 	}
-	for _, s := range v.snapshot.Satellites {
+	var selectedState *satellite.State
+	var selectedPoint rl.Vector2
+	for i := range v.snapshot.Satellites {
+		s := &v.snapshot.Satellites[i]
 		if !v.enabled[s.NORAD] {
 			continue
 		}
@@ -247,10 +250,16 @@ func (v *satelliteMap) drawMap(b rl.Rectangle) {
 		p := worldProject(s.Latitude, s.Longitude, b)
 		rl.DrawCircleV(p, 6, c)
 		simpleui.DrawText(sondeClip(s.Name, 18), p.X+9, p.Y-7, 11, c)
+		if s.NORAD == v.selected {
+			selectedState, selectedPoint = s, p
+		}
 	}
 	station := worldProject(v.snapshot.Station.Latitude, v.snapshot.Station.Longitude, b)
 	rl.DrawCircleV(station, 5, colors.green)
 	simpleui.DrawText(v.snapshot.Station.Name, station.X+8, station.Y-7, 11, colors.text)
+	if selectedState != nil {
+		v.drawPassCard(b, selectedPoint, selectedState.NextPass)
+	}
 	rl.DrawRectangleLinesEx(b, 2, colors.border)
 	legendBar := rl.Rectangle{X: b.X + 1, Y: b.Y + b.Height - 28, Width: b.Width - 2, Height: 27}
 	legendBackground := colors.panel
@@ -264,6 +273,89 @@ func (v *satelliteMap) drawMap(b rl.Rectangle) {
 	simpleui.DrawText("visible desde la estación", b.X+163, legendY, 11, colors.muted)
 	drawVisibilityIndicator(rl.Vector2{X: b.X + 355, Y: legendY + 5}, false)
 	simpleui.DrawText("bajo el horizonte", b.X+367, legendY, 11, colors.muted)
+}
+
+func (v *satelliteMap) drawPassCard(mapBounds rl.Rectangle, target rl.Vector2, pass satellite.PassPrediction) {
+	const width, height = float32(244), float32(132)
+	usableBottom := mapBounds.Y + mapBounds.Height - 36
+	x, y := target.X+18, target.Y+18
+	if x+width > mapBounds.X+mapBounds.Width-8 {
+		x = target.X - width - 18
+	}
+	if y+height > usableBottom {
+		y = target.Y - height - 18
+	}
+	x = min(max(x, mapBounds.X+8), mapBounds.X+mapBounds.Width-width-8)
+	y = min(max(y, mapBounds.Y+8), usableBottom-height)
+	card := rl.Rectangle{X: x, Y: y, Width: width, Height: height}
+
+	anchor := rl.Vector2{X: min(max(target.X, card.X), card.X+card.Width), Y: min(max(target.Y, card.Y), card.Y+card.Height)}
+	rl.DrawLineEx(target, anchor, 2, colors.orange)
+	background := colors.panel
+	background.A = 245
+	rl.DrawRectangleRounded(card, .06, 8, background)
+	rl.DrawRectangleRoundedLinesEx(card, .06, 8, 2, colors.orange)
+
+	simpleui.DrawTextStyled("PRÓXIMA PASADA", card.X+13, card.Y+10, 13, simpleui.FontSemiBold, colors.orange)
+	if pass.Continuous {
+		status := "VISIBLE CONTINUAMENTE"
+		if !pass.InProgress {
+			status = "BAJO EL HORIZONTE"
+		}
+		simpleui.DrawTextStyled(status, card.X+13, card.Y+43, 14, simpleui.FontSemiBold, colors.text)
+		simpleui.DrawText("Sin AOS/LOS en las próximas 48 h", card.X+13, card.Y+72, 11, colors.muted)
+		return
+	}
+	if !pass.Found {
+		simpleui.DrawTextStyled("SIN PASADAS EN 48 H", card.X+13, card.Y+43, 14, simpleui.FontSemiBold, colors.text)
+		simpleui.DrawText("Según los elementos orbitales actuales", card.X+13, card.Y+72, 11, colors.muted)
+		return
+	}
+
+	now := v.snapshot.Updated.Local()
+	tca := pass.TCA.Local()
+	simpleui.DrawTextStyled(passDayLabel(now, tca)+" · "+tca.Format("15:04")+" "+localZoneLabel(tca), card.X+13, card.Y+32, 14, simpleui.FontSemiBold, colors.text)
+	simpleui.DrawText(passCountdown(v.snapshot.Updated, pass.TCA, pass.InProgress), card.X+13, card.Y+55, 11, colors.text)
+	rl.DrawLine(int32(card.X+12), int32(card.Y+75), int32(card.X+card.Width-12), int32(card.Y+75), withAlpha(colors.border, 180))
+	simpleui.DrawText(fmt.Sprintf("DISTANCIA MÍNIMA   %.0f km", pass.MinRangeKM), card.X+13, card.Y+82, 11, colors.text)
+	simpleui.DrawText(fmt.Sprintf("ELEVACIÓN MÁX.     %.1f°", pass.MaxElevation), card.X+13, card.Y+101, 11, colors.text)
+	simpleui.DrawText(fmt.Sprintf("AOS %s  ·  LOS %s", pass.AOS.Local().Format("15:04"), pass.LOS.Local().Format("15:04")), card.X+13, card.Y+119, 10, colors.muted)
+}
+
+func passDayLabel(now, event time.Time) string {
+	y1, m1, d1 := now.Date()
+	y2, m2, d2 := event.Date()
+	if y1 == y2 && m1 == m2 && d1 == d2 {
+		return "HOY"
+	}
+	tomorrow := now.AddDate(0, 0, 1)
+	y3, m3, d3 := tomorrow.Date()
+	if y2 == y3 && m2 == m3 && d2 == d3 {
+		return "MAÑANA"
+	}
+	return event.Format("02/01")
+}
+
+func localZoneLabel(at time.Time) string {
+	zone, _ := at.Zone()
+	if zone == "" {
+		return "LOCAL"
+	}
+	return zone
+}
+
+func passCountdown(now, event time.Time, inProgress bool) string {
+	if inProgress {
+		return "PASADA EN CURSO"
+	}
+	minutes := int(math.Round(event.Sub(now).Minutes()))
+	if minutes <= 0 {
+		return "AHORA"
+	}
+	if minutes < 60 {
+		return fmt.Sprintf("EN %d min", minutes)
+	}
+	return fmt.Sprintf("EN %d h %02d min", minutes/60, minutes%60)
 }
 func (v *satelliteMap) drawDetails(b rl.Rectangle) {
 	simpleui.DrawTextStyled("SATÉLITE SELECCIONADO", b.X+14, b.Y+10, 14, simpleui.FontSemiBold, colors.orange)
