@@ -23,6 +23,41 @@ func TestAircraftMapProjectionRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAircraftMapFitsAfterPositionsArrive(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "aircraft.json")
+	v := &aircraftMap{path: path, centerLat: 40.2, centerLon: -3.7, lonSpan: 14, selected: -1, tracks: make(map[string][]geoPoint)}
+	withoutPosition, _ := json.Marshal([]aircraft.Aircraft{{ICAO: "7C6B28", Callsign: "QFA123"}})
+	if err := os.WriteFile(path, withoutPosition, 0644); err != nil {
+		t.Fatal(err)
+	}
+	v.read()
+	if v.fitted {
+		t.Fatal("view must stay unlocked until an aircraft has a position")
+	}
+	if v.centerLat != 40.2 || v.centerLon != -3.7 {
+		t.Fatalf("view moved without positions: %.4f %.4f", v.centerLat, v.centerLon)
+	}
+
+	lat, lon := -33.86, 151.21
+	withPosition, _ := json.Marshal([]aircraft.Aircraft{{ICAO: "7C6B28", Callsign: "QFA123", Latitude: &lat, Longitude: &lon}})
+	if err := os.WriteFile(path, withPosition, 0644); err != nil {
+		t.Fatal(err)
+	}
+	v.next = time.Time{}
+	v.read()
+	if !v.fitted {
+		t.Fatal("expected the map to fit once a position arrived")
+	}
+	if abs64(v.centerLat-lat) > 0.01 || abs64(v.centerLon-lon) > 0.01 {
+		t.Fatalf("map did not center on traffic: lat=%.4f lon=%.4f", v.centerLat, v.centerLon)
+	}
+	b := rl.Rectangle{X: 20, Y: 78, Width: 970, Height: 690}
+	p := v.project(lat, lon, b)
+	if !rl.CheckCollisionPointRec(p, b) {
+		t.Fatalf("positioned aircraft is off the map: %+v", p)
+	}
+}
+
 func TestAircraftMapLabelClickAndZoomFromDetailsPanel(t *testing.T) {
 	lat, lon := 40.48, -3.57
 	v := aircraftMap{centerLat: lat, centerLon: lon, lonSpan: 2, selected: -1, list: []aircraft.Aircraft{{ICAO: "3451A2", Latitude: &lat, Longitude: &lon}}}

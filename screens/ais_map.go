@@ -22,10 +22,10 @@ func RunAISMap(path string) {
 	simpleui.SetTextScale(1.25)
 	simpleui.SetTitle("IC-SDR · AIS Map")
 	simpleui.SetMinimumSize(900, 540)
-	v := &aisMap{path: path, centerLat: 40.2, centerLon: -3.7, lonSpan: 14, selected: -1, tracks: make(map[uint32][]geoPoint)}
+	v := &aisMap{path: path, centerLat: 15, centerLon: 0, lonSpan: 260, selected: -1, tracks: make(map[uint32][]geoPoint)}
 	center := simpleui.NewButton("aisCenterFleet", 1040, 18, 145, 42, "CENTER FLEET", 13)
 	center.SetColors(colors.panelAlt, colors.border, colors.text)
-	center.OnClick(func() { v.fit(); v.fitted = true })
+	center.OnClick(func() { v.fitted = v.fit() })
 	world := simpleui.NewButton("aisWorld", 1200, 18, 130, 42, "WORLD VIEW", 13)
 	world.SetColors(colors.panelAlt, colors.border, colors.text)
 	world.OnClick(func() { v.centerLat, v.centerLon, v.lonSpan = 15, 0, 260 })
@@ -102,13 +102,12 @@ func (v *aisMap) read() {
 			v.tracks[s.MMSI] = track
 		}
 	}
-	if !v.fitted && len(vessels) > 0 {
-		v.fit()
+	if !v.fitted && v.fit() {
 		v.fitted = true
 	}
 }
 
-func (v *aisMap) fit() {
+func (v *aisMap) fit() bool {
 	minLat, maxLat, minLon, maxLon := 90., -90., 180., -180.
 	n := 0
 	for _, s := range v.vessels {
@@ -122,11 +121,12 @@ func (v *aisMap) fit() {
 		n++
 	}
 	if n == 0 {
-		return
+		return false
 	}
 	v.centerLat, v.centerLon = (minLat+maxLat)/2, (minLon+maxLon)/2
 	v.lonSpan = math.Max(.35, math.Max((maxLon-minLon)*1.7, (maxLat-minLat)*2.6))
 	v.clampView()
+	return true
 }
 
 func (v *aisMap) latSpan(b rl.Rectangle) float64 { return v.lonSpan * float64(b.Height/b.Width) }

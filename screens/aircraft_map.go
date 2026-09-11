@@ -17,10 +17,10 @@ func RunAircraftMap(path string) {
 	simpleui.SetTextScale(1.25)
 	simpleui.SetTitle("IC-SDR · Air traffic")
 	simpleui.SetMinimumSize(900, 540)
-	v := &aircraftMap{path: path, centerLat: 40.2, centerLon: -3.7, lonSpan: 14, selected: -1, tracks: make(map[string][]geoPoint)}
+	v := &aircraftMap{path: path, centerLat: 15, centerLon: 0, lonSpan: 260, selected: -1, tracks: make(map[string][]geoPoint)}
 	center := simpleui.NewButton("flightCenter", 1040, 18, 145, 42, "CENTER TRAFFIC", 12)
 	center.SetColors(colors.panelAlt, colors.border, colors.text)
-	center.OnClick(func() { v.fit(); v.fitted = true })
+	center.OnClick(func() { v.fitted = v.fit() })
 	world := simpleui.NewButton("flightWorld", 1200, 18, 130, 42, "WORLD VIEW", 13)
 	world.SetColors(colors.panelAlt, colors.border, colors.text)
 	world.OnClick(func() { v.centerLat, v.centerLon, v.lonSpan = 15, 0, 260 })
@@ -69,12 +69,11 @@ func (v *aircraftMap) read() {
 			v.tracks[a.ICAO] = t
 		}
 	}
-	if !v.fitted && len(list) > 0 {
-		v.fit()
+	if !v.fitted && v.fit() {
 		v.fitted = true
 	}
 }
-func (v *aircraftMap) fit() {
+func (v *aircraftMap) fit() bool {
 	minLat, maxLat, minLon, maxLon := 90., -90., 180., -180.
 	n := 0
 	for _, a := range v.list {
@@ -88,11 +87,12 @@ func (v *aircraftMap) fit() {
 		n++
 	}
 	if n == 0 {
-		return
+		return false
 	}
 	v.centerLat, v.centerLon = (minLat+maxLat)/2, (minLon+maxLon)/2
 	v.lonSpan = math.Max(.8, math.Max((maxLon-minLon)*1.6, (maxLat-minLat)*2.5))
 	v.clamp()
+	return true
 }
 func (v *aircraftMap) latSpan(b rl.Rectangle) float64 { return v.lonSpan * float64(b.Height/b.Width) }
 func (v *aircraftMap) clamp() {
@@ -206,10 +206,12 @@ func (v *aircraftMap) draw() {
 			rl.DrawLineEx(v.project(t[i-1].lat, t[i-1].lon, b), v.project(t[i].lat, t[i].lon, b), 1.5, rl.Color{R: 196, G: 120, B: 255, A: 120})
 		}
 	}
+	located := 0
 	for i, a := range v.list {
 		if a.Latitude == nil || a.Longitude == nil {
 			continue
 		}
+		located++
 		p := v.project(*a.Latitude, *a.Longitude, b)
 		if !rl.CheckCollisionPointRec(p, b) {
 			continue
@@ -242,7 +244,7 @@ func (v *aircraftMap) draw() {
 		simpleui.DrawText(label+alt, p.X+13, p.Y-8, 10, colors.text)
 	}
 	simpleui.DrawText("LIVE AIR TRAFFIC", 24, 20, 24, colors.cyan)
-	simpleui.DrawText(fmt.Sprintf("%d aircraft · cyan 1090 · orange 978 · drag and use the wheel", len(v.list)), 340, 29, 13, colors.muted)
+	simpleui.DrawText(fmt.Sprintf("%d aircraft · %d with position · cyan 1090 · orange 978 · drag and use the wheel", len(v.list), located), 340, 29, 13, colors.muted)
 	v.details()
 	simpleui.DrawText("Natural Earth · positions received directly by radio", 1015, 742, 9, colors.muted)
 }
