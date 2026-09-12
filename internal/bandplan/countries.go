@@ -28,18 +28,22 @@ func countryUS() Plan {
 	plan := clone(ituR2(), "us", "United States", "R2")
 	plan.APRSHz = 144_390_000
 	plan.Default = Tune{Category: "HAM", Name: "20 m", FrequencyHz: 14_261_000, SpanHz: 100_000}
+	applyNorthAmericanPersonalRadio(&plan)
 	return plan
 }
 
 func countryCA() Plan {
 	plan := clone(ituR2(), "ca", "Canada", "R2")
 	plan.APRSHz = 144_390_000
+	applyNorthAmericanPersonalRadio(&plan)
 	return plan
 }
 
 func countryMX() Plan {
 	plan := clone(ituR2(), "mx", "Mexico", "R2")
 	plan.APRSHz = 144_390_000
+	replaceRange(&plan, "ISM", "FRS / GMRS", 462_500_000, 467_700_000)
+	replaceTune(&plan, "ISM", "FRS / GMRS", 462_562_500, 500_000)
 	return plan
 }
 
@@ -63,7 +67,7 @@ func countryAU() Plan {
 	replaceRange(&plan, "HAM", "80 m", 3_500_000, 3_700_000)
 	replaceRange(&plan, "HAM", "70 cm", 420_000_000, 450_000_000)
 	replaceTune(&plan, "HAM", "2 m", 146_500_000, 500_000)
-	replaceTune(&plan, "ISM", "UHF CB", 476_625_000, 500_000)
+	applyUHFCB(&plan)
 	return plan
 }
 
@@ -71,6 +75,7 @@ func countryNZ() Plan {
 	plan := clone(ituR3(), "nz", "New Zealand", "R3")
 	plan.APRSHz = 144_575_000
 	replaceRange(&plan, "HAM", "80 m", 3_500_000, 3_900_000)
+	applyUHFCB(&plan)
 	return plan
 }
 
@@ -176,4 +181,16 @@ func countryPH() Plan {
 	plan.APRSHz = 144_390_000
 	replaceRange(&plan, "HAM", "2 m", 144_000_000, 148_000_000)
 	return plan
+}
+
+func applyNorthAmericanPersonalRadio(plan *Plan) {
+	replaceRange(plan, "ISM", "FRS / GMRS", 462_500_000, 467_700_000)
+	replaceRange(plan, "ISM", "MURS", 151_820_000, 154_600_000)
+	replaceTune(plan, "ISM", "FRS / GMRS", 462_562_500, 500_000)
+	replaceTune(plan, "ISM", "MURS", 154_570_000, 250_000)
+}
+
+func applyUHFCB(plan *Plan) {
+	replaceRange(plan, "ISM", "UHF CB", 476_412_500, 477_412_500)
+	replaceTune(plan, "ISM", "UHF CB", 476_625_000, 500_000)
 }

@@ -17,9 +17,6 @@ func ituR2() Plan {
 	replaceRange(&plan, "COMMERCIAL", "MW / AM", 530_000, 1_700_000)
 	removeRange(&plan, "ISM", "PMR446")
 	removeRange(&plan, "ISM", "868 MHz")
-	replaceRange(&plan, "ISM", "FRS / GMRS", 462_500_000, 467_700_000)
-	replaceRange(&plan, "ISM", "MURS", 151_820_000, 154_600_000)
-
 	replaceTune(&plan, "HAM", "80 m", 3_900_000, 50_000)
 	replaceTune(&plan, "HAM", "40 m", 7_200_000, 50_000)
 	replaceTune(&plan, "HAM", "6 m", 50_125_000, 200_000)
@@ -32,7 +29,5 @@ func ituR2() Plan {
 	replaceTune(&plan, "COMMERCIAL", "MW / AM", 1_000_000, 500_000)
 	removeTune(&plan, "ISM", "PMR446")
 	removeTune(&plan, "ISM", "868 MHz")
-	replaceTune(&plan, "ISM", "FRS / GMRS", 462_562_500, 500_000)
-	replaceTune(&plan, "ISM", "MURS", 154_570_000, 250_000)
 	return plan
 }

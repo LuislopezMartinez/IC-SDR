@@ -46,6 +46,7 @@ type AudioPlayer struct {
 	digitalMode    atomic.Bool
 	digitalActive  atomic.Bool
 	digitalStarved int
+	playbackMode   string
 }
 
 func NewAudioPlayer(receiver *sdr.Receiver, recorder *AudioRecorder) *AudioPlayer {
@@ -55,7 +56,8 @@ func NewAudioPlayer(receiver *sdr.Receiver, recorder *AudioRecorder) *AudioPlaye
 func (player *AudioPlayer) Pump() {
 	if player.receiver != nil {
 		mode, active := player.receiver.AudioPlaybackState()
-		player.digitalMode.Store(mode == "DMR BETA" || mode == "TETRA")
+		player.transitionPlaybackMode(mode)
+		player.digitalMode.Store(mode == "DMR BETA" || mode == "TETRA" || mode == "DIGITAL AUTO")
 		player.digitalActive.Store(active)
 	}
 	if !player.ready {
@@ -88,6 +90,33 @@ func (player *AudioPlayer) Pump() {
 		}
 		player.started = true
 	}
+}
+
+// transitionPlaybackMode discards timing and starvation state belonging to
+// the previous demodulator. An exhausted burst-oriented DMR session must not
+// leave the continuous NFM stream paused.
+func (player *AudioPlayer) transitionPlaybackMode(mode string) {
+	if mode == player.playbackMode {
+		return
+	}
+	player.resetPlaybackState()
+	player.playbackMode = mode
+}
+
+// ResetPlayback forces a fresh prebuffer even when two bands happen to use
+// the same demodulator (for example NFM -> NFM).
+func (player *AudioPlayer) ResetPlayback() { player.resetPlaybackState() }
+
+func (player *AudioPlayer) resetPlaybackState() {
+	if player.ready && player.started {
+		rl.PauseAudioStream(player.stream)
+		player.paused = true
+	}
+	player.started = false
+	player.sourceCount = 0
+	player.sourcePosition = 0
+	player.digitalStarved = 0
+	player.starved.Store(false)
 }
 
 // fillAudio continuously reconciles the independent SDR and WASAPI clocks.

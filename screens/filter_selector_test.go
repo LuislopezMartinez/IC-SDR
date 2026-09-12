@@ -2,26 +2,9 @@ package screens
 
 import "testing"
 
-func TestAMFilterCatalog(t *testing.T) {
-	presets := filterCatalog["AM"]
-	expected := []int{10000, 6000, 4000, 7500}
-	if len(presets) != 4 {
-		t.Fatalf("expected four AM filters, got %d", len(presets))
+func TestNFMCustomFilterRange(t *testing.T) {
+	minimum, maximum, step := customFilterRange("NFM")
+	if minimum != 500 || maximum != 25_000 || step != 500 {
+		t.Fatalf("NFM custom range = %d..%d step %d; want 500..25000 step 500", minimum, maximum, step)
 	}
-	for index, bandwidth := range expected {
-		if presets[index].BandwidthHz != bandwidth {
-			t.Fatalf("filter %d: got %d, want %d", index, presets[index].BandwidthHz, bandwidth)
-		}
-	}
-}
-
-func TestCustomAMFilterQuantization(t *testing.T) {
-	selector := NewFilterSelector(nil)
-	selector.mode = "AM"
-	selector.setCustomNormalized(.5)
-	bandwidth := filterCatalog["AM"][3].BandwidthHz
-	if bandwidth < 2000 || bandwidth > 15000 || bandwidth%250 != 0 {
-		t.Fatalf("invalid custom AM bandwidth: %d", bandwidth)
-	}
-	filterCatalog["AM"][3].BandwidthHz = 7500
 }

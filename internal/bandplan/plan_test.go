@@ -41,6 +41,40 @@ func TestR2UsesAmericanAmateurEdges(t *testing.T) {
 	}
 }
 
+func TestGenericR3DoesNotIncludeAustralianUHFCB(t *testing.T) {
+	for _, item := range Must("itu-r3").Selector["ISM"] {
+		if item.Name == "UHF CB" {
+			t.Fatal("generic ITU R3 should not list Australian UHF CB")
+		}
+	}
+	found := false
+	for _, item := range Must("nz").Selector["ISM"] {
+		if item.Name == "UHF CB" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("New Zealand missing UHF CB")
+	}
+}
+
+func TestGenericR2DoesNotIncludeUSPersonalRadio(t *testing.T) {
+	for _, item := range Must("itu-r2").Selector["ISM"] {
+		if item.Name == "FRS / GMRS" || item.Name == "MURS" {
+			t.Fatalf("generic ITU R2 should not list %s", item.Name)
+		}
+	}
+	found := false
+	for _, item := range Must("us").Selector["ISM"] {
+		if item.Name == "FRS / GMRS" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("US plan missing FRS / GMRS")
+	}
+}
+
 func TestAustraliaOverridesAPRSAndUHFCB(t *testing.T) {
 	plan := Must("au")
 	if plan.ITU != "R3" || plan.APRSHz != 145_175_000 {
@@ -78,9 +112,9 @@ func TestFromLocaleAustralia(t *testing.T) {
 	if region != "itu-r2" || country != "us" {
 		t.Fatalf("US %s %s", region, country)
 	}
-	lang, region, country = FromLocale("es-ES")
-	if lang != "es" || region != "itu-r1" || country != "es" {
-		t.Fatalf("ES %s %s %s", lang, region, country)
+	lang, region, country = FromLocale("en_US.UTF-8")
+	if region != "itu-r2" || country != "us" {
+		t.Fatalf("en_US.UTF-8 %s %s", region, country)
 	}
 }
 

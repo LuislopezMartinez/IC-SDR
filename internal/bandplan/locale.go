@@ -6,6 +6,9 @@ import "strings"
 // the ITU region and country band plan that should start with the app.
 func FromLocale(tag string) (language, region, country string) {
 	tag = strings.ReplaceAll(strings.TrimSpace(tag), "_", "-")
+	if i := strings.IndexAny(tag, ".@"); i >= 0 {
+		tag = tag[:i]
+	}
 	if tag == "" {
 		return "en", "itu-r1", "auto"
 	}

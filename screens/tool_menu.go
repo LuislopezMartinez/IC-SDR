@@ -22,6 +22,7 @@ var toolMenuItems = []toolMenuItem{
 	{id: "FFT", label: "FFT DISPLAY", icon: "menu-fft-display.png", row: 0},
 	{id: "PBT_AUDIO", label: "PBT / AUDIO", icon: "menu-twin-pbt.png", row: 0},
 	{id: "DMR_MONITOR", label: "DMR", icon: "menu-dmr-if.png", row: 1},
+	{id: "DIGITAL_AUTO", label: "DIGITAL AUTO", row: 1},
 	{id: "SSTV", label: "SSTV", icon: "menu-sstv.png", row: 1},
 	{id: "APRS", label: "APRS", icon: "menu-aprs.png", row: 1},
 	{id: "RTL_433", label: "RTL_433", icon: "menu-rtl433.png", row: 1},
@@ -178,6 +179,15 @@ func (menu *ToolMenu) drawCustomIcon(id string, center rl.Vector2, active bool, 
 		accent = menu.rowAccent(row)
 	}
 	switch id {
+	case "DIGITAL_AUTO":
+		rl.DrawCircleLines(int32(center.X), int32(center.Y), 31, accent)
+		for ring := float32(12); ring <= 24; ring += 12 {
+			rl.DrawCircleLines(int32(center.X), int32(center.Y), ring, colors.muted)
+		}
+		for i, h := range []float32{13, 28, 43, 24, 36} {
+			x := center.X - 31 + float32(i)*15
+			rl.DrawRectangleRounded(rl.Rectangle{X: x, Y: center.Y + 24 - h, Width: 8, Height: h}, .3, 4, accent)
+		}
 	case "RADIOSONDE":
 		rl.DrawEllipse(int32(center.X), int32(center.Y-13), 20, 24, accent)
 		rl.DrawLineEx(rl.Vector2{X: center.X - 12, Y: center.Y + 6}, rl.Vector2{X: center.X, Y: center.Y + 23}, 2, colors.muted)
@@ -261,10 +271,10 @@ func (menu *ToolMenu) itemBounds(index int) rl.Rectangle {
 	step, width := float32(168), float32(160)
 	y := float32(135 + item.row*138)
 	if item.row == 1 {
-		lineCount, lineColumn := 4, column
+		lineCount, lineColumn := 5, column
 		y = 273
-		if column >= 4 {
-			lineCount, lineColumn, y = 4, column-4, 390
+		if column >= 5 {
+			lineCount, lineColumn, y = count-5, column-5, 390
 		}
 		rowX := float32(640) - float32(lineCount)*step/2
 		return rl.Rectangle{X: rowX + float32(lineColumn)*step, Y: y, Width: width, Height: 108}

@@ -27,6 +27,35 @@ func TestAudioPlayerConsumesLargestPostProcessedPeak(t *testing.T) {
 	}
 }
 
+func TestPlaybackModeTransitionClearsDigitalState(t *testing.T) {
+	player := NewAudioPlayer(nil, nil)
+	player.playbackMode = "DMR BETA"
+	player.sourceCount = 7
+	player.sourcePosition = 2.5
+	player.digitalStarved = 1234
+	player.starved.Store(true)
+
+	player.transitionPlaybackMode("NFM")
+
+	if player.playbackMode != "NFM" || player.sourceCount != 0 || player.sourcePosition != 0 || player.digitalStarved != 0 || player.starved.Load() {
+		t.Fatalf("digital playback state survived NFM transition: %+v", player)
+	}
+}
+
+func TestPlaybackResetClearsStateWithoutModeChange(t *testing.T) {
+	player := NewAudioPlayer(nil, nil)
+	player.playbackMode = "NFM"
+	player.sourceCount = 5
+	player.sourcePosition = 1.25
+	player.starved.Store(true)
+
+	player.ResetPlayback()
+
+	if player.playbackMode != "NFM" || player.sourceCount != 0 || player.sourcePosition != 0 || player.starved.Load() {
+		t.Fatalf("same-mode band reset retained playback state: %+v", player)
+	}
+}
+
 func TestDialFrequencyAndDigitStep(t *testing.T) {
 	if got := formatDialFrequency(446_018_750); got != "446.018.750" {
 		t.Fatalf("formatDialFrequency() = %q", got)

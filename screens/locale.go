@@ -124,13 +124,13 @@ func (screen *MainScreen) refreshLocaleChrome() {
 		}
 	}
 	if screen.themeButton != nil {
-		screen.themeButton.SetLabel(T("THEME") + "  " + T(themeDisplayName(screen.themeName)))
+		screen.themeButton.SetLabel(T("THEME"))
 	}
 	if screen.localeButton != nil {
 		screen.localeButton.SetLabel(T("LANGUAGE"))
 	}
 	if screen.step != nil {
-		screen.step.SetLabel(T("STEP") + "  " + formatStep(screen.tuningStepHz))
+		screen.step.SetLabel(T("STEP"))
 	}
 	if screen.viewButton != nil {
 		screen.viewButton.SetLabel(T("VIEW") + "  " + formatView(screen.viewMode))

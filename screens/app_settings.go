@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"go-zero/internal/bandplan"
 	"go-zero/internal/radiosonde"
 	"go-zero/internal/resources"
 	"go-zero/internal/sdr"
@@ -99,6 +100,7 @@ func loadAppSettings(path string, screen *MainScreen) {
 	if settings.Country != "" {
 		screen.country = settings.Country
 	}
+	applyBandPlan(bandplan.Must(bandplan.Resolve(screen.ituRegion, screen.country)))
 	if validBand(settings.BandCategory, settings.BandName) {
 		screen.bandCategory = settings.BandCategory
 		screen.bandName = settings.BandName
@@ -123,7 +125,7 @@ func loadAppSettings(path string, screen *MainScreen) {
 	if validTool(settings.ActiveTool) {
 		screen.activeTool = settings.ActiveTool
 	}
-	if settings.ViewMode >= 1 && settings.ViewMode <= 3 {
+	if settings.ViewMode >= 1 && settings.ViewMode <= 2 {
 		screen.viewMode = settings.ViewMode
 	}
 	if settings.ScanCenterToMemory != nil {

@@ -1,6 +1,7 @@
 package tetra
 
 import (
+	"encoding/json"
 	"math"
 	"strings"
 	"testing"
@@ -15,8 +16,29 @@ func TestParseSDSSimpleText(t *testing.T) {
 		bits = appendBits(bits, uint32(b), 8)
 	}
 	message, position, ok := parseSDS(bits, 6009004, time.Unix(123, 0))
-	if !ok || position != nil || message.Kind != "SDS TEXT" || !strings.Contains(message.Text, "HELLO") || !strings.Contains(message.Text, "06009004") {
+	if !ok || position != nil || message.Kind != "SDS TEXT" || message.PartySSI != 6009004 || !strings.Contains(message.Text, "HELLO") || !message.Recognized {
 		t.Fatalf("unexpected SDS result: ok=%v position=%v message=%+v", ok, position, message)
+	}
+}
+
+func TestMessageJSONKeepsKindAndText(t *testing.T) {
+	want := Message{Time: time.Unix(123, 0), Kind: "D-SDS DATA", Text: "contenido", AddressSSI: 5017011, PartySSI: 4198000, Slot: 3}
+	data, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got Message
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Kind != want.Kind || got.Text != want.Text || got.AddressSSI != want.AddressSSI || got.PartySSI != want.PartySSI || got.Slot != want.Slot {
+		t.Fatalf("message fields were lost in JSON: %s", data)
+	}
+}
+
+func TestBitsToHexPreservesPartialNibble(t *testing.T) {
+	if got := bitsToHex([]byte{1, 0, 1, 0, 1, 1}); got != "AC" {
+		t.Fatalf("bitsToHex() = %q, want AC", got)
 	}
 }
 

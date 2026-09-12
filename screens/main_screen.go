@@ -17,7 +17,7 @@ const (
 	waterfallY   = float32(450)
 	waterfallH   = float32(170)
 	toolY        = float32(630)
-	toolH        = float32(196)
+	toolH        = designHeight - toolY - 8
 	// New panels must not introduce text below this readable baseline.
 	uiMinimumFontSize = int32(13)
 	uiControlFontSize = int32(14)
@@ -83,11 +83,12 @@ type MainScreen struct {
 	mode                   *simpleui.Dropdown
 	filter, band           *simpleui.Button
 	step                   *simpleui.Button
+	stepDown, stepUp       *simpleui.Button
+	menuButton             *simpleui.Button
 	viewButton             *simpleui.Button
 	themeButton            *simpleui.Button
 	localeButton           *simpleui.Button
 	localeSettings         *LocaleSettings
-	menuButton             *simpleui.Button
 	muteSwitch             *simpleui.Switch
 	holdLabel              *simpleui.Label
 	closeLabel             *simpleui.Label
@@ -165,6 +166,7 @@ type MainScreen struct {
 	memoryPanel            *MemoryPanel
 	scanPanel              *ScanPanel
 	dmrPanel               *DMRPanel
+	digitalVoicePanel      *DigitalVoicePanel
 	aprsPanel              *APRSPanel
 	aprsView               string
 	rtl433Panel            *RTL433Panel
@@ -278,6 +280,8 @@ func (screen *MainScreen) CreateControls() {
 		screen.selectFilter(screen.filterSelector.Current(mode))
 		if mode == "DMR BETA" && screen.activeTool != "SCAN" {
 			screen.selectTool("DMR_MONITOR")
+		} else if mode != "DMR BETA" && screen.activeTool == "DMR_MONITOR" {
+			screen.selectTool("PBT_AUDIO")
 		}
 		screen.markSettingsDirty()
 	})
@@ -359,7 +363,6 @@ func (screen *MainScreen) CreateControls() {
 		modeLabel = T("FIX")
 	}
 	screen.vfoModeSwitch = simpleui.NewSwitch("vfoMode", 1110, 159, 136, 28, modeLabel, !screen.centerMode, 12)
-	screen.vfoModeSwitch.SetTrackColors(rl.Color{R: 51, G: 61, B: 70, A: 255}, colors.orange)
 	screen.vfoModeSwitch.OnChange(func(fixed bool) {
 		screen.centerMode = !fixed
 		screen.vfoModeSwitch.SetLabel(T("FIX"))
@@ -372,7 +375,7 @@ func (screen *MainScreen) CreateControls() {
 				screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
 				screen.waterfall.Reset()
 			}
-			screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+			screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 		}
 		screen.markSettingsDirty()
 	})
@@ -381,12 +384,13 @@ func (screen *MainScreen) CreateControls() {
 	screen.memViewSwitch.OnChange(screen.setMemoryView)
 	spanDown := simpleui.NewButton("spanDown", frequencyPanelX+16, frequencyPanelY+36, 36, 32, "-", 16)
 	spanUp := simpleui.NewButton("spanUp", frequencyPanelX+58, frequencyPanelY+36, 36, 32, "+", 16)
-	menu := simpleui.NewButton("menu", toolContentX, 842, 110, 40, T("MENU"), 15)
-	screen.menuButton = menu
-	screen.viewButton = simpleui.NewButton("view", toolContentX+120, 842, 100, 40, T("VIEW")+"  "+formatView(screen.viewMode), 14)
-	screen.step = simpleui.NewButton("step", toolContentX+230, 842, 220, 40, T("STEP")+"  "+formatStep(screen.tuningStepHz), 15)
-	screen.themeButton = simpleui.NewButton("theme", toolContentX+460, 842, 150, 40, T("THEME")+"  "+T(themeDisplayName(screen.themeName)), 13)
-	screen.localeButton = simpleui.NewButton("locale", toolContentX+620, 842, 140, 40, T("LANGUAGE"), 13)
+	screen.menuButton = simpleui.NewButton("menu", frequencyDialX+9, frequencyPanelY+7, 62, 24, T("MENU"), 10)
+	screen.viewButton = simpleui.NewButton("view", frequencyDialX+75, frequencyPanelY+7, 62, 24, T("VIEW")+"  "+formatView(screen.viewMode), 10)
+	screen.step = simpleui.NewButton("step", frequencyDialX+9, frequencyPanelY+frequencyPanelH-23, 43, 19, T("STEP"), 10)
+	screen.stepDown = simpleui.NewButton("stepDown", frequencyDialX+57, frequencyPanelY+frequencyPanelH-23, 27, 19, "-", 13)
+	screen.stepUp = simpleui.NewButton("stepUp", frequencyDialX+197, frequencyPanelY+frequencyPanelH-23, 27, 19, "+", 13)
+	screen.themeButton = simpleui.NewButton("theme", frequencyDialX+141, frequencyPanelY+7, 68, 24, T("THEME"), 10)
+	screen.localeButton = simpleui.NewButton("locale", frequencyDialX+213, frequencyPanelY+7, 86, 24, T("LANGUAGE"), 10)
 	screen.localeSettings = NewLocaleSettings(screen)
 	screen.localeButton.OnClick(screen.localeSettings.Open)
 	spanDown.OnClick(func() { screen.changeSpan(-1) })
@@ -399,9 +403,11 @@ func (screen *MainScreen) CreateControls() {
 	}
 	screen.sdrHeader = NewSDRHeaderPanel(screen.receiver, screen.markSettingsDirty)
 	screen.stepSelector = NewStepSelector(screen.tuningStepHz, screen.selectTuningStep)
-	menu.OnClick(screen.toolMenu.Open)
+	screen.menuButton.OnClick(screen.toolMenu.Open)
 	screen.viewButton.OnClick(screen.cycleViewMode)
 	screen.step.OnClick(screen.stepSelector.Open)
+	screen.stepDown.OnClick(func() { screen.changeTuningStep(-1) })
+	screen.stepUp.OnClick(func() { screen.changeTuningStep(1) })
 	screen.themeButton.OnClick(screen.cycleTheme)
 
 	screen.createWaterfallControls()
@@ -437,6 +443,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.audioPlayer.SetRecorder(screen.recorder)
 	screen.recorderPanel = NewRecorderPanel(screen, screen.recorder)
 	screen.utilitiesSidebar = NewUtilitiesSidebar(screen)
+	screen.digitalVoicePanel = NewDigitalVoicePanel(screen)
 	screen.audioPlayer.SetVolume(screen.volume / 100)
 	screen.audioPlayer.SetMuted(screen.muted)
 
@@ -459,7 +466,7 @@ func (screen *MainScreen) CreateControls() {
 		screen.mode, screen.filter, screen.band,
 		squelch, screen.squelchLabel, screen.squelchSlider, holdLabel, holdSlider, closeLabel, closeSlider,
 		mute, screen.volumeLabel, screen.volumeSlider, screen.vfoModeSwitch, screen.memViewSwitch,
-		spanDown, spanUp, menu, screen.viewButton, screen.step, screen.themeButton, screen.localeButton,
+		spanDown, spanUp, screen.menuButton, screen.viewButton, screen.step, screen.stepDown, screen.stepUp, screen.themeButton, screen.localeButton,
 	} {
 		simpleui.Add(element)
 	}
@@ -480,6 +487,9 @@ func (screen *MainScreen) CreateControls() {
 		simpleui.Add(element)
 	}
 	for _, element := range screen.dmrPanel.controls {
+		simpleui.Add(element)
+	}
+	for _, element := range screen.digitalVoicePanel.controls {
 		simpleui.Add(element)
 	}
 	for _, element := range screen.aprsPanel.controls {
@@ -549,9 +559,12 @@ func (screen *MainScreen) CreateControls() {
 	if screen.activeTool == "TETRA" {
 		screen.tetraPanel.Enter()
 	}
+	if screen.activeTool == "DIGITAL_AUTO" {
+		screen.digitalVoicePanel.Enter()
+	}
 	if screen.receiver != nil {
 		screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
-		screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 		screen.receiver.SetDMRAutoCenter(screen.dmrAutoCenter)
 		screen.receiver.SetDMRAudioSlot(screen.dmrAudioSlot)
 	}
@@ -571,7 +584,7 @@ func (screen *MainScreen) Draw() {
 	screen.recorderPanel.Tick()
 	// Valid DMR voice frames are already gated by DSDcc; the RF squelch must
 	// never cut or omit decoded digital audio from a recording.
-	digitalAudio := screen.mode != nil && (screen.mode.SelectedText() == "DMR BETA" || screen.mode.SelectedText() == "TETRA")
+	digitalAudio := screen.mode != nil && (screen.mode.SelectedText() == "DMR BETA" || screen.mode.SelectedText() == "TETRA" || screen.activeTool == "DIGITAL_AUTO")
 	screen.audioPlayer.SetRecorderSquelch(screen.squelchEnabled && !digitalAudio, screen.stats.SquelchOpen)
 	screen.audioPlayer.Pump()
 	screen.uiSounds.EnsureLoaded()
@@ -608,6 +621,9 @@ func (screen *MainScreen) Draw() {
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.Tick()
 	}
+	if screen.digitalVoicePanel != nil {
+		screen.digitalVoicePanel.Tick()
+	}
 	screen.updateFrequencyInteraction()
 	screen.updateSpectrumDrag()
 	if screen.receiver != nil && rl.GetTime() >= screen.nextSpectrumUpdate {
@@ -624,14 +640,15 @@ func (screen *MainScreen) Draw() {
 	rl.DrawRectangle(0, 0, int32(designWidth), int32(designHeight), colors.background)
 	screen.drawHeader()
 	screen.drawSpectrum()
-	if screen.receiver != nil {
-		screen.waterfall.Update(screen.receiver, screen.stats.SampleRate, screen.spanHz)
+	if screen.activeTool != "DIGITAL_AUTO" {
+		if screen.receiver != nil {
+			screen.waterfall.Update(screen.receiver, screen.stats.SampleRate, screen.spanHz)
+		}
+		screen.drawWaterfall()
 	}
-	screen.drawWaterfall()
 	if screen.viewMode == 1 {
 		screen.drawLowerWorkspace()
 	}
-	screen.drawFooterBackground()
 	screen.utilitiesSidebar.Draw()
 }
 
@@ -666,6 +683,9 @@ func (screen *MainScreen) Close() {
 	}
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.Close()
+	}
+	if screen.digitalVoicePanel != nil {
+		screen.digitalVoicePanel.Close()
 	}
 	if screen.satellitePanel != nil {
 		screen.satellitePanel.Close()
@@ -733,7 +753,6 @@ func (screen *MainScreen) drawFrequencyDisplay() {
 	drawPanel(frequencyPanelX, frequencyPanelY, frequencyPanelW, frequencyPanelH)
 	rl.DrawLineEx(rl.Vector2{X: frequencyDividerX, Y: frequencyPanelY + 7}, rl.Vector2{X: frequencyDividerX, Y: frequencyPanelY + frequencyPanelH - 7}, 1, colors.border)
 	simpleui.DrawTextStyled("SPAN", frequencyPanelX+16, frequencyPanelY+9, 11, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawTextStyled("VFO A  ·  "+screen.mode.SelectedText(), frequencyDialX+15, frequencyPanelY+8, 12, simpleui.FontSemiBold, colors.cyan)
 
 	formatted := formatDialFrequency(screen.frequencyHz)
 	totalWidth := simpleui.MeasureTextStyled(formatted, frequencyFontSize, simpleui.FontMono).X
@@ -748,7 +767,9 @@ func (screen *MainScreen) drawFrequencyDisplay() {
 			exponent = digitCount - seenDigits - 1
 			seenDigits++
 		}
-		selected := exponent == screen.frequencyDigitExponent
+		// Separators have exponent -1. They must remain plain text when no
+		// editable digit is selected (frequencyDigitExponent is also -1).
+		selected := exponent >= 0 && exponent == screen.frequencyDigitExponent
 		if selected {
 			rl.DrawRectangleRounded(rl.Rectangle{X: cursor - 2, Y: frequencyPanelY + 24, Width: characterWidth + 4, Height: 45}, .18, 5, rl.Color{R: 25, G: 125, B: 190, A: 150})
 		}
@@ -764,15 +785,9 @@ func (screen *MainScreen) drawFrequencyDisplay() {
 	spanValue := fmt.Sprintf("%.3f MHz", float64(screen.spanHz)/1_000_000)
 	spanWidth := simpleui.MeasureTextStyled(spanValue, 11, simpleui.FontSemiBold).X
 	simpleui.DrawTextStyled(spanValue, frequencyPanelX+(108-spanWidth)*.5, footerY, 11, simpleui.FontSemiBold, colors.muted)
-	if screen.frequencyDigitExponent >= 0 {
-		label := "DIGIT STEP  " + formatStep(screen.digitStepHz())
-		width := simpleui.MeasureTextStyled(label, 14, simpleui.FontSemiBold).X
-		simpleui.DrawTextStyled(label, frequencyDialX+(frequencyDialW-width)*.5, footerY-1, 14, simpleui.FontSemiBold, rl.Color{R: 125, G: 205, B: 255, A: 255})
-	} else {
-		label := "STEP  " + formatStep(screen.tuningStepHz)
-		width := simpleui.MeasureTextStyled(label, 12, simpleui.FontSemiBold).X
-		simpleui.DrawTextStyled(label, frequencyDialX+frequencyDialW*.47-width*.5, footerY, 12, simpleui.FontSemiBold, colors.orange)
-	}
+	label := formatStep(screen.tuningStepHz)
+	width := simpleui.MeasureTextStyled(label, 12, simpleui.FontSemiBold).X
+	simpleui.DrawTextStyled(label, frequencyDialX+140-width*.5, footerY, 12, simpleui.FontSemiBold, colors.orange)
 	centerLabel, centerColor := "FIX", colors.orange
 	if screen.centerMode {
 		centerLabel, centerColor = "CENTER", colors.green
@@ -813,7 +828,7 @@ func (screen *MainScreen) updateAudioMeter() {
 }
 
 func drawCompactAudioMeter(x, y, width, height, db float32) {
-	rl.DrawRectangleRounded(rl.Rectangle{X: x, Y: y, Width: width, Height: height}, 1, 5, rl.Color{R: 38, G: 49, B: 57, A: 255})
+	rl.DrawRectangleRounded(rl.Rectangle{X: x, Y: y, Width: width, Height: height}, 1, 5, meterTrackColor())
 	fraction := min(max((db+60)/60, 0), 1)
 	color := colors.cyan
 	if db > -12 {
@@ -823,6 +838,10 @@ func drawCompactAudioMeter(x, y, width, height, db float32) {
 		color = colors.red
 	}
 	rl.DrawRectangleRounded(rl.Rectangle{X: x, Y: y, Width: width * fraction, Height: height}, 1, 5, color)
+}
+
+func meterTrackColor() rl.Color {
+	return mixColor(colors.panelAlt, colors.muted, .38)
 }
 
 func (screen *MainScreen) drawSquelchPanel() {
@@ -1059,6 +1078,10 @@ func (screen *MainScreen) drawTuningCursorLabel(cursorX, y, graphX, graphWidth f
 }
 
 func (screen *MainScreen) drawLowerWorkspace() {
+	if screen.activeTool == "DIGITAL_AUTO" {
+		screen.digitalVoicePanel.DrawPanel()
+		return
+	}
 	drawPanel(toolContentX, toolY, toolContentRight-toolContentX, toolH)
 	if screen.activeTool == "TETRA" && !screen.waterfallVisible {
 		screen.tetraPanel.DrawPanel()
@@ -1098,11 +1121,6 @@ func (screen *MainScreen) drawWaterfall() {
 	tuningFraction := float32(.5) + float32(screen.frequencyHz-screen.centerFrequencyHz)/float32(screen.spanHz)
 	x, y, width, height := screen.waterfallGeometry()
 	screen.waterfall.Draw(x, y, width, height, tuningFraction)
-}
-
-func (screen *MainScreen) drawFooterBackground() {
-	rl.DrawRectangle(int32(toolContentX), 830, int32(designWidth-toolContentX), 70, colors.background)
-	rl.DrawLine(int32(toolContentX), 830, int32(designWidth), 830, colors.border)
 }
 
 func (screen *MainScreen) createWaterfallControls() {
@@ -1239,6 +1257,9 @@ func (screen *MainScreen) selectTool(tool string) {
 	if previous == "SATELLITES" && tool != "SATELLITES" && screen.satellitePanel != nil {
 		screen.satellitePanel.Leave()
 	}
+	if previous == "DIGITAL_AUTO" && tool != "DIGITAL_AUTO" && screen.digitalVoicePanel != nil {
+		screen.digitalVoicePanel.Leave()
+	}
 	// A tool can be selected while VIEW 2 is active and while the menu owns the
 	// mouse release. Discard any gesture begun on the old geometry, then publish
 	// the new tool before restoring VIEW 1 so visibility is calculated from the
@@ -1304,6 +1325,12 @@ func (screen *MainScreen) selectTool(tool string) {
 	if screen.dmrPanel != nil {
 		screen.dmrPanel.SetVisible(tool == "DMR_MONITOR")
 	}
+	if screen.digitalVoicePanel != nil {
+		screen.digitalVoicePanel.SetVisible(tool == "DIGITAL_AUTO")
+		if tool == "DIGITAL_AUTO" && previous != "DIGITAL_AUTO" {
+			screen.digitalVoicePanel.Enter()
+		}
+	}
 	if screen.rtl433Panel != nil {
 		screen.rtl433Panel.SetVisible(tool == "RTL_433")
 		if tool == "RTL_433" && previous != "RTL_433" {
@@ -1358,14 +1385,14 @@ func (screen *MainScreen) selectTool(tool string) {
 
 func (screen *MainScreen) cycleViewMode() {
 	next := screen.viewMode + 1
-	if next > 3 {
+	if next > 2 {
 		next = 1
 	}
 	screen.setViewMode(next)
 }
 
 func (screen *MainScreen) setViewMode(mode int) {
-	if mode < 1 || mode > 3 {
+	if mode < 1 || mode > 2 {
 		mode = 1
 	}
 	screen.viewMode = mode
@@ -1390,6 +1417,9 @@ func (screen *MainScreen) setViewMode(mode int) {
 	}
 	if screen.dmrPanel != nil {
 		screen.dmrPanel.SetVisible(showTool && screen.activeTool == "DMR_MONITOR")
+	}
+	if screen.digitalVoicePanel != nil {
+		screen.digitalVoicePanel.SetVisible(showTool && screen.activeTool == "DIGITAL_AUTO")
 	}
 	if screen.rtl433Panel != nil {
 		screen.rtl433Panel.SetVisible(showTool && screen.activeTool == "RTL_433")
@@ -1420,6 +1450,9 @@ func (screen *MainScreen) setViewMode(mode int) {
 
 func (screen *MainScreen) spectrumGeometry() (x, y, width, height float32) {
 	x, y, width, height = toolContentX, 215, toolContentRight-toolContentX, 235
+	if screen.activeTool == "DIGITAL_AUTO" && screen.viewMode == 1 {
+		height = 261
+	}
 	if screen.viewMode == 2 {
 		height = 470
 	}
@@ -1428,16 +1461,56 @@ func (screen *MainScreen) spectrumGeometry() (x, y, width, height float32) {
 
 func (screen *MainScreen) waterfallGeometry() (x, y, width, height float32) {
 	x, y, width, height = toolContentX, 450, toolContentRight-toolContentX, 170
+	if screen.activeTool == "DIGITAL_AUTO" && screen.viewMode == 1 {
+		y, height = 365, 111
+	}
 	if screen.viewMode == 2 {
 		y, height = 685, 141
-	}
-	if screen.viewMode == 3 {
-		height = 340
 	}
 	return
 }
 
+func (screen *MainScreen) stopAllDecodersForBandChange() {
+	if screen.scanPanel != nil {
+		screen.scanPanel.Stop()
+	}
+	if screen.digitalVoicePanel != nil {
+		screen.digitalVoicePanel.Leave()
+	}
+	if screen.rtl433Panel != nil {
+		screen.rtl433Panel.Leave()
+	}
+	if screen.radiosondePanel != nil {
+		screen.radiosondePanel.Leave()
+	}
+	if screen.aisPanel != nil {
+		screen.aisPanel.Leave()
+	}
+	if screen.aircraftPanel != nil {
+		screen.aircraftPanel.Leave()
+	}
+	if screen.aprsPanel != nil {
+		screen.aprsPanel.Leave()
+	}
+	if screen.sstvPanel != nil {
+		screen.sstvPanel.Leave()
+	}
+	if screen.tetraPanel != nil {
+		screen.tetraPanel.Leave()
+	}
+	if screen.receiver != nil {
+		screen.receiver.StopAllDecoders()
+	}
+	if screen.audioPlayer != nil {
+		screen.audioPlayer.ResetPlayback()
+	}
+	if screen.activeTool != "PBT_AUDIO" {
+		screen.selectTool("PBT_AUDIO")
+	}
+}
+
 func (screen *MainScreen) selectBand(band BandDefinition) {
+	screen.stopAllDecodersForBandChange()
 	screen.setFrequencyDigitExponent(-1)
 	screen.bandCategory = band.Category
 	screen.bandName = band.Name
@@ -1447,16 +1520,13 @@ func (screen *MainScreen) selectBand(band BandDefinition) {
 	screen.centerFrequencyHz = band.FrequencyHz
 	screen.spanHz = band.SpanHz
 	screen.tuningStepHz = recommendedStepForBand(band)
-	if screen.step != nil {
-		screen.step.SetLabel("STEP  " + formatStep(screen.tuningStepHz))
-	}
 	if screen.stepSelector != nil {
 		screen.stepSelector.SetSelected(screen.tuningStepHz)
 	}
 	screen.waterfall.Reset()
 	if screen.receiver != nil {
 		screen.receiver.SetCenterFrequency(band.FrequencyHz)
-		screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 	}
 	screen.markSettingsDirty()
 }
@@ -1476,16 +1546,33 @@ func (screen *MainScreen) selectTuningStep(stepHz int64) {
 		halfSpan := screen.spanHz / 2
 		screen.frequencyHz = min(max(screen.frequencyHz, screen.centerFrequencyHz-halfSpan), screen.centerFrequencyHz+halfSpan)
 	}
-	if screen.step != nil {
-		screen.step.SetLabel("STEP  " + formatStep(stepHz))
+	if screen.stepSelector != nil {
+		screen.stepSelector.SetSelected(stepHz)
 	}
 	if screen.receiver != nil {
 		if centerChanged {
 			screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
 		}
-		screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 	}
 	screen.markSettingsDirty()
+}
+
+func (screen *MainScreen) changeTuningStep(direction int) {
+	if direction == 0 || len(tuningStepsHz) == 0 {
+		return
+	}
+	index := 0
+	for i, stepHz := range tuningStepsHz {
+		if stepHz <= screen.tuningStepHz {
+			index = i
+		}
+		if stepHz == screen.tuningStepHz {
+			break
+		}
+	}
+	index = min(max(index+direction, 0), len(tuningStepsHz)-1)
+	screen.selectTuningStep(tuningStepsHz[index])
 }
 
 func (screen *MainScreen) digitStepHz() int64 {
@@ -1517,13 +1604,6 @@ func (screen *MainScreen) setFrequencyDigitExponent(exponent int) {
 		if screen.vfoModeSwitch != nil {
 			screen.vfoModeSwitch.SetActive(true)
 		}
-		if screen.step != nil {
-			screen.step.SetLabel("DIGIT STEP\n" + formatStep(screen.digitStepHz()))
-			screen.step.SetColors(rl.Color{R: 25, G: 125, B: 190, A: 255}, rl.Color{R: 125, G: 205, B: 255, A: 255}, rl.White)
-		}
-	} else if screen.step != nil {
-		screen.step.SetLabel("STEP  " + formatStep(screen.tuningStepHz))
-		screen.step.ClearColors()
 	}
 	screen.markSettingsDirty()
 }
@@ -1558,7 +1638,7 @@ func (screen *MainScreen) updateFrequencyInteraction() {
 			if centerChanged {
 				screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
 			}
-			screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+			screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 		}
 	}
 }
@@ -1568,16 +1648,6 @@ func (screen *MainScreen) setFrequencyDigitHover(exponent int) {
 		return
 	}
 	screen.frequencyDigitExponent = exponent
-	if screen.step == nil {
-		return
-	}
-	if exponent >= 0 {
-		screen.step.SetLabel(T("DIGIT STEP") + "\n" + formatStep(screen.digitStepHz()))
-		screen.step.SetColors(rl.Color{R: 25, G: 125, B: 190, A: 255}, rl.Color{R: 125, G: 205, B: 255, A: 255}, rl.White)
-	} else {
-		screen.step.SetLabel(T("STEP") + "  " + formatStep(screen.tuningStepHz))
-		screen.step.ClearColors()
-	}
 }
 
 func frequencyDigitExponentAt(mouseX float32, formatted string) (int, bool) {
@@ -1686,7 +1756,7 @@ func (screen *MainScreen) selectFilter(preset FilterPreset) {
 		screen.filter.SetLabel(filterButtonLabel(preset))
 	}
 	if screen.receiver != nil {
-		screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 	}
 	screen.markSettingsDirty()
 }
@@ -1706,6 +1776,16 @@ func toolDisplayName(tool string) string {
 		}
 	}
 	return tool
+}
+
+func (screen *MainScreen) receiverDemodMode() string {
+	if screen.activeTool == "DIGITAL_AUTO" {
+		return "DIGITAL AUTO"
+	}
+	if screen.mode == nil {
+		return ""
+	}
+	return screen.mode.SelectedText()
 }
 
 func (screen *MainScreen) changeSpan(direction int) {
@@ -1739,7 +1819,7 @@ func (screen *MainScreen) changeSpan(direction int) {
 	}
 	if screen.receiver != nil {
 		screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
-		screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 	}
 	screen.markSettingsDirty()
 }
@@ -1778,7 +1858,7 @@ func (screen *MainScreen) updateSpectrumDrag() {
 				screen.tuneCenteredBySteps(steps)
 				if screen.receiver != nil {
 					screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
-					screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+					screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 				}
 			} else {
 				centerChanged := screen.tuneFixedBySteps(steps)
@@ -1786,7 +1866,7 @@ func (screen *MainScreen) updateSpectrumDrag() {
 					if centerChanged {
 						screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
 					}
-					screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+					screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 				}
 			}
 			screen.resetTETRAAfterManualSpectrumTune(previousFrequency)
@@ -1810,7 +1890,7 @@ func (screen *MainScreen) updateSpectrumDrag() {
 		screen.resetTETRAAfterManualSpectrumTune(previousFrequency)
 		screen.draggingSpectrum = false
 		if screen.receiver != nil {
-			screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+			screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 		}
 		return
 	}
@@ -1829,7 +1909,7 @@ func (screen *MainScreen) updateSpectrumDrag() {
 		// Match IC-SDR: the receiver coalesces retunes while IQ reads continue.
 		if screen.receiver != nil && (released || now >= screen.nextDragRetune) {
 			screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
-			screen.receiver.SetDemodulator(screen.mode.SelectedText(), screen.frequencyHz, screen.demodBandwidthHz)
+			screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 			screen.nextDragRetune = now + 1.0/60.0
 		}
 	}

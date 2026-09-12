@@ -20,7 +20,5 @@ func ituR3() Plan {
 	replaceTune(&plan, "HAM", "2 m", 146_500_000, 500_000)
 	replaceTune(&plan, "HAM", "70 cm", 439_000_000, 500_000)
 	removeTune(&plan, "ISM", "PMR446")
-	replaceTune(&plan, "ISM", "UHF CB", 476_625_000, 500_000)
-	replaceRange(&plan, "ISM", "UHF CB", 476_412_500, 477_412_500)
 	return plan
 }

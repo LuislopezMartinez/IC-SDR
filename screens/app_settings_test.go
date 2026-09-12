@@ -15,7 +15,7 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 		SpanHz: 500_000, TuningStepHz: 6_250, CenterMode: false,
 		ScanCenterToMemory: boolSetting(true), ScanResume: "HOLD", ScanPolicy: "STRONGER",
 		ScanDwellMs: 5000, ScanMinimumHz: 433_050_000, ScanMaximumHz: 434_750_000,
-		ActiveTool: "MEMORIES", ViewMode: 3,
+		ActiveTool: "MEMORIES", ViewMode: 2,
 		SquelchEnabled: boolSetting(true), SquelchThreshold: -42, SquelchHoldMs: 120, SquelchCloseMs: 240,
 		SpectrumMinimumDB: -80, SpectrumMaximumDB: -10,
 		FFTAveragingMs: 150, FFTRefreshFPS: 30, FFTPeakHold: boolSetting(false), FFTPeakDecay: 6, FFTWindow: "FLAT TOP",
@@ -45,7 +45,7 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 	if screen.spanHz != want.SpanHz || screen.tuningStepHz != want.TuningStepHz || screen.centerMode != want.CenterMode {
 		t.Fatalf("restored raster = %d/%d center=%v", screen.spanHz, screen.tuningStepHz, screen.centerMode)
 	}
-	if screen.activeTool != "MEMORIES" || screen.viewMode != 3 || !screen.scanCenterToMemory || screen.scanResume != "HOLD" || screen.scanPolicy != "STRONGER" || screen.scanDwellMs != 5000 {
+	if screen.activeTool != "MEMORIES" || screen.viewMode != 2 || !screen.scanCenterToMemory || screen.scanResume != "HOLD" || screen.scanPolicy != "STRONGER" || screen.scanDwellMs != 5000 {
 		t.Fatalf("restored scanner settings are incomplete")
 	}
 	if screen.activeTool != want.ActiveTool || screen.viewMode != want.ViewMode {

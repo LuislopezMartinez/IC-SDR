@@ -1107,7 +1107,9 @@ func (p *MemoryPanel) recall(m MemoryEntry) {
 	}
 	if m.StepHz > 0 {
 		p.screen.tuningStepHz = m.StepHz
-		p.screen.step.SetLabel("STEP  " + formatStep(m.StepHz))
+		if p.screen.stepSelector != nil {
+			p.screen.stepSelector.SetSelected(m.StepHz)
+		}
 	}
 	p.screen.frequencyHz = m.FrequencyHz
 	p.screen.updateBandForFrequency(m.FrequencyHz)

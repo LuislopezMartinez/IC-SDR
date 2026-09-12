@@ -346,11 +346,12 @@ func userFromResource(a resourceAddress, slot int) User {
 }
 
 type cmceInfo struct {
-	Kind       string
-	Code       uint8
-	CallID     uint16
-	CallingSSI uint32
-	SDS        []byte
+	Kind        string
+	Code        uint8
+	CallID      uint16
+	CallingSSI  uint32
+	SDSDataType uint8
+	SDS         []byte
 }
 
 type llcPDU struct {
@@ -513,6 +514,7 @@ func parseTLSDU(tl []byte) (cmceInfo, uint8, bool) {
 			offset += 24
 		}
 		dataType := bitsToUint(tl, offset, 2)
+		result.SDSDataType = uint8(dataType)
 		offset += 2
 		length := [4]int{16, 32, 64, 0}[dataType]
 		if dataType == 3 {

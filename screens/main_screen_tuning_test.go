@@ -55,10 +55,8 @@ func TestViewGeometriesAndToolSelection(t *testing.T) {
 		t.Fatalf("view 2 geometry = FFT %.0f, waterfall y %.0f h %.0f", fftHeight, waterfallY, waterfallHeight)
 	}
 	screen.setViewMode(3)
-	_, _, _, fftHeight = screen.spectrumGeometry()
-	_, _, _, waterfallHeight = screen.waterfallGeometry()
-	if fftHeight != 235 || waterfallHeight != 340 {
-		t.Fatalf("view 3 geometry = FFT %.0f, waterfall %.0f", fftHeight, waterfallHeight)
+	if screen.viewMode != 1 {
+		t.Fatalf("removed view 3 was not normalized to view 1: %d", screen.viewMode)
 	}
 	screen.selectTool("PBT_AUDIO")
 	if screen.viewMode != 1 || screen.activeTool != "PBT_AUDIO" {
@@ -66,6 +64,24 @@ func TestViewGeometriesAndToolSelection(t *testing.T) {
 	}
 	if screen.draggingSpectrum || screen.scanPanel.dragTarget != 0 {
 		t.Fatal("tool selection left a stale spectrum gesture active")
+	}
+}
+
+func TestViewButtonCyclesOnlyBetweenTwoViews(t *testing.T) {
+	screen := &MainScreen{viewMode: 1}
+	screen.cycleViewMode()
+	if screen.viewMode != 2 {
+		t.Fatalf("first VIEW cycle selected %d, want 2", screen.viewMode)
+	}
+	screen.cycleViewMode()
+	if screen.viewMode != 1 {
+		t.Fatalf("second VIEW cycle selected %d, want 1", screen.viewMode)
+	}
+}
+
+func TestToolPanelUsesFormerFooterSpace(t *testing.T) {
+	if bottom := toolY + toolH; bottom != designHeight-8 {
+		t.Fatalf("tool panel ends at %.0f, want %.0f", bottom, designHeight-8)
 	}
 }
 
@@ -93,6 +109,30 @@ func TestWheelStepsPreservesDirection(t *testing.T) {
 		if got := wheelSteps(input); got != want {
 			t.Fatalf("wheelSteps(%v) = %d, want %d", input, got, want)
 		}
+	}
+}
+
+func TestChangeTuningStepUsesAdjacentAvailableRaster(t *testing.T) {
+	screen := &MainScreen{frequencyHz: 100_000_000, centerFrequencyHz: 100_000_000, spanHz: 2_000_000, tuningStepHz: 12_500, frequencyDigitExponent: -1}
+
+	screen.changeTuningStep(-1)
+	if screen.tuningStepHz != 10_000 {
+		t.Fatalf("decreasing STEP selected %d, want 10000", screen.tuningStepHz)
+	}
+	screen.changeTuningStep(1)
+	if screen.tuningStepHz != 12_500 {
+		t.Fatalf("increasing STEP selected %d, want 12500", screen.tuningStepHz)
+	}
+
+	screen.tuningStepHz = tuningStepsHz[0]
+	screen.changeTuningStep(-1)
+	if screen.tuningStepHz != tuningStepsHz[0] {
+		t.Fatalf("STEP moved below minimum to %d", screen.tuningStepHz)
+	}
+	screen.tuningStepHz = tuningStepsHz[len(tuningStepsHz)-1]
+	screen.changeTuningStep(1)
+	if screen.tuningStepHz != tuningStepsHz[len(tuningStepsHz)-1] {
+		t.Fatalf("STEP moved above maximum to %d", screen.tuningStepHz)
 	}
 }
 

@@ -106,6 +106,7 @@ func main() {
 		CalibrationDB:             23,
 		InitialHardware:           initialHardware,
 		DMRExecutable:             toolExecutable("dmr", "dmr_sample_runner"),
+		DigitalVoiceExecutable:    toolExecutable("digital_voice", "dsd-neo"),
 		RTL433Executable:          toolExecutable("rtl_433", "rtl_433"),
 		RadiosondeDirectory:       resources.Path("tools", "radiosonde", "runtime", "bin"),
 		AISExecutable:             toolExecutable("ais", "AIS-catcher"),
@@ -207,6 +208,7 @@ func logPortableResources() {
 		resources.Path("runtime", "windows-x64", "bin", "VCRUNTIME140_1.dll"),
 		resources.Path("runtime", "windows-x64", "lib", "SoapySDR", "modules0.8", "sdrPlaySupport.dll"),
 		resources.Path("runtime", "windows-x64", "lib", "SoapySDR", "modules0.8", "rtlsdrSupport.dll"),
+		toolExecutable("digital_voice", "dsd-neo"),
 	}
 	for _, path := range paths {
 		info, err := os.Stat(path)

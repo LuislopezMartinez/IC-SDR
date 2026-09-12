@@ -2,7 +2,7 @@
 
 **Multimode SDR for Windows, written in Go for maximum efficiency.**
 
-**Current version: [v0.3.1](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.3.1)**
+**Current version: [v0.5.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.5.0)**
 
 IC-SDR brings together reception, demodulation, spectrum analysis and digital signal decoding in a desktop interface designed for daily use.
 
@@ -34,8 +34,41 @@ IC-SDR integrates tools to receive and display:
 - **DMR** — digital radio reception.
 - **SSTV** — slow-scan television.
 - **TETRA** — TETRA signal reception and analysis.
+- **Digital Auto** — detection and decoding of DMR, P25 I/II, NXDN,
+  D-STAR, YSF, dPMR, ProVoice, M17 and X2-TDMA via DSD-neo.
 
 ![RTL_433 decoding in IC-SDR](docs/images/ic-sdr-rtl433.png)
+
+## What's new in v0.5.0
+
+- Expanded TETRA/SDS viewer with source and destination SSI, slot, encryption,
+  protocol, data type, and a diagnosis of the received content.
+- Unrecognized SDS messages are kept and shown in hex so extra protocols can
+  be inspected.
+- Reorganized header with shortcuts for menu, view, theme, and tuning-step
+  up/down controls.
+- The lower workspace is used in full, with simpler views so modules and
+  decoders stay readable.
+- Custom NFM filters now accept widths from 500 Hz.
+- Satellite catalog scrolling reaches every item and group.
+- Fixes for restoring views, memories, and tuning steps.
+- New tests for SDS/TETRA, header layout, tuning, filters, and the satellite map.
+
+## What's new in v0.4.0
+
+- New **Digital Auto** decoder with simultaneous protocol selection, call
+  detection, and digital-voice playback.
+- Dedicated panel with protocol, slot, source, destination, encryption,
+  input level, SNR, BER, and network-specific data.
+- Next-pass satellite prediction with AOS, TCA, LOS, max elevation, and
+  minimum distance.
+- Safe restart of decoders, audio, and the scanner when changing band or
+  mode, so leftover audio and stuck states do not linger.
+- Fixes when switching between analog and digital audio.
+- Frequency-digit selection is drawn correctly.
+- Contrast and readability improvements on the S-meter and scanner.
+- DSD-neo 2.9.0 runtime is validated when building the portable package.
+- New tests for digital voice, orbit prediction, the receiver, and playback.
 
 ## What's new in v0.3.1
 
