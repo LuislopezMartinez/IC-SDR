@@ -55,6 +55,7 @@ type trackState struct {
 	even, odd      *cprFrame
 	refLat, refLon float64
 	hasRef         bool
+	lastPos        time.Time
 }
 
 type Decoder struct {
@@ -180,8 +181,16 @@ func (d *Decoder) fail(err error) {
 func (d *Decoder) SetReference(lat, lon float64, ok bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.hasReceiverRef = ok && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
+	d.hasReceiverRef = ok && validLatLon(lat, lon)
 	d.receiverLat, d.receiverLon = lat, lon
+	if !d.hasReceiverRef {
+		return
+	}
+	for _, t := range d.tracks {
+		if t.aircraft.Latitude == nil {
+			t.refLat, t.refLon, t.hasRef = lat, lon, true
+		}
+	}
 }
 
 func (d *Decoder) stopProcess() {
@@ -322,10 +331,10 @@ func (d *Decoder) stateFor(icao, source string) *trackState {
 	t := d.tracks[icao]
 	if t == nil {
 		t = &trackState{aircraft: Aircraft{ICAO: icao, Source: source}}
-		if d.hasReceiverRef {
-			t.refLat, t.refLon, t.hasRef = d.receiverLat, d.receiverLon, true
-		}
 		d.tracks[icao] = t
+	}
+	if !t.hasRef && d.hasReceiverRef {
+		t.refLat, t.refLon, t.hasRef = d.receiverLat, d.receiverLon, true
 	}
 	return t
 }
@@ -412,21 +421,50 @@ func (t *trackState) applyCPR(a *Aircraft, cprlat, cprlon int, odd, surface bool
 	if t.even != nil && t.odd != nil && t.even.surface == t.odd.surface && t.even.surface == surface && math.Abs(t.even.at.Sub(t.odd.at).Seconds()) <= maxAge {
 		if !surface {
 			if lat, lon, ok := decodeCPRAirborne(t.even.lat, t.even.lon, t.odd.lat, t.odd.lon, odd); ok {
-				t.setPosition(a, lat, lon)
+				t.setPosition(a, lat, lon, false, now)
+				return
+			}
+		} else if t.hasRef {
+			if lat, lon, ok := decodeCPRSurface(t.even.lat, t.even.lon, t.odd.lat, t.odd.lon, odd, t.refLon); ok {
+				t.setPosition(a, lat, lon, true, now)
 				return
 			}
 		}
 	}
 	if t.hasRef {
 		if lat, lon, ok := decodeCPRRelative(t.refLat, t.refLon, cprlat, cprlon, odd, surface); ok {
-			t.setPosition(a, lat, lon)
+			t.setPosition(a, lat, lon, surface, now)
 		}
 	}
 }
 
-func (t *trackState) setPosition(a *Aircraft, lat, lon float64) {
+func (t *trackState) setPosition(a *Aircraft, lat, lon float64, onGround bool, now time.Time) {
+	if !validLatLon(lat, lon) {
+		return
+	}
+	if a.Latitude != nil && a.Longitude != nil {
+		dist := earthDistanceKm(*a.Latitude, *a.Longitude, lat, lon)
+		dt := now.Sub(t.lastPos).Hours()
+		if t.lastPos.IsZero() || dt < 0 {
+			dt = 1.0 / 3600
+		}
+		if dt < 1.0/3600 {
+			dt = 1.0 / 3600
+		}
+		speed := 2800.0
+		slop := 8.0
+		if a.OnGround || onGround {
+			speed = 370
+			slop = 2
+		}
+		if dist > slop+speed*dt {
+			return
+		}
+	}
 	a.Latitude, a.Longitude = &lat, &lon
+	a.OnGround = onGround
 	t.refLat, t.refLon, t.hasRef = lat, lon, true
+	t.lastPos = now
 }
 
 func (d *Decoder) read978(r io.Reader) {
@@ -445,11 +483,14 @@ func (d *Decoder) read978(r io.Reader) {
 		a.LastSeen = time.Now().UTC()
 		d.messages++
 		a.Callsign = fields["Callsign"]
-		if v, ok := parseFloatField(fields["Latitude"]); ok {
+		if v, ok := parseFloatField(fields["Latitude"]); ok && validLatLon(v, 0) {
 			a.Latitude = &v
 		}
-		if v, ok := parseFloatField(fields["Longitude"]); ok {
+		if v, ok := parseFloatField(fields["Longitude"]); ok && validLatLon(0, v) {
 			a.Longitude = &v
+		}
+		if a.Latitude == nil || a.Longitude == nil || !validLatLon(*a.Latitude, *a.Longitude) {
+			a.Latitude, a.Longitude = nil, nil
 		}
 		if v, ok := parseIntField(fields["Altitude"]); ok {
 			a.Altitude = &v

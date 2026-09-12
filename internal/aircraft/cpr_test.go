@@ -25,13 +25,13 @@ func encodeAirborne(lat, lon float64, odd bool) (int, int) {
 
 func TestCPRAirborneBothHemispheres(t *testing.T) {
 	points := []struct{ lat, lon float64 }{
-		{52.25720, 3.91937},    // Netherlands
-		{40.4168, -3.7038},     // Madrid
-		{-33.8688, 151.2093},   // Sydney
-		{-37.8136, 144.9631},   // Melbourne
-		{-45.8788, 170.5028},   // Dunedin
-		{61.2181, -149.9003},   // Anchorage
-		{1.3521, 103.8198},     // Singapore
+		{52.25720, 3.91937},  // Netherlands
+		{40.4168, -3.7038},   // Madrid
+		{-33.8688, 151.2093}, // Sydney
+		{-37.8136, 144.9631}, // Melbourne
+		{-45.8788, 170.5028}, // Dunedin
+		{61.2181, -149.9003}, // Anchorage
+		{1.3521, 103.8198},   // Singapore
 	}
 	for _, p := range points {
 		evenLat, evenLon := encodeAirborne(p.lat, p.lon, false)
@@ -79,4 +79,35 @@ func TestKnownEuropeanCPRPair(t *testing.T) {
 	if math.Abs(lat-52.25720) > 0.001 || math.Abs(lon-3.91937) > 0.001 {
 		t.Fatalf("even frame got %.5f %.5f", lat, lon)
 	}
+}
+
+func TestCPRSurfaceUsesReceiverLongitude(t *testing.T) {
+	lat, lon := 40.489, -3.567
+	evenLat, evenLon := encodeSurface(lat, lon, false)
+	oddLat, oddLon := encodeSurface(lat, lon, true)
+	gotLat, gotLon, ok := decodeCPRSurface(evenLat, evenLon, oddLat, oddLon, true, lon)
+	if !ok {
+		t.Fatal("surface CPR failed")
+	}
+	if math.Abs(gotLat-lat) > 0.002 || math.Abs(wrap180(gotLon-lon)) > 0.002 {
+		t.Fatalf("surface CPR mismatch: got %.5f %.5f", gotLat, gotLon)
+	}
+}
+
+func encodeSurface(lat, lon float64, odd bool) (int, int) {
+	dlat := 90.0 / 60.0
+	if odd {
+		dlat = 90.0 / 59.0
+	}
+	yz := int(math.Floor(cprModFloat(lat, dlat)/dlat*131072+0.5)) % 131072
+	if yz < 0 {
+		yz += 131072
+	}
+	ni := cprN(lat, odd)
+	dlon := 90.0 / float64(ni)
+	xz := int(math.Floor(cprModFloat(lon, dlon)/dlon*131072+0.5)) % 131072
+	if xz < 0 {
+		xz += 131072
+	}
+	return yz, xz
 }

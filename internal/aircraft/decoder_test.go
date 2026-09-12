@@ -92,3 +92,25 @@ func TestDecodeUATText(t *testing.T) {
 		t.Fatalf("UAT fields not decoded: %+v", list[0])
 	}
 }
+
+func TestDecodeRejectsTeleportJump(t *testing.T) {
+	d := New(2_048_000, "", "", "")
+	now := time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC)
+	st := d.stateFor("7C0001", "1090 ADS-B")
+	ye, xe := encodeAirborne(-33.8688, 151.2093, false)
+	yo, xo := encodeAirborne(-33.8688, 151.2093, true)
+	st.applyCPR(&st.aircraft, ye, xe, false, false, now)
+	st.applyCPR(&st.aircraft, yo, xo, true, false, now.Add(time.Second))
+	if st.aircraft.Latitude == nil {
+		t.Fatal("first fix missing")
+	}
+	firstLat, firstLon := *st.aircraft.Latitude, *st.aircraft.Longitude
+	ye, xe = encodeAirborne(51.5, -0.12, false)
+	yo, xo = encodeAirborne(51.5, -0.12, true)
+	st.even, st.odd = nil, nil
+	st.applyCPR(&st.aircraft, ye, xe, false, false, now.Add(2*time.Second))
+	st.applyCPR(&st.aircraft, yo, xo, true, false, now.Add(3*time.Second))
+	if math.Abs(*st.aircraft.Latitude-firstLat) > 0.01 || math.Abs(wrap180(*st.aircraft.Longitude-firstLon)) > 0.01 {
+		t.Fatalf("teleport accepted: %.5f %.5f", *st.aircraft.Latitude, *st.aircraft.Longitude)
+	}
+}

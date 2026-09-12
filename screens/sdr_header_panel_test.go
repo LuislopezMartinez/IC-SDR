@@ -66,6 +66,39 @@ func TestRSPDxHeaderShowsThreeAntennaPorts(t *testing.T) {
 	}
 }
 
+func TestGenericHeaderKeepsDCSpikeSwitch(t *testing.T) {
+	p := NewSDRHeaderPanel(nil, nil)
+	p.current = sdr.HardwareSettings{
+		Available: true, Driver: "hackrf", Device: "HackRF Pro",
+		RFGain: 14, AGC: false,
+	}
+	p.refresh()
+	if !p.dcSpike.Enabled() || !p.dcSpike.Active() {
+		t.Fatalf("DC spike switch unavailable on generic SDR: enabled=%v active=%v", p.dcSpike.Enabled(), p.dcSpike.Active())
+	}
+	if p.iqCorrection.Enabled() || p.rfNotch.Enabled() {
+		t.Fatal("hardware IQ/notch controls must stay disabled on generic profiles")
+	}
+}
+
+func TestDCSpikeSwitchUpdatesReceiver(t *testing.T) {
+	receiver := sdr.NewReceiver(sdr.Config{SampleRate: 2_048_000, FFTSize: 4096})
+	p := NewSDRHeaderPanel(receiver, nil)
+	if !receiver.RemoveDCSpike() {
+		t.Fatal("DC spike removal should start enabled")
+	}
+	receiver.SetRemoveDCSpike(false)
+	p.refresh()
+	if p.dcSpike.Active() {
+		t.Fatal("header did not follow the receiver DC spike flag")
+	}
+	receiver.SetRemoveDCSpike(true)
+	p.refresh()
+	if !p.dcSpike.Active() {
+		t.Fatal("header did not restore the DC spike flag")
+	}
+}
+
 func TestRTLHeaderHidesAntennaSwitch(t *testing.T) {
 	p := NewSDRHeaderPanel(nil, nil)
 	p.current = sdr.HardwareSettings{Available: true, Driver: "rtlsdr", Device: "R820T"}

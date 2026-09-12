@@ -38,7 +38,6 @@ type aircraftMap struct {
 	fitted, dragging              bool
 	dragOrigin, lastMouse         rl.Vector2
 	tracks                        map[string][]geoPoint
-	texture                       rl.Texture2D
 }
 
 func (v *aircraftMap) read() {
@@ -94,36 +93,20 @@ func (v *aircraftMap) fit() bool {
 	v.clamp()
 	return true
 }
-func (v *aircraftMap) latSpan(b rl.Rectangle) float64 { return v.lonSpan * float64(b.Height/b.Width) }
+func (v *aircraftMap) latSpan(b rl.Rectangle) float64 {
+	return mercatorLatSpan(v.centerLat, v.lonSpan, b)
+}
 func (v *aircraftMap) clamp() {
-	v.lonSpan = math.Max(.1, math.Min(260, v.lonSpan))
-	ls := v.lonSpan * 690 / 970
-	v.centerLat = math.Max(-90+ls/2, math.Min(90-ls/2, v.centerLat))
-	v.centerLon = math.Max(-180+v.lonSpan/2, math.Min(180-v.lonSpan/2, v.centerLon))
+	v.centerLat, v.centerLon, v.lonSpan = clampMapView(v.centerLat, v.centerLon, v.lonSpan, rl.Rectangle{Width: 970, Height: 690})
 }
 func (v *aircraftMap) project(lat, lon float64, b rl.Rectangle) rl.Vector2 {
-	ls := v.latSpan(b)
-	return rl.Vector2{X: b.X + float32((lon-v.centerLon+v.lonSpan/2)/v.lonSpan)*b.Width, Y: b.Y + float32((v.centerLat+ls/2-lat)/ls)*b.Height}
+	return projectMercator(v.centerLat, v.centerLon, v.lonSpan, lat, lon, b)
 }
 func (v *aircraftMap) unproject(p rl.Vector2, b rl.Rectangle) (float64, float64) {
-	ls := v.latSpan(b)
-	return v.centerLat + ls/2 - float64((p.Y-b.Y)/b.Height)*ls, v.centerLon - v.lonSpan/2 + float64((p.X-b.X)/b.Width)*v.lonSpan
+	return unprojectMercator(v.centerLat, v.centerLon, v.lonSpan, p, b)
 }
 func (v *aircraftMap) background(b rl.Rectangle) {
-	if v.texture.ID == 0 {
-		img := rl.LoadImageFromMemory(".png", aisWorldPNG, int32(len(aisWorldPNG)))
-		if img != nil && img.Data != nil {
-			v.texture = rl.LoadTextureFromImage(img)
-			rl.UnloadImage(img)
-			rl.SetTextureFilter(v.texture, rl.FilterBilinear)
-		}
-	}
-	if v.texture.ID == 0 {
-		return
-	}
-	ls := v.latSpan(b)
-	src := rl.Rectangle{X: float32((v.centerLon-v.lonSpan/2+180)/360) * float32(v.texture.Width), Y: float32((90-v.centerLat-ls/2)/180) * float32(v.texture.Height), Width: float32(v.lonSpan/360) * float32(v.texture.Width), Height: float32(ls/180) * float32(v.texture.Height)}
-	rl.DrawTexturePro(v.texture, src, b, rl.Vector2{}, 0, rl.White)
+	drawGeoMap(v.centerLat, v.centerLon, v.lonSpan, b)
 }
 func (v *aircraftMap) input(b rl.Rectangle) {
 	m := rl.GetMousePosition()
@@ -137,8 +120,7 @@ func (v *aircraftMap) input(b rl.Rectangle) {
 	}
 	if v.dragging && rl.IsMouseButtonDown(rl.MouseButtonLeft) {
 		d := rl.Vector2Subtract(m, v.lastMouse)
-		v.centerLon -= float64(d.X) / float64(b.Width) * v.lonSpan
-		v.centerLat += float64(d.Y) / float64(b.Height) * v.latSpan(b)
+		v.centerLat, v.centerLon = panMap(v.centerLat, v.centerLon, v.lonSpan, d, b)
 		v.lastMouse = m
 		v.clamp()
 	}
@@ -154,13 +136,7 @@ func (v *aircraftMap) zoomAt(m rl.Vector2, b rl.Rectangle, wheel float32) {
 	if !rl.CheckCollisionPointRec(anchor, b) {
 		anchor = rl.Vector2{X: b.X + b.Width/2, Y: b.Y + b.Height/2}
 	}
-	lat, lon := v.unproject(anchor, b)
-	v.lonSpan *= math.Pow(.78, float64(wheel))
-	v.clamp()
-	lat2, lon2 := v.unproject(anchor, b)
-	v.centerLat += lat - lat2
-	v.centerLon += lon - lon2
-	v.clamp()
+	v.centerLat, v.centerLon, v.lonSpan = zoomMap(v.centerLat, v.centerLon, v.lonSpan, anchor, b, wheel)
 }
 func (v *aircraftMap) selectAt(m rl.Vector2, b rl.Rectangle) {
 	best, dist := -1, float32(1e9)
@@ -181,17 +157,7 @@ func (v *aircraftMap) selectAt(m rl.Vector2, b rl.Rectangle) {
 	}
 }
 func (v *aircraftMap) grid(b rl.Rectangle) {
-	ls := v.latSpan(b)
-	for i := 0; i <= 10; i++ {
-		x := b.X + b.Width*float32(i)/10
-		rl.DrawLine(int32(x), int32(b.Y), int32(x), int32(b.Y+b.Height), rl.Color{R: 90, G: 150, B: 170, A: 38})
-		simpleui.DrawText(fmt.Sprintf("%.2f°", v.centerLon-v.lonSpan/2+v.lonSpan*float64(i)/10), x+2, b.Y+b.Height-18, 9, colors.muted)
-	}
-	for i := 0; i <= 8; i++ {
-		y := b.Y + b.Height*float32(i)/8
-		rl.DrawLine(int32(b.X), int32(y), int32(b.X+b.Width), int32(y), rl.Color{R: 90, G: 150, B: 170, A: 38})
-		simpleui.DrawText(fmt.Sprintf("%.2f°", v.centerLat+ls/2-ls*float64(i)/8), b.X+3, y+2, 9, colors.muted)
-	}
+	drawMapGrid(v.centerLat, v.centerLon, v.lonSpan, b)
 }
 func (v *aircraftMap) draw() {
 	v.read()
@@ -246,7 +212,7 @@ func (v *aircraftMap) draw() {
 	simpleui.DrawText("LIVE AIR TRAFFIC", 24, 20, 24, colors.cyan)
 	simpleui.DrawText(fmt.Sprintf("%d aircraft · %d with position · cyan 1090 · orange 978 · drag and use the wheel", len(v.list), located), 340, 29, 13, colors.muted)
 	v.details()
-	simpleui.DrawText("Natural Earth · positions received directly by radio", 1015, 742, 9, colors.muted)
+	simpleui.DrawText("© OpenStreetMap · © CARTO · positions received directly by radio", 1015, 742, 9, colors.muted)
 }
 func drawAircraftSymbol(p rl.Vector2, size, angle float32, c rl.Color) {
 	r := float64(angle) * math.Pi / 180

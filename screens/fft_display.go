@@ -26,6 +26,7 @@ type FFTDisplay struct {
 	fftRangeLabel, waterfallRangeLabel                                *simpleui.Label
 	average, refresh, decay, speed, contrast                          *simpleui.Slider
 	peak                                                              *simpleui.Switch
+	dcSpike                                                           *simpleui.Switch
 	windowButton, paletteButton                                       *simpleui.Button
 	fftRange, waterfallRange                                          *simpleui.RangeSlider
 }
@@ -43,7 +44,8 @@ func NewFFTDisplay(screen *MainScreen) *FFTDisplay {
 	panel.refreshLabel = label("fftRefreshLabel", 240, 654, 190, "")
 	panel.refresh = simpleui.NewSlider("fftRefresh", 248, 680, 174, 20, 5, 60, float32(panel.refreshFPS))
 	panel.refresh.SetStep(1)
-	panel.peak = simpleui.NewSwitch("fftPeak", 445, 650, 180, 28, "PEAK HOLD", panel.peakHold, 12)
+	panel.dcSpike = simpleui.NewSwitch("fftDCSpike", 445, 650, 86, 28, "DC SPIKE", true, 12)
+	panel.peak = simpleui.NewSwitch("fftPeak", 535, 650, 90, 28, "PEAK HOLD", panel.peakHold, 12)
 	panel.decayLabel = label("fftDecayLabel", 445, 692, 180, "PEAK DECAY  3 dB/s")
 	panel.decay = simpleui.NewSlider("fftDecay", 453, 718, 164, 18, 1, 10, panel.peakDecay)
 	panel.decay.SetStep(1)
@@ -89,6 +91,15 @@ func NewFFTDisplay(screen *MainScreen) *FFTDisplay {
 		panel.decay.SetEnabled(value)
 		screen.markSettingsDirty()
 	})
+	if screen.receiver != nil {
+		panel.dcSpike.SetActive(screen.receiver.RemoveDCSpike())
+	}
+	panel.dcSpike.OnChange(func(value bool) {
+		if screen.receiver != nil {
+			screen.receiver.SetRemoveDCSpike(value)
+		}
+		screen.markSettingsDirty()
+	})
 	panel.decay.OnChange(func(value float32) {
 		panel.peakDecay = value
 		screen.fftPeakDecay = value
@@ -124,7 +135,7 @@ func NewFFTDisplay(screen *MainScreen) *FFTDisplay {
 	adjust.OnClick(func() { screen.selectTool("WATERFALL_ADJUST") })
 
 	panel.controls = []simpleui.Element{panel.averageLabel, panel.average, panel.refreshLabel, panel.refresh,
-		panel.peak, panel.decayLabel, panel.decay, panel.windowButton, size, panel.fftRangeLabel, panel.fftRange,
+		panel.dcSpike, panel.peak, panel.decayLabel, panel.decay, panel.windowButton, size, panel.fftRangeLabel, panel.fftRange,
 		panel.speedLabel, panel.speed, panel.contrastLabel, panel.contrast, panel.waterfallRangeLabel,
 		panel.waterfallRange, panel.paletteButton, reset, adjust}
 	panel.SetVisible(false)
@@ -148,6 +159,9 @@ func (panel *FFTDisplay) Sync() {
 	panel.contrast.SetValue(float32(panel.screen.waterfallSettings.Contrast))
 	panel.waterfallRange.SetValues(panel.screen.waterfallSettings.MinimumDBm, panel.screen.waterfallSettings.MaximumDBm)
 	panel.fftRange.SetValues(panel.screen.spectrumMinimumDB, panel.screen.spectrumMaximumDB)
+	if panel.screen.receiver != nil {
+		panel.dcSpike.SetActive(panel.screen.receiver.RemoveDCSpike())
+	}
 	panel.refreshLabels()
 }
 
@@ -228,6 +242,7 @@ func (panel *FFTDisplay) refreshLabels() {
 	panel.fftRangeLabel.SetText(fmt.Sprintf("%s  %.0f / %.0f dB", T("FFT RANGE"), panel.screen.spectrumMinimumDB, panel.screen.spectrumMaximumDB))
 	panel.waterfallRangeLabel.SetText(fmt.Sprintf("%s  %.0f / %.0f dB", T("LEVEL"), panel.screen.waterfallSettings.MinimumDBm, panel.screen.waterfallSettings.MaximumDBm))
 	panel.peak.SetLabel(T("PEAK HOLD"))
+	panel.dcSpike.SetLabel(T("DC SPIKE"))
 }
 
 func indexOf(values []string, wanted string) int {

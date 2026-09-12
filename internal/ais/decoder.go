@@ -53,8 +53,8 @@ func parseMessage(line []byte) (message, bool) {
 	if json.Unmarshal(line, &m) != nil || m.MMSI == 0 {
 		return message{}, false
 	}
-	if (m.Lat != nil && (*m.Lat < -90 || *m.Lat > 90)) || (m.Lon != nil && (*m.Lon < -180 || *m.Lon > 180)) {
-		return message{}, false
+	if invalid := (m.Lat != nil && (*m.Lat < -90 || *m.Lat > 90)) || (m.Lon != nil && (*m.Lon < -180 || *m.Lon > 180)); invalid {
+		m.Lat, m.Lon = nil, nil
 	}
 	return m, true
 }
@@ -213,10 +213,8 @@ func (d *Decoder) mergeLocked(m message) {
 		v.Status = m.Status
 		v.StatusText = m.StatusText
 	}
-	if m.Lat != nil {
+	if m.Lat != nil && m.Lon != nil {
 		v.Latitude = m.Lat
-	}
-	if m.Lon != nil {
 		v.Longitude = m.Lon
 	}
 	if m.Speed != nil {

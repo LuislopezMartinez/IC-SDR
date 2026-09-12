@@ -21,8 +21,12 @@ func TestParseAndMergeVesselMessages(t *testing.T) {
 }
 
 func TestParseRejectsInvalidPosition(t *testing.T) {
-	if _, ok := parseMessage([]byte(`{"mmsi":123456789,"lat":91,"lon":4}`)); ok {
-		t.Fatal("invalid latitude accepted")
+	m, ok := parseMessage([]byte(`{"mmsi":123456789,"lat":91,"lon":4}`))
+	if !ok {
+		t.Fatal("identity of an AIS report must still be kept")
+	}
+	if m.Lat != nil || m.Lon != nil {
+		t.Fatalf("invalid coordinates were kept: lat=%v lon=%v", m.Lat, m.Lon)
 	}
 }
 

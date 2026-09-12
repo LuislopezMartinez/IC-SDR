@@ -48,6 +48,7 @@ type persistedAppSettings struct {
 	FFTAveragingMs        int                   `json:"fftAveragingMs,omitempty"`
 	FFTRefreshFPS         int                   `json:"fftRefreshFps,omitempty"`
 	FFTPeakHold           *bool                 `json:"fftPeakHold,omitempty"`
+	RemoveDCSpike         *bool                 `json:"removeDCSpike,omitempty"`
 	FFTPeakDecay          float32               `json:"fftPeakDecay,omitempty"`
 	FFTWindow             string                `json:"fftWindow,omitempty"`
 	WaterfallSpeed        int                   `json:"waterfallSpeed,omitempty"`
@@ -167,6 +168,9 @@ func loadAppSettings(path string, screen *MainScreen) {
 	if settings.FFTPeakHold != nil {
 		screen.fftPeakHold = *settings.FFTPeakHold
 	}
+	if settings.RemoveDCSpike != nil && screen.receiver != nil {
+		screen.receiver.SetRemoveDCSpike(*settings.RemoveDCSpike)
+	}
 	if settings.FFTPeakDecay >= 1 && settings.FFTPeakDecay <= 10 {
 		screen.fftPeakDecay = settings.FFTPeakDecay
 	}
@@ -262,9 +266,9 @@ func (screen *MainScreen) flushSettings(force bool) {
 		mode = screen.mode.SelectedText()
 	}
 	settings := persistedAppSettings{
-		Version:      appSettingsVersion,
-		Theme:        screen.themeName,
-		Language:     screen.language, ITURegion: screen.ituRegion, Country: screen.country,
+		Version:  appSettingsVersion,
+		Theme:    screen.themeName,
+		Language: screen.language, ITURegion: screen.ituRegion, Country: screen.country,
 		BandCategory: screen.bandCategory, BandName: screen.bandName,
 		Mode: mode, FrequencyHz: screen.frequencyHz, CenterFrequencyHz: screen.centerFrequencyHz,
 		SpanHz: screen.spanHz, TuningStepHz: screen.tuningStepHz, CenterMode: screen.centerMode,
@@ -273,7 +277,7 @@ func (screen *MainScreen) flushSettings(force bool) {
 		SquelchHoldMs: screen.squelchHoldMs, SquelchCloseMs: screen.squelchCloseMs,
 		SpectrumMinimumDB: screen.spectrumMinimumDB, SpectrumMaximumDB: screen.spectrumMaximumDB,
 		FFTAveragingMs: screen.fftAveragingMs, FFTRefreshFPS: screen.fftRefreshFPS,
-		FFTPeakHold: boolSetting(screen.fftPeakHold), FFTPeakDecay: screen.fftPeakDecay, FFTWindow: screen.fftWindow,
+		FFTPeakHold: boolSetting(screen.fftPeakHold), RemoveDCSpike: boolSetting(true), FFTPeakDecay: screen.fftPeakDecay, FFTWindow: screen.fftWindow,
 		WaterfallSpeed: screen.waterfallSettings.LinesPerSecond, WaterfallContrast: screen.waterfallSettings.Contrast,
 		WaterfallOffsetDB: screen.waterfallSettings.ColorOffsetDB, WaterfallMinimum: screen.waterfallSettings.MinimumDBm,
 		WaterfallMaximum: screen.waterfallSettings.MaximumDBm, WaterfallPalette: screen.waterfallSettings.Palette,
@@ -303,6 +307,7 @@ func (screen *MainScreen) flushSettings(force bool) {
 		settings.ScanMinimumHz, settings.ScanMaximumHz = screen.scanPanel.minimumHz, screen.scanPanel.maximumHz
 	}
 	if screen.receiver != nil {
+		settings.RemoveDCSpike = boolSetting(screen.receiver.RemoveDCSpike())
 		hardware := screen.receiver.HardwareSettings()
 		if hardware.Available {
 			settings.Hardware = &hardware

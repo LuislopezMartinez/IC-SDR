@@ -127,6 +127,9 @@ func parseAPRS(p *Packet) {
 		}
 	case '`', '\'':
 		p.Type = "MIC-E"
+		if parseMicE(p) {
+			return
+		}
 		p.Summary = "Mic-E · " + clean(d[1:])
 		return
 	default:
@@ -138,6 +141,9 @@ func parseAPRS(p *Packet) {
 		}
 	}
 	if offset >= 0 && parsePosition(p, d, offset) {
+		return
+	}
+	if offset >= 0 && parseCompressed(p, d, offset) {
 		return
 	}
 	p.Summary = clean(d)
@@ -175,6 +181,130 @@ func parsePosition(p *Packet, d string, o int) bool {
 	}
 	parseExtras(p, comment)
 	parseWeather(p, comment)
+	if comment != "" {
+		p.Summary = comment
+	} else {
+		p.Summary = p.Coordinates
+	}
+	return true
+}
+
+func parseCompressed(p *Packet, d string, o int) bool {
+	if o+10 > len(d) {
+		return false
+	}
+	table := d[o]
+	if table != '/' && table != '\\' {
+		return false
+	}
+	for i := 1; i <= 8; i++ {
+		if d[o+i] < 33 || d[o+i] > 123 {
+			return false
+		}
+	}
+	lat := 90 - float64(base91Value(d[o+1:o+5]))/380926
+	lon := -180 + float64(base91Value(d[o+5:o+9]))/190463
+	if lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+		return false
+	}
+	p.Latitude, p.Longitude = lat, lon
+	p.Coordinates = fmt.Sprintf("%.5f, %.5f", lat, lon)
+	p.Locator = maidenhead(lat, lon)
+	p.Symbol = string([]byte{table, d[o+9]})
+	comment := ""
+	if o+13 <= len(d) {
+		comment = clean(d[o+13:])
+	} else if o+10 < len(d) {
+		comment = clean(d[o+10:])
+	}
+	parseExtras(p, comment)
+	parseWeather(p, comment)
+	if comment != "" {
+		p.Summary = comment
+	} else {
+		p.Summary = p.Coordinates
+	}
+	return true
+}
+
+func base91Value(s string) int {
+	n := 0
+	for i := 0; i < len(s); i++ {
+		n = n*91 + int(s[i]) - 33
+	}
+	return n
+}
+
+func parseMicE(p *Packet) bool {
+	d := p.Destination
+	info := p.Information
+	if len(d) < 6 || len(info) < 9 {
+		return false
+	}
+	digits := make([]int, 6)
+	for i := 0; i < 6; i++ {
+		ch := d[i]
+		switch {
+		case ch >= '0' && ch <= '9':
+			digits[i] = int(ch - '0')
+		case ch >= 'A' && ch <= 'J':
+			digits[i] = int(ch - 'A')
+		case ch >= 'P' && ch <= 'Y':
+			digits[i] = int(ch - 'P')
+		case ch == 'K', ch == 'L', ch == 'Z':
+			digits[i] = 0
+		default:
+			return false
+		}
+	}
+	lat := float64(digits[0]*10+digits[1]) + float64(digits[2]*10+digits[3])/60 + float64(digits[4]*10+digits[5])/6000
+	if d[3] < 'P' {
+		lat = -lat
+	}
+	deg := int(info[1]) - 28
+	if d[4] >= 'P' {
+		deg += 100
+	}
+	if deg >= 180 && deg <= 189 {
+		deg -= 80
+	}
+	if deg >= 190 && deg <= 199 {
+		deg -= 190
+	}
+	min := int(info[2]) - 28
+	if min >= 60 {
+		min -= 60
+	}
+	hmin := int(info[3]) - 28
+	lon := float64(deg) + float64(min)/60 + float64(hmin)/6000
+	if d[5] >= 'P' {
+		lon = -lon
+	}
+	if lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+		return false
+	}
+	sp := int(info[4]) - 28
+	dc := int(info[5]) - 28
+	se := int(info[6]) - 28
+	speed := sp*10 + dc/10
+	course := (dc%10)*100 + se
+	if speed >= 800 {
+		speed -= 800
+	}
+	if course >= 400 {
+		course -= 400
+	}
+	p.Latitude, p.Longitude = lat, lon
+	p.Coordinates = fmt.Sprintf("%.5f, %.5f", lat, lon)
+	p.Locator = maidenhead(lat, lon)
+	p.Symbol = string([]byte{info[8], info[7]})
+	p.Speed = fmt.Sprintf("%d km/h", int(math.Round(float64(speed)*1.852)))
+	p.Course = fmt.Sprintf("%d°", course)
+	comment := ""
+	if len(info) > 9 {
+		comment = clean(info[9:])
+	}
+	parseExtras(p, comment)
 	if comment != "" {
 		p.Summary = comment
 	} else {

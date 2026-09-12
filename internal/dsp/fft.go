@@ -60,14 +60,30 @@ func (fft *FFT) SetWindowType(windowType string) {
 }
 
 func (fft *FFT) Process(interleavedIQ []float32, output []float32) {
+	fft.ProcessDC(interleavedIQ, output, false)
+}
+
+// ProcessDC converts one IQ block into a centered spectrum. When removeSpike
+// is set, the block mean is removed before the transform and the DC bins are
+// interpolated so LO leakage does not dominate the display.
+func (fft *FFT) ProcessDC(interleavedIQ []float32, output []float32, removeSpike bool) {
 	fft.mu.Lock()
 	defer fft.mu.Unlock()
 	if len(interleavedIQ) < fft.size*2 || len(output) < fft.size {
 		return
 	}
+	meanI, meanQ := 0.0, 0.0
+	if removeSpike {
+		for index := 0; index < fft.size; index++ {
+			meanI += float64(interleavedIQ[index*2])
+			meanQ += float64(interleavedIQ[index*2+1])
+		}
+		meanI /= float64(fft.size)
+		meanQ /= float64(fft.size)
+	}
 	for index := 0; index < fft.size; index++ {
-		fft.real[index] = float64(interleavedIQ[index*2]) * fft.window[index]
-		fft.imag[index] = float64(interleavedIQ[index*2+1]) * fft.window[index]
+		fft.real[index] = (float64(interleavedIQ[index*2]) - meanI) * fft.window[index]
+		fft.imag[index] = (float64(interleavedIQ[index*2+1]) - meanQ) * fft.window[index]
 	}
 	fft.transform()
 
@@ -79,6 +95,28 @@ func (fft *FFT) Process(interleavedIQ []float32, output []float32) {
 		imag := fft.imag[fftBin] * normalization
 		power := real*real + imag*imag
 		output[displayBin] = float32(10 * math.Log10(power+1e-14))
+	}
+	if removeSpike {
+		suppressDCBins(output)
+	}
+}
+
+func suppressDCBins(spectrum []float32) {
+	n := len(spectrum)
+	if n < 16 {
+		return
+	}
+	dc := n / 2
+	width := 2
+	left := dc - width - 1
+	right := dc + width + 1
+	if left < 0 || right >= n {
+		return
+	}
+	span := float32(2*width + 2)
+	for i := -width; i <= width; i++ {
+		t := float32(i+width+1) / span
+		spectrum[dc+i] = spectrum[left] + t*(spectrum[right]-spectrum[left])
 	}
 }
 

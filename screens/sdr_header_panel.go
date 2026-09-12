@@ -19,6 +19,7 @@ type SDRHeaderPanel struct {
 	agc, biasT, iqCorrection, rfNotch, dabNotch       *simpleui.Switch
 	rfGain, ifGain, ppm, setpoint                     *simpleui.Slider
 	antenna                                           [3]*simpleui.Button
+	dcSpike                                           *simpleui.Switch
 }
 
 func NewSDRHeaderPanel(receiver *sdr.Receiver, onChanged func()) *SDRHeaderPanel {
@@ -46,6 +47,7 @@ func NewSDRHeaderPanel(receiver *sdr.Receiver, onChanged func()) *SDRHeaderPanel
 	p.setpoint.SetStep(1)
 	p.rfNotch = simpleui.NewSwitch("headerSDRRFNotch", 1270, 174, 140, 24, "RF NOTCH", false, 11)
 	p.dabNotch = simpleui.NewSwitch("headerSDRDABNotch", 1420, 174, 150, 24, "DAB NOTCH", false, 11)
+	p.dcSpike = simpleui.NewSwitch("headerSDRDC", 1268, 148, 98, 24, "DC SPIKE", true, 11)
 	for index := range p.antenna {
 		i := index
 		p.antenna[i] = simpleui.NewButton("headerSDRAntenna"+fmt.Sprintf("%d", i), 1268+float32(i)*102, 148, 98, 24, []string{"A", "B", "C"}[i], 12)
@@ -84,6 +86,14 @@ func NewSDRHeaderPanel(receiver *sdr.Receiver, onChanged func()) *SDRHeaderPanel
 		}
 		p.submit()
 	})
+	p.dcSpike.OnChange(func(v bool) {
+		if p.receiver != nil {
+			p.receiver.SetRemoveDCSpike(v)
+		}
+		if p.onChanged != nil {
+			p.onChanged()
+		}
+	})
 	p.rfGain.OnChange(func(v float32) { p.current.RFGain = v; p.refreshLabels() })
 	p.rfGain.OnRelease(func(float32) { p.submit() })
 	p.ifGain.OnChange(func(v float32) {
@@ -99,7 +109,7 @@ func NewSDRHeaderPanel(receiver *sdr.Receiver, onChanged func()) *SDRHeaderPanel
 	p.ppm.OnRelease(func(float32) { p.submit() })
 	p.setpoint.OnChange(func(v float32) { p.current.AGCSetpoint = int(math.Round(float64(v))); p.refreshLabels() })
 	p.setpoint.OnRelease(func(float32) { p.submit() })
-	p.controls = []simpleui.Element{p.status, p.agc, p.biasT, p.iqCorrection, p.rfLabel, p.ifLabel, p.rfGain, p.ifGain, p.ppmLabel, p.setpointLabel, p.ppm, p.setpoint, p.antenna[0], p.antenna[1], p.antenna[2], p.rfNotch, p.dabNotch}
+	p.controls = []simpleui.Element{p.status, p.agc, p.biasT, p.iqCorrection, p.rfLabel, p.ifLabel, p.rfGain, p.ifGain, p.ppmLabel, p.setpointLabel, p.ppm, p.setpoint, p.antenna[0], p.antenna[1], p.antenna[2], p.dcSpike, p.rfNotch, p.dabNotch}
 	p.sync()
 	return p
 }
@@ -140,6 +150,9 @@ func (p *SDRHeaderPanel) refresh() {
 	p.iqCorrection.SetActive(s.IQCorrection)
 	p.rfNotch.SetActive(s.RFNotch)
 	p.dabNotch.SetActive(s.DABNotch)
+	if p.receiver != nil {
+		p.dcSpike.SetActive(p.receiver.RemoveDCSpike())
+	}
 	switch {
 	case rtl:
 		p.iqCorrection.SetLabel(T("D-AGC"))
@@ -195,6 +208,7 @@ func (p *SDRHeaderPanel) refresh() {
 		p.ifGain.SetEnabled(s.Available && !s.AGC)
 	}
 	p.rfGain.SetEnabled(s.Available && !s.AGC && (!rtl || s.DirectSampling == 0))
+	p.dcSpike.SetEnabled(true)
 	p.refreshAntennaButtons()
 	p.refreshLabels()
 }
@@ -219,12 +233,13 @@ func (p *SDRHeaderPanel) refreshAntennaButtons() {
 			button.ClearColors()
 		}
 	}
-	notchY := float32(150)
+	rowY := float32(148)
 	if show {
-		notchY = 174
+		rowY = 174
 	}
-	p.rfNotch.SetBounds(rl.Rectangle{X: 1270, Y: notchY, Width: 140, Height: 24})
-	p.dabNotch.SetBounds(rl.Rectangle{X: 1420, Y: notchY, Width: 150, Height: 24})
+	p.dcSpike.SetBounds(rl.Rectangle{X: 1268, Y: rowY, Width: 98, Height: 24})
+	p.rfNotch.SetBounds(rl.Rectangle{X: 1370, Y: rowY, Width: 92, Height: 24})
+	p.dabNotch.SetBounds(rl.Rectangle{X: 1466, Y: rowY, Width: 98, Height: 24})
 }
 func (p *SDRHeaderPanel) refreshLabels() {
 	p.ppmLabel.SetText(fmt.Sprintf("%s  %+.1f", T("PPM"), p.current.PPM))
@@ -253,5 +268,6 @@ func (p *SDRHeaderPanel) refreshLabels() {
 func (p *SDRHeaderPanel) refreshLocale() {
 	p.agc.SetLabel(T("AGC"))
 	p.biasT.SetLabel(T("BIAS-T"))
+	p.dcSpike.SetLabel(T("DC SPIKE"))
 	p.refresh()
 }

@@ -101,15 +101,16 @@ type Receiver struct {
 	tetra      *tetra.Decoder
 	subtone    *dsp.SubtoneDetector
 
-	stop         chan struct{}
-	done         chan struct{}
-	tuneDone     chan struct{}
-	running      atomic.Bool
-	averagingMs  atomic.Int64
-	deemphasisUs atomic.Int64
-	closeOnce    sync.Once
-	startMu      sync.Mutex
-	closed       atomic.Bool
+	stop          chan struct{}
+	done          chan struct{}
+	tuneDone      chan struct{}
+	running       atomic.Bool
+	averagingMs   atomic.Int64
+	deemphasisUs  atomic.Int64
+	removeDCSpike atomic.Bool
+	closeOnce     sync.Once
+	startMu       sync.Mutex
+	closed        atomic.Bool
 
 	mu                                 sync.RWMutex
 	spectrum                           []float32
@@ -184,6 +185,7 @@ func NewReceiver(config Config) *Receiver {
 	receiver.subtone = dsp.NewSubtoneDetector()
 	receiver.averagingMs.Store(120)
 	receiver.deemphasisUs.Store(50)
+	receiver.removeDCSpike.Store(true)
 	for index := range receiver.spectrum {
 		receiver.spectrum[index] = -120
 	}
@@ -346,6 +348,10 @@ func (receiver *Receiver) SetCenterFrequency(frequencyHz int64) {
 func (receiver *Receiver) CenterFrequency() int64 { return receiver.centerHz.Load() }
 
 func (receiver *Receiver) SetFFTWindow(windowType string) { receiver.fft.SetWindowType(windowType) }
+func (receiver *Receiver) SetRemoveDCSpike(enabled bool) {
+	receiver.removeDCSpike.Store(enabled)
+}
+func (receiver *Receiver) RemoveDCSpike() bool { return receiver.removeDCSpike.Load() }
 func (receiver *Receiver) SetSpectrumAveraging(milliseconds int) {
 	receiver.averagingMs.Store(int64(min(max(milliseconds, 10), 300)))
 }
@@ -745,7 +751,7 @@ func (receiver *Receiver) run() {
 			fill += count
 			source += count
 			if fill == receiver.config.FFTSize {
-				receiver.fft.Process(fftBuffer, workingSpectrum)
+				receiver.fft.ProcessDC(fftBuffer, workingSpectrum, receiver.removeDCSpike.Load())
 				averagingSeconds := float64(receiver.averagingMs.Load()) / 1000
 				smoothingAlpha := float32(1 - math.Exp(-blockSeconds/averagingSeconds))
 				for index := range workingSpectrum {

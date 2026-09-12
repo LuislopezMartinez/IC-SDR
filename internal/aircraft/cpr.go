@@ -96,6 +96,47 @@ func decodeCPRAirborne(evenLat, evenLon, oddLat, oddLon int, odd bool) (float64,
 	return lat, wrap180(lon), true
 }
 
+func decodeCPRSurface(evenLat, evenLon, oddLat, oddLon int, odd bool, reflon float64) (float64, float64, bool) {
+	j := int(math.Floor((59*float64(evenLat)-60*float64(oddLat))/131072 + 0.5))
+	rlat0 := 1.5 * (float64(cprModInt(j, 60)) + float64(evenLat)/131072)
+	rlat1 := (90.0 / 59) * (float64(cprModInt(j, 59)) + float64(oddLat)/131072)
+	if rlat0 >= 270 {
+		rlat0 -= 360
+	}
+	if rlat1 >= 270 {
+		rlat1 -= 360
+	}
+	if rlat0 < -90 || rlat0 > 90 || rlat1 < -90 || rlat1 > 90 {
+		return 0, 0, false
+	}
+	if cprNL(rlat0) != cprNL(rlat1) {
+		return 0, 0, false
+	}
+	lat, cprlon := rlat0, evenLon
+	if odd {
+		lat, cprlon = rlat1, oddLon
+	}
+	ni := cprN(lat, odd)
+	m := int(math.Floor((float64(evenLon)*(float64(cprNL(lat))-1)-float64(oddLon)*float64(cprNL(lat)))/131072 + 0.5))
+	lon := cprDlon(lat, odd, true) * (float64(cprModInt(m, ni)) + float64(cprlon)/131072)
+	lon -= math.Floor(lon/90) * 90
+	lon += 90 * math.Floor(0.5+(wrap180(reflon)-lon)/90)
+	return lat, wrap180(lon), true
+}
+
+func validLatLon(lat, lon float64) bool {
+	return !math.IsNaN(lat) && !math.IsNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
+}
+
+func earthDistanceKm(lat1, lon1, lat2, lon2 float64) float64 {
+	const r = 6371.0
+	p1, p2 := lat1*math.Pi/180, lat2*math.Pi/180
+	dlat := (lat2 - lat1) * math.Pi / 180
+	dlon := wrap180(lon2-lon1) * math.Pi / 180
+	a := math.Sin(dlat/2)*math.Sin(dlat/2) + math.Cos(p1)*math.Cos(p2)*math.Sin(dlon/2)*math.Sin(dlon/2)
+	return 2 * r * math.Asin(math.Min(1, math.Sqrt(a)))
+}
+
 func decodeCPRRelative(reflat, reflon float64, cprlat, cprlon int, odd, surface bool) (float64, float64, bool) {
 	span := 360.0
 	if surface {
