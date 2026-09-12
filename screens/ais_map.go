@@ -134,7 +134,7 @@ func (v *aisMap) drawMap(b rl.Rectangle) {
 }
 
 func (v *aisMap) input(b rl.Rectangle) {
-	m := rl.GetMousePosition()
+	m := simpleui.MousePosition()
 	inside := rl.CheckCollisionPointRec(m, b)
 	if wheel := rl.GetMouseWheelMove(); wheel != 0 {
 		v.zoomAt(m, b, wheel)

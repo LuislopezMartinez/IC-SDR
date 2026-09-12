@@ -35,6 +35,7 @@ type aircraftMap struct {
 	next                          time.Time
 	centerLat, centerLon, lonSpan float64
 	selected                      int
+	selectedICAO                  string
 	fitted, dragging              bool
 	dragOrigin, lastMouse         rl.Vector2
 	tracks                        map[string][]geoPoint
@@ -54,6 +55,7 @@ func (v *aircraftMap) read() {
 		return
 	}
 	v.list = list
+	v.restoreSelection()
 	for _, a := range list {
 		if a.Latitude == nil || a.Longitude == nil {
 			continue
@@ -108,8 +110,21 @@ func (v *aircraftMap) unproject(p rl.Vector2, b rl.Rectangle) (float64, float64)
 func (v *aircraftMap) background(b rl.Rectangle) {
 	drawGeoMap(v.centerLat, v.centerLon, v.lonSpan, b)
 }
+func (v *aircraftMap) restoreSelection() {
+	v.selected = -1
+	if v.selectedICAO == "" {
+		return
+	}
+	for i, a := range v.list {
+		if a.ICAO == v.selectedICAO {
+			v.selected = i
+			return
+		}
+	}
+}
+
 func (v *aircraftMap) input(b rl.Rectangle) {
-	m := rl.GetMousePosition()
+	m := simpleui.MousePosition()
 	inside := rl.CheckCollisionPointRec(m, b)
 	if w := rl.GetMouseWheelMove(); w != 0 {
 		v.zoomAt(m, b, w)
@@ -154,6 +169,7 @@ func (v *aircraftMap) selectAt(m rl.Vector2, b rl.Rectangle) {
 	}
 	if best >= 0 {
 		v.selected = best
+		v.selectedICAO = v.list[best].ICAO
 	}
 }
 func (v *aircraftMap) grid(b rl.Rectangle) {

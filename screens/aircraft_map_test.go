@@ -74,6 +74,34 @@ func TestAircraftMapLabelClickAndZoomFromDetailsPanel(t *testing.T) {
 	}
 }
 
+func TestAircraftMapKeepsSelectionWhenListReorders(t *testing.T) {
+	lat, lon := 40.48, -3.57
+	otherLat, otherLon := 41.0, -4.0
+	v := aircraftMap{
+		centerLat: lat, centerLon: lon, lonSpan: 2, selected: -1,
+		tracks: make(map[string][]geoPoint),
+		list: []aircraft.Aircraft{
+			{ICAO: "AAAAAA", Latitude: &lat, Longitude: &lon},
+			{ICAO: "BBBBBB", Latitude: &otherLat, Longitude: &otherLon},
+		},
+	}
+	b := rl.Rectangle{X: 20, Y: 78, Width: 970, Height: 690}
+	p := v.project(otherLat, otherLon, b)
+	v.selectAt(p, b)
+	if v.selectedICAO != "BBBBBB" || v.selected != 1 {
+		t.Fatalf("selected ICAO=%q index=%d", v.selectedICAO, v.selected)
+	}
+	v.list = []aircraft.Aircraft{
+		{ICAO: "CCCCCC", Latitude: &lat, Longitude: &lon},
+		{ICAO: "AAAAAA", Latitude: &lat, Longitude: &lon},
+		{ICAO: "BBBBBB", Latitude: &otherLat, Longitude: &otherLon},
+	}
+	v.restoreSelection()
+	if v.selected != 2 || v.list[v.selected].ICAO != "BBBBBB" {
+		t.Fatalf("selection lost after LastSeen reorder: index=%d", v.selected)
+	}
+}
+
 func TestAircraftMapRender(t *testing.T) {
 	dir := os.Getenv("AIRCRAFT_MAP_RENDER_DIR")
 	if dir == "" {
