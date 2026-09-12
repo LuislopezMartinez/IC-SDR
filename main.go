@@ -98,7 +98,8 @@ func main() {
 		RuntimeRoot: sdrRuntimeRoot(),
 		Driver:      "sdrplay",
 		// Empty serial accepts any connected RSP. If none is available the
-		// receiver automatically falls back to an RTL-SDR device.
+		// receiver enumerates every loaded Soapy driver (RTL-SDR, HackRF,
+		// Airspy, Lime, Pluto, and others) and opens the first that works.
 		Serial:                    "",
 		FrequencyHz:               14_261_000,
 		SampleRate:                2_048_000,
@@ -201,13 +202,18 @@ func startStartupWatchdog() func() {
 }
 
 func logPortableResources() {
+	root := sdrRuntimeRoot()
+	startupStep("SDR runtime root: %s", root)
+	core := filepath.Join(root, "lib", "libSoapySDR.so")
+	switch runtime.GOOS {
+	case "windows":
+		core = filepath.Join(root, "bin", "SoapySDR.dll")
+	case "darwin":
+		core = filepath.Join(root, "lib", "libSoapySDR.dylib")
+	}
 	paths := []string{
-		resources.Path("runtime", "windows-x64", "bin", "SoapySDR.dll"),
-		resources.Path("runtime", "windows-x64", "bin", "MSVCP140.dll"),
-		resources.Path("runtime", "windows-x64", "bin", "VCRUNTIME140.dll"),
-		resources.Path("runtime", "windows-x64", "bin", "VCRUNTIME140_1.dll"),
-		resources.Path("runtime", "windows-x64", "lib", "SoapySDR", "modules0.8", "sdrPlaySupport.dll"),
-		resources.Path("runtime", "windows-x64", "lib", "SoapySDR", "modules0.8", "rtlsdrSupport.dll"),
+		core,
+		filepath.Join(root, "lib", "SoapySDR", "modules0.8"),
 		toolExecutable("digital_voice", "dsd-neo"),
 	}
 	for _, path := range paths {
@@ -217,5 +223,12 @@ func logPortableResources() {
 			continue
 		}
 		startupStep("Resource OK: %q · %d bytes", path, info.Size())
+	}
+	modules, err := os.ReadDir(filepath.Join(root, "lib", "SoapySDR", "modules0.8"))
+	if err != nil {
+		return
+	}
+	for _, module := range modules {
+		startupStep("Soapy module: %s", module.Name())
 	}
 }

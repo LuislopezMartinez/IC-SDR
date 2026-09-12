@@ -15,10 +15,7 @@ func toolExecutable(tool, name string) string {
 }
 
 func sdrRuntimeRoot() string {
-	if runtime.GOOS == "windows" {
-		return resources.Path("runtime", "windows-x64")
-	}
-	return resources.Path("runtime", runtime.GOOS+"-"+runtime.GOARCH)
+	return resources.SDRRuntimeRoot()
 }
 
 func tetraCodecName() string {

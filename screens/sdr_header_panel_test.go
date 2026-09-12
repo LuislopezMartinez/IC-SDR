@@ -29,3 +29,18 @@ func TestRTLSDRHeaderUsesDriverSpecificControls(t *testing.T) {
 		t.Fatal("manual tuner gain remained enabled under AGC")
 	}
 }
+
+func TestGenericHeaderUsesOverallGain(t *testing.T) {
+	p := NewSDRHeaderPanel(nil, nil)
+	p.current = sdr.HardwareSettings{
+		Available: true, Driver: "hackrf", Device: "HackRF One",
+		RFGain: 14, AGC: false,
+	}
+	p.refresh()
+	if !p.rfGain.Enabled() || p.ifGain.Enabled() || p.setpoint.Enabled() {
+		t.Fatalf("generic controls incorrect: gain=%v if=%v setpoint=%v", p.rfGain.Enabled(), p.ifGain.Enabled(), p.setpoint.Enabled())
+	}
+	if !strings.Contains(p.rfLabel.Text(), "GAIN") {
+		t.Fatalf("generic gain label incorrect: %q", p.rfLabel.Text())
+	}
+}

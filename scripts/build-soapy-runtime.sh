@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Build a portable SoapySDR + RTL-SDR runtime into DATA/runtime/$GOOS-$GOARCH.
+# Build a portable SoapySDR runtime into DATA/runtime/$GOOS-$GOARCH.
 # Used on Linux and macOS so IC-SDR does not need distro/Homebrew SDR packages.
+# RTL-SDR is required. HackRF, Airspy, AirspyHF, and SoapyRemote are best-effort
+# extras — a failure there must not block the RTL bundle.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -36,6 +38,13 @@ LIBUSB_VER="1.0.27"
 RTLSDR_VER="v2.0.2"
 SOAPY_VER="soapy-sdr-0.8.1"
 SOAPYRTL_VER="soapy-rtlsdr-0.3.0"
+HACKRF_VER="v2024.02.1"
+AIRSPY_VER="v1.0.10"
+AIRSPYHF_VER="1.8.1"
+SOAPYHACKRF_VER="soapy-hackrf-0.3.4"
+SOAPYAIRSPY_VER="soapy-airspy-0.2.0"
+SOAPYAIRSPYHF_VER="soapy-airspyhf-0.2.0"
+SOAPYREMOTE_VER="soapy-remote-0.5.2"
 
 export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 export CMAKE_PREFIX_PATH="$prefix${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
@@ -91,6 +100,44 @@ extract() {
   tar -xf "$archive" -C "$dest" --strip-components=1
 }
 
+optional_fetch_src() {
+  local dir="$1" marker="$2" url="$3" archive="$4"
+  if [[ -f "$dir/$marker" ]]; then
+    return 0
+  fi
+  if ! curl -L --fail --retry 3 -o "$archive" "$url"; then
+    echo "WARNING: could not download $url; skipping $(basename "$dir")"
+    rm -f "$archive"
+    return 0
+  fi
+  if ! extract "$archive" "$dir"; then
+    echo "WARNING: extract failed for $archive; skipping $(basename "$dir")"
+    return 0
+  fi
+}
+
+optional_cmake_install() {
+  local label="$1" srcdir="$2" builddir="$3"
+  shift 3
+  echo "Building $label (optional)"
+  if [[ ! -f "$srcdir/CMakeLists.txt" ]]; then
+    echo "WARNING: $label source missing; skipping"
+    return 0
+  fi
+  if ! run_cmake "$srcdir" "$builddir" "$@"; then
+    echo "WARNING: $label configure failed; skipping"
+    return 0
+  fi
+  if ! cmake --build "$builddir" --config Release -j"$jobs"; then
+    echo "WARNING: $label build failed; skipping"
+    return 0
+  fi
+  if ! cmake --install "$builddir"; then
+    echo "WARNING: $label install failed; skipping"
+    return 0
+  fi
+}
+
 if [[ ! -f "$src/libusb/configure" ]]; then
   fetch "https://github.com/libusb/libusb/releases/download/v${LIBUSB_VER}/libusb-${LIBUSB_VER}.tar.bz2" "$src/libusb.tar.bz2"
   extract "$src/libusb.tar.bz2" "$src/libusb"
@@ -107,6 +154,20 @@ if [[ ! -f "$src/SoapyRTLSDR/CMakeLists.txt" ]]; then
   fetch "https://github.com/pothosware/SoapyRTLSDR/archive/refs/tags/${SOAPYRTL_VER}.tar.gz" "$src/SoapyRTLSDR.tar.gz"
   extract "$src/SoapyRTLSDR.tar.gz" "$src/SoapyRTLSDR"
 fi
+optional_fetch_src "$src/hackrf" "host/libhackrf/CMakeLists.txt" \
+  "https://github.com/greatscottgadgets/hackrf/archive/refs/tags/${HACKRF_VER}.tar.gz" "$src/hackrf.tar.gz"
+optional_fetch_src "$src/airspyone_host" "libairspy/CMakeLists.txt" \
+  "https://github.com/airspy/airspyone_host/archive/refs/tags/${AIRSPY_VER}.tar.gz" "$src/airspyone_host.tar.gz"
+optional_fetch_src "$src/airspyhf" "CMakeLists.txt" \
+  "https://github.com/airspy/airspyhf/archive/refs/tags/${AIRSPYHF_VER}.tar.gz" "$src/airspyhf.tar.gz"
+optional_fetch_src "$src/SoapyHackRF" "CMakeLists.txt" \
+  "https://github.com/pothosware/SoapyHackRF/archive/refs/tags/${SOAPYHACKRF_VER}.tar.gz" "$src/SoapyHackRF.tar.gz"
+optional_fetch_src "$src/SoapyAirspy" "CMakeLists.txt" \
+  "https://github.com/pothosware/SoapyAirspy/archive/refs/tags/${SOAPYAIRSPY_VER}.tar.gz" "$src/SoapyAirspy.tar.gz"
+optional_fetch_src "$src/SoapyAirspyHF" "CMakeLists.txt" \
+  "https://github.com/pothosware/SoapyAirspyHF/archive/refs/tags/${SOAPYAIRSPYHF_VER}.tar.gz" "$src/SoapyAirspyHF.tar.gz"
+optional_fetch_src "$src/SoapyRemote" "CMakeLists.txt" \
+  "https://github.com/pothosware/SoapyRemote/archive/refs/tags/${SOAPYREMOTE_VER}.tar.gz" "$src/SoapyRemote.tar.gz"
 
 echo "Building libusb ${LIBUSB_VER}"
 pushd "$src/libusb" >/dev/null
@@ -148,6 +209,48 @@ run_cmake "$src/SoapyRTLSDR" "$src/SoapyRTLSDR/build" \
   -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
 cmake --build "$src/SoapyRTLSDR/build" --config Release -j"$jobs"
 cmake --install "$src/SoapyRTLSDR/build"
+
+optional_cmake_install "libhackrf ${HACKRF_VER}" "$src/hackrf/host/libhackrf" "$src/hackrf/host/libhackrf/build" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$prefix" \
+  -DCMAKE_PREFIX_PATH="$prefix" \
+  -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+  -DINSTALL_UDEV_RULES=OFF
+optional_cmake_install "SoapyHackRF ${SOAPYHACKRF_VER}" "$src/SoapyHackRF" "$src/SoapyHackRF/build" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$prefix" \
+  -DCMAKE_PREFIX_PATH="$prefix" \
+  -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+
+optional_cmake_install "libairspy ${AIRSPY_VER}" "$src/airspyone_host/libairspy" "$src/airspyone_host/libairspy/build" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$prefix" \
+  -DCMAKE_PREFIX_PATH="$prefix" \
+  -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+  -DINSTALL_UDEV_RULES=OFF
+optional_cmake_install "SoapyAirspy ${SOAPYAIRSPY_VER}" "$src/SoapyAirspy" "$src/SoapyAirspy/build" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$prefix" \
+  -DCMAKE_PREFIX_PATH="$prefix" \
+  -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+
+optional_cmake_install "libairspyhf ${AIRSPYHF_VER}" "$src/airspyhf" "$src/airspyhf/build" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$prefix" \
+  -DCMAKE_PREFIX_PATH="$prefix" \
+  -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+optional_cmake_install "SoapyAirspyHF ${SOAPYAIRSPYHF_VER}" "$src/SoapyAirspyHF" "$src/SoapyAirspyHF/build" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$prefix" \
+  -DCMAKE_PREFIX_PATH="$prefix" \
+  -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+
+optional_cmake_install "SoapyRemote ${SOAPYREMOTE_VER}" "$src/SoapyRemote" "$src/SoapyRemote/build" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$prefix" \
+  -DCMAKE_PREFIX_PATH="$prefix" \
+  -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+  -DUSE_AVAHI=OFF
 
 if [[ "$GOOS_VAL" == "linux" ]]; then
   if command -v patchelf >/dev/null 2>&1; then

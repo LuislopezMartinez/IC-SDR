@@ -90,6 +90,17 @@ func TestDigitalToAnalogModeChangeClearsSharedAudio(t *testing.T) {
 	}
 }
 
+func TestAdoptSampleRateUpdatesReceiver(t *testing.T) {
+	receiver := NewReceiver(Config{FrequencyHz: 100_000_000, SampleRate: 2_048_000, FFTSize: 4096})
+	receiver.adoptSampleRate(2_500_000)
+	if receiver.config.SampleRate != 2_500_000 {
+		t.Fatalf("sample rate %v, want 2500000", receiver.config.SampleRate)
+	}
+	if receiver.nfm == nil || receiver.tetra == nil {
+		t.Fatal("demodulators were not rebuilt")
+	}
+}
+
 func TestStopAllDecodersStopsTETRAAndClearsAudio(t *testing.T) {
 	receiver := NewReceiver(Config{FrequencyHz: 100_000_000, SampleRate: 2_048_000, FFTSize: 4096})
 	receiver.tetra.Configure(true)

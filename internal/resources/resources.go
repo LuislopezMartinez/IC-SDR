@@ -6,6 +6,7 @@ package resources
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // WritablePath returns a location inside DATA beside the executable. Keeping
@@ -102,4 +103,21 @@ func workingDir() string {
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// SDRRuntimeRoot is the portable SoapySDR tree for this OS/architecture.
+// Windows prefers DATA/runtime/windows-<arch> and falls back to windows-x64.
+func SDRRuntimeRoot() string {
+	if runtime.GOOS == "windows" {
+		preferred := Path("runtime", "windows-"+runtime.GOARCH)
+		fallback := Path("runtime", "windows-x64")
+		if exists(preferred) {
+			return preferred
+		}
+		if preferred != fallback && exists(fallback) {
+			return fallback
+		}
+		return preferred
+	}
+	return Path("runtime", runtime.GOOS+"-"+runtime.GOARCH)
 }

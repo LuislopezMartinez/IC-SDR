@@ -38,7 +38,7 @@ func loadSoapy(config Config) (*soapyAPI, error) {
 		if err == nil {
 			return api, nil
 		}
-		config.trace("SoapySDR/%s: bundled runtime rejected: %v", config.Driver, err)
+		config.trace("SoapySDR: bundled runtime rejected: %v", err)
 	}
 
 	var failures []error
@@ -46,31 +46,21 @@ func loadSoapy(config Config) (*soapyAPI, error) {
 		if bundled != "" && corePath == bundled {
 			continue
 		}
-		config.trace("SoapySDR/%s: dlopen %s", config.Driver, corePath)
+		deps := preloadLibraries(config, unixRadioDependencies(root))
+		deps = append(deps, preloadLibraries(config, unixSDRplayAPICandidates())...)
+		config.trace("SoapySDR: dlopen %s", corePath)
 		core, err := loadShared(corePath)
 		if err != nil {
+			for index := len(deps) - 1; index >= 0; index-- {
+				closeShared(deps[index])
+			}
 			failures = append(failures, fmt.Errorf("load %s: %w", corePath, err))
 			continue
 		}
 		api := registerSoapy(core)
-		for _, dep := range unixRTLDependencies(root) {
-			if handle, depErr := loadShared(dep); depErr == nil {
-				api.dependencies = append(api.dependencies, handle)
-			}
-		}
-		for _, modulePath := range unixSoapyModuleCandidates(config) {
-			if _, statErr := os.Stat(modulePath); statErr != nil {
-				continue
-			}
-			config.trace("SoapySDR/%s: loading module %s", config.Driver, modulePath)
-			message := api.consume(api.loadModule(modulePath))
-			if message == "" {
-				config.trace("SoapySDR/%s: module loaded (%s)", config.Driver, modulePath)
-				return api, nil
-			}
-			failures = append(failures, fmt.Errorf("module %s: %s", modulePath, message))
-		}
-		config.trace("SoapySDR/%s: using library without an explicit module path", config.Driver)
+		api.dependencies = deps
+		api.loadModules(config, collectSoapyModules(unixSoapyModuleDirs(root)...))
+		config.trace("SoapySDR: using %s", corePath)
 		return api, nil
 	}
 	if len(failures) == 0 {
@@ -80,38 +70,28 @@ func loadSoapy(config Config) (*soapyAPI, error) {
 }
 
 func loadBundledSoapy(config Config, root, corePath string) (*soapyAPI, error) {
+	pluginDir := filepath.Join(root, "lib", "SoapySDR", "modules0.8")
 	_ = os.Setenv("SOAPY_SDR_ROOT", root)
-	_ = os.Setenv("SOAPY_SDR_PLUGIN_PATH", filepath.Join(root, "lib", "SoapySDR", "modules0.8"))
-	config.trace("SoapySDR/%s: loading bundled %s", config.Driver, corePath)
-	for _, dep := range unixRTLDependencies(root) {
-		if _, err := os.Stat(dep); err != nil {
-			continue
-		}
-		if _, err := loadShared(dep); err != nil {
-			return nil, fmt.Errorf("load bundled dependency %s: %w", dep, err)
-		}
+	_ = os.Setenv("SOAPY_SDR_PLUGIN_PATH", pluginDir)
+	libDir := filepath.Join(root, "lib")
+	if runtime.GOOS == "darwin" {
+		_ = os.Setenv("DYLD_LIBRARY_PATH", libDir+string(os.PathListSeparator)+os.Getenv("DYLD_LIBRARY_PATH"))
+	} else {
+		_ = os.Setenv("LD_LIBRARY_PATH", libDir+string(os.PathListSeparator)+os.Getenv("LD_LIBRARY_PATH"))
 	}
+	deps := preloadLibraries(config, unixRadioDependencies(root))
+	deps = append(deps, preloadLibraries(config, unixSDRplayAPICandidates())...)
+	config.trace("SoapySDR: loading bundled %s", corePath)
 	core, err := loadShared(corePath)
 	if err != nil {
+		for index := len(deps) - 1; index >= 0; index-- {
+			closeShared(deps[index])
+		}
 		return nil, fmt.Errorf("load bundled %s: %w", corePath, err)
 	}
 	api := registerSoapy(core)
-	var moduleErrs []error
-	for _, modulePath := range unixSoapyModuleCandidates(config) {
-		if _, err := os.Stat(modulePath); err != nil {
-			continue
-		}
-		message := api.consume(api.loadModule(modulePath))
-		if message == "" {
-			config.trace("SoapySDR/%s: bundled module loaded (%s)", config.Driver, modulePath)
-			return api, nil
-		}
-		moduleErrs = append(moduleErrs, fmt.Errorf("%s: %s", modulePath, message))
-	}
-	if len(moduleErrs) > 0 {
-		api.close()
-		return nil, errors.Join(moduleErrs...)
-	}
+	api.dependencies = deps
+	api.loadModules(config, collectSoapyModules(pluginDir, filepath.Join(root, "lib64", "SoapySDR", "modules0.8")))
 	return api, nil
 }
 
@@ -153,9 +133,7 @@ func unixSoapyCoreCandidates(config Config) []string {
 	return uniqueStrings(out)
 }
 
-func unixSoapyModuleCandidates(config Config) []string {
-	root := config.RuntimeRoot
-	moduleNames := unixSoapyModuleNames(config.Driver)
+func unixSoapyModuleDirs(root string) []string {
 	var dirs []string
 	if root != "" {
 		dirs = append(dirs,
@@ -169,35 +147,20 @@ func unixSoapyModuleCandidates(config Config) []string {
 	dirs = append(dirs,
 		"/usr/lib/x86_64-linux-gnu/SoapySDR/modules0.8",
 		"/usr/lib/aarch64-linux-gnu/SoapySDR/modules0.8",
+		"/usr/lib/arm-linux-gnueabihf/SoapySDR/modules0.8",
 		"/usr/local/lib/SoapySDR/modules0.8",
+		"/usr/lib/SoapySDR/modules0.8",
 	)
-	var out []string
-	for _, dir := range dirs {
-		for _, name := range moduleNames {
-			out = append(out, filepath.Join(dir, name))
-		}
-	}
-	out = append(out, moduleNames...)
-	return uniqueStrings(out)
+	return uniqueStrings(dirs)
 }
 
-func unixSoapyModuleNames(driver string) []string {
-	base := "rtlsdrSupport"
-	if driver == "sdrplay" {
-		base = "sdrPlaySupport"
-	}
-	return []string{
-		"lib" + base + ".so",
-		base + ".so",
-		"lib" + base + ".dylib",
-		base + ".dylib",
-	}
-}
-
-func unixRTLDependencies(root string) []string {
+func unixRadioDependencies(root string) []string {
 	names := []string{
 		"libusb-1.0.so.0", "libusb-1.0.so", "libusb-1.0.0.dylib", "libusb-1.0.dylib",
 		"librtlsdr.so.0", "librtlsdr.so", "librtlsdr.0.dylib", "librtlsdr.dylib",
+		"libhackrf.so.0", "libhackrf.so", "libhackrf.0.dylib", "libhackrf.dylib",
+		"libairspy.so.0", "libairspy.so", "libairspy.0.dylib", "libairspy.dylib",
+		"libairspyhf.so.0", "libairspyhf.so", "libairspyhf.0.dylib", "libairspyhf.dylib",
 	}
 	var out []string
 	if root != "" {
@@ -206,12 +169,28 @@ func unixRTLDependencies(root string) []string {
 		}
 	}
 	if homebrew := unixHomebrewPrefix(); homebrew != "" {
-		out = append(out,
-			filepath.Join(homebrew, "lib", "libusb-1.0.dylib"),
-			filepath.Join(homebrew, "lib", "librtlsdr.dylib"),
-		)
+		for _, name := range []string{"libusb-1.0.dylib", "librtlsdr.dylib", "libhackrf.dylib", "libairspy.dylib", "libairspyhf.dylib"} {
+			out = append(out, filepath.Join(homebrew, "lib", name))
+		}
 	}
 	out = append(out, names...)
+	return uniqueStrings(out)
+}
+
+func unixSDRplayAPICandidates() []string {
+	var out []string
+	if homebrew := unixHomebrewPrefix(); homebrew != "" {
+		out = append(out, filepath.Join(homebrew, "lib", "libsdrplay_api.dylib"))
+	}
+	out = append(out,
+		"/usr/local/lib/libsdrplay_api.so",
+		"/usr/lib/libsdrplay_api.so",
+		"/usr/lib/x86_64-linux-gnu/libsdrplay_api.so",
+		"/usr/lib/aarch64-linux-gnu/libsdrplay_api.so",
+		"/opt/sdrplay/lib/libsdrplay_api.so",
+		"libsdrplay_api.so",
+		"libsdrplay_api.dylib",
+	)
 	return uniqueStrings(out)
 }
 
@@ -225,20 +204,4 @@ func unixHomebrewPrefix() string {
 		}
 	}
 	return ""
-}
-
-func uniqueStrings(in []string) []string {
-	seen := make(map[string]struct{}, len(in))
-	out := make([]string, 0, len(in))
-	for _, value := range in {
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
 }

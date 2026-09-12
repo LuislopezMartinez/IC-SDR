@@ -188,9 +188,13 @@ func (receiver *Receiver) Start() error {
 	}
 	receiver.device = device
 	receiver.trace("SDR: device opened · hardware=%s · driver=%s", device.hardware, device.driver)
+	if math.Abs(device.sampleRate-receiver.config.SampleRate) > 1 {
+		receiver.trace("SDR: adopting device sample rate %.0f (requested %.0f)", device.sampleRate, receiver.config.SampleRate)
+		receiver.adoptSampleRate(device.sampleRate)
+	}
 	receiver.trace("SDR: reading physical controls")
 	hardware := device.hardwareSettings()
-	if receiver.config.InitialHardware != nil {
+	if receiver.config.InitialHardware != nil && ProfileFor(device.driver) == ProfileSDRplay {
 		receiver.trace("SDR: applying initial settings")
 		initial := *receiver.config.InitialHardware
 		initial.Available = true
@@ -204,7 +208,7 @@ func (receiver *Receiver) Start() error {
 		}
 		hardware = device.hardwareSettings()
 	}
-	receiver.trace("SDR: settings confirmed · sampleRate=%.0f", device.sampleRate)
+	receiver.trace("SDR: settings confirmed · hardware=%s · driver=%s · sampleRate=%.0f", device.hardware, device.driver, device.sampleRate)
 	receiver.mu.Lock()
 	receiver.stats.Device = device.hardware
 	receiver.stats.SampleRate = device.sampleRate
@@ -217,6 +221,25 @@ func (receiver *Receiver) Start() error {
 	go receiver.runTuner()
 	receiver.trace("SDR: capture and tune threads started")
 	return nil
+}
+
+func (receiver *Receiver) adoptSampleRate(rate float64) {
+	if rate <= 0 {
+		return
+	}
+	receiver.config.SampleRate = rate
+	receiver.am = dsp.NewAMDemodulator(rate, 48_000)
+	receiver.nfm = dsp.NewNFMDemodulator(rate, 48_000)
+	receiver.wfm = dsp.NewNFMDemodulator(rate, 48_000)
+	receiver.ssb = dsp.NewSSBDemodulator(rate, 48_000)
+	receiver.dmr = dmr.New(rate, receiver.config.DMRExecutable, receiver.enqueueDigitalAudio)
+	receiver.digital = digitalvoice.NewBank(rate, receiver.config.DigitalVoiceExecutable, receiver.enqueueDigitalAudio)
+	receiver.rtl433 = rtl433.New(rate, receiver.config.RTL433Executable)
+	receiver.radiosonde = radiosonde.New(rate, receiver.config.RadiosondeDirectory)
+	receiver.ais = ais.New(rate, receiver.config.AISExecutable)
+	receiver.aircraft = aircraft.New(rate, receiver.config.Aircraft1090Executable, receiver.config.Aircraft978Executable, receiver.config.AircraftUATTextExecutable)
+	receiver.aprs = aprs.New(rate, receiver.config.APRSExecutable, receiver.config.APRSConfig, receiver.config.APRSWorkingDirectory)
+	receiver.tetra = tetra.New(rate, receiver.config.TETRACodec, receiver.enqueueDigitalAudio)
 }
 
 func (receiver *Receiver) trace(format string, args ...any) {

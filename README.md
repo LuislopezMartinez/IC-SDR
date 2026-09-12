@@ -7,7 +7,7 @@
 IC-SDR brings together reception, demodulation, spectrum analysis and digital signal decoding in a desktop interface designed for daily use.
 
 > [!IMPORTANT]
-IC-SDR is designed for **Windows** portable SDR use, and also compiles for **Linux** and **macOS**. TETRA voice uses `libtetradec` on every OS, including Windows ARM64. Hardware SDR uses a bundled SoapySDR + RTL-SDR runtime on Windows, Linux, and macOS (`DATA/runtime/<os>-<arch>`). SDRplay still uses the vendor API on Windows.
+IC-SDR is designed for **Windows** portable SDR use, and also compiles for **Linux** and **macOS**. TETRA voice uses `libtetradec` on every OS, including Windows ARM64. Hardware SDR uses a bundled SoapySDR runtime on Windows, Linux, and macOS (`DATA/runtime/<os>-<arch>`). The loader enumerates every available Soapy driver so RTL-SDR, HackRF, Airspy, AirspyHF, Lime, Pluto, and other connected radios can open. SDRplay uses the vendor API when that API is installed.
 
 ![IC-SDR main interface](docs/images/ic-sdr-main.png)
 
@@ -98,10 +98,10 @@ The `dist/` folder is generated locally and is not part of the versioned source 
 
 ## Requirements
 
-- **Windows** for the portable SoapySDR / RTL-SDR / SDRplay runtime.
-- Linux and macOS archives include a bundled SoapySDR + RTL-SDR runtime under `DATA/runtime/<os>-<arch>`. A system install is still used as fallback.
+- **Windows** for the portable SoapySDR runtime (RTL-SDR and SDRplay modules, plus any other modules shipped in `DATA/runtime/windows-x64`).
+- Linux and macOS archives include a bundled SoapySDR runtime under `DATA/runtime/<os>-<arch>` with RTL-SDR, and best-effort HackRF, Airspy, AirspyHF, and SoapyRemote modules. A system SoapySDR install is still used as fallback (Lime, Pluto, UHD, BladeRF, SDRplay, and others).
 - Go 1.22 or later to compile from source (see `go.mod`).
-- A receiver compatible with RTL-SDR or SoapySDR/SDRplay.
+- A USB SDR that a loaded Soapy module can open. SDRplay also needs the vendor API from SDRplay.
 
 ## Compilation
 

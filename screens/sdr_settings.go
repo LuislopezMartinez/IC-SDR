@@ -165,6 +165,9 @@ func (modal *SDRSettings) submit() {
 
 func (modal *SDRSettings) refresh() {
 	settings := modal.current
+	profile := sdr.ProfileFor(settings.Driver)
+	rtl := profile == sdr.ProfileRTLSDR
+	generic := profile == sdr.ProfileGeneric
 	modal.deviceLabel.SetText(settings.Device + "   DRIVER " + settings.Driver)
 	modal.agc.SetActive(settings.AGC)
 	modal.biasT.SetActive(settings.BiasT)
@@ -175,7 +178,30 @@ func (modal *SDRSettings) refresh() {
 	modal.ifGain.SetValue(settings.IFGain)
 	modal.ppm.SetValue(settings.PPM)
 	modal.setpoint.SetValue(float32(settings.AGCSetpoint))
-	modal.ifGain.SetEnabled(settings.Available && !settings.AGC)
+	switch {
+	case rtl:
+		modal.rfGain.SetRange(0, 49.6)
+		modal.ifGain.SetEnabled(false)
+		modal.setpoint.SetEnabled(false)
+		modal.rfNotch.SetEnabled(false)
+		modal.dabNotch.SetEnabled(false)
+		modal.iqCorrection.SetEnabled(false)
+	case generic:
+		modal.rfGain.SetRange(0, 80)
+		modal.ifGain.SetEnabled(false)
+		modal.setpoint.SetEnabled(false)
+		modal.rfNotch.SetEnabled(false)
+		modal.dabNotch.SetEnabled(false)
+		modal.iqCorrection.SetEnabled(false)
+	default:
+		modal.rfGain.SetRange(0, 9)
+		modal.ifGain.SetEnabled(settings.Available && !settings.AGC)
+		modal.setpoint.SetEnabled(settings.Available)
+		modal.rfNotch.SetEnabled(settings.Available)
+		modal.dabNotch.SetEnabled(settings.Available)
+		modal.iqCorrection.SetEnabled(settings.Available)
+	}
+	modal.rfGain.SetEnabled(settings.Available && !settings.AGC)
 	for _, control := range modal.controls {
 		control.SetVisible(settings.Available)
 	}
@@ -184,14 +210,25 @@ func (modal *SDRSettings) refresh() {
 }
 
 func (modal *SDRSettings) refreshLabels() {
-	modal.rfLabel.SetText(fmt.Sprintf("%s   STATUS %.0f", T("LNA / RFGR"), modal.current.RFGain))
-	ifText := fmt.Sprintf("%s   %.0f dB", T("IFGR"), modal.current.IFGain)
-	if modal.current.AGC {
-		ifText += "   (" + T("AGC CONTROLLED") + ")"
+	switch sdr.ProfileFor(modal.current.Driver) {
+	case sdr.ProfileRTLSDR:
+		modal.rfLabel.SetText(fmt.Sprintf("%s   %.1f dB", T("TUNER"), modal.current.RFGain))
+		modal.ifLabel.SetText(T("IFGR · N/A"))
+		modal.setpointLabel.SetText(T("AGC SETPOINT · N/A"))
+	case sdr.ProfileGeneric:
+		modal.rfLabel.SetText(fmt.Sprintf("%s   %.1f dB", T("GAIN"), modal.current.RFGain))
+		modal.ifLabel.SetText(T("IFGR · N/A"))
+		modal.setpointLabel.SetText(T("AGC SETPOINT · N/A"))
+	default:
+		modal.rfLabel.SetText(fmt.Sprintf("%s   STATUS %.0f", T("LNA / RFGR"), modal.current.RFGain))
+		ifText := fmt.Sprintf("%s   %.0f dB", T("IFGR"), modal.current.IFGain)
+		if modal.current.AGC {
+			ifText += "   (" + T("AGC CONTROLLED") + ")"
+		}
+		modal.ifLabel.SetText(ifText)
+		modal.setpointLabel.SetText(fmt.Sprintf("%s   %d dB", T("AGC SETPOINT"), modal.current.AGCSetpoint))
 	}
-	modal.ifLabel.SetText(ifText)
 	modal.ppmLabel.SetText(fmt.Sprintf("%s   %.1f ppm", T("FREQUENCY CORRECTION"), modal.current.PPM))
-	modal.setpointLabel.SetText(fmt.Sprintf("%s   %d dB", T("AGC SETPOINT"), modal.current.AGCSetpoint))
 }
 
 func (modal *SDRSettings) refreshLocale() {

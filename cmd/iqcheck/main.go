@@ -11,7 +11,7 @@ import (
 
 func main() {
 	receiver := sdr.NewReceiver(sdr.Config{
-		RuntimeRoot:   resources.Path("runtime", "windows-x64"),
+		RuntimeRoot:   resources.SDRRuntimeRoot(),
 		Driver:        "sdrplay",
 		Serial:        "2401019760",
 		FrequencyHz:   14_261_000,
