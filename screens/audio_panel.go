@@ -185,7 +185,7 @@ func (p *AudioPanel) DrawPanel() {
 	drawSmallText("+12", 476, 704, colors.muted)
 	drawSmallText("0", 480, 733, colors.muted)
 	drawSmallText("-12", 476, 762, colors.muted)
-	p.drawSpectrum(818, 690, 736, 74, 12000)
+	p.drawSpectrum(audioSpectrumX, audioSpectrumY, audioSpectrumW, audioSpectrumH, audioSpectrumMaxHz)
 	drawSmallText(fmt.Sprintf("LOW %s", formatAudioHz(p.lowCut)), 822, 670, colors.cyan)
 	drawSmallText(fmt.Sprintf("HIGH %s", formatAudioHz(p.highCut)), 952, 670, colors.orange)
 	drawSmallText(fmt.Sprintf("BUFFER %d ms · %.0f%%", p.screen.stats.AudioBuffered*1000/audioSampleRate, float32(p.screen.stats.AudioBuffered)*100/48000), 1045, 650, colors.muted)
@@ -245,12 +245,47 @@ func (p *AudioPanel) drawPBTResponse(x, y, w, h float32, mode string, low, high 
 	}
 }
 
+const (
+	audioSpectrumX     = float32(818)
+	audioSpectrumY     = float32(690)
+	audioSpectrumW     = float32(736)
+	audioSpectrumH     = float32(74)
+	audioSpectrumMaxHz = 12000
+	audioCutHitSlop    = float32(22)
+)
+
+func audioSpectrumXForHz(hz int) float32 {
+	return audioSpectrumX + audioSpectrumW*float32(hz)/float32(audioSpectrumMaxHz)
+}
+
+func audioHzForSpectrumX(x float32) int {
+	value := int(math.Round(float64((x-audioSpectrumX)*float32(audioSpectrumMaxHz)/audioSpectrumW/10))) * 10
+	return min(max(value, 20), audioSpectrumMaxHz)
+}
+
+func nearestAudioCutHandle(legacyX float32, lowCut, highCut int) int {
+	lowX := audioSpectrumXForHz(lowCut)
+	highX := audioSpectrumXForHz(highCut)
+	dLow := float32(math.Abs(float64(legacyX - lowX)))
+	dHigh := float32(math.Abs(float64(legacyX - highX)))
+	if dLow > audioCutHitSlop && dHigh > audioCutHitSlop {
+		return 0
+	}
+	if dLow <= dHigh {
+		return 1
+	}
+	return 2
+}
+
 func (p *AudioPanel) handleGraphInput() {
 	if p.screen.activeTool != "PBT_AUDIO" || p.screen.overlayOpen() {
 		p.pbtDrag, p.audioDrag = 0, 0
 		return
 	}
 	mouse := simpleui.MousePosition()
+	// DrawPanel runs inside drawCompactedTool (X is scaled to sit beside the
+	// utilities column). Hit tests must use the same legacy coordinates.
+	mouse.X = expandToolX(mouse.X)
 	pressed := rl.IsMouseButtonPressed(rl.MouseButtonLeft)
 	down := rl.IsMouseButtonDown(rl.MouseButtonLeft)
 	released := rl.IsMouseButtonReleased(rl.MouseButtonLeft)
@@ -297,23 +332,17 @@ func (p *AudioPanel) handleGraphInput() {
 		}
 		p.applyPBT()
 	}
-	if pressed && mouse.X >= 818 && mouse.X <= 1554 && mouse.Y >= 684 && mouse.Y <= 764 {
-		lowX := 818 + 736*float32(p.lowCut)/12000
-		highX := 818 + 736*float32(p.highCut)/12000
-		if math.Abs(float64(mouse.X-lowX)) <= 16 {
-			p.audioDrag = 1
-		} else if math.Abs(float64(mouse.X-highX)) <= 16 {
-			p.audioDrag = 2
-		}
+	if pressed && mouse.X >= audioSpectrumX && mouse.X <= audioSpectrumX+audioSpectrumW && mouse.Y >= audioSpectrumY-6 && mouse.Y <= audioSpectrumY+audioSpectrumH {
+		p.audioDrag = nearestAudioCutHandle(mouse.X, p.lowCut, p.highCut)
 	}
 	if p.audioDrag != 0 && down {
-		value := int(math.Round(float64((mouse.X-818)*12000/736/10))) * 10
-		value = min(max(value, 20), 12000)
+		value := audioHzForSpectrumX(mouse.X)
 		if p.audioDrag == 1 {
 			p.lowCut = min(value, p.highCut-200)
 		} else {
 			p.highCut = max(value, p.lowCut+200)
 		}
+		p.cutoffs.SetValues(float32(p.lowCut), float32(p.highCut))
 		p.apply()
 	}
 	if released {
@@ -338,8 +367,8 @@ func (p *AudioPanel) drawSpectrum(x, y, w, h float32, maximumHz int) {
 		}
 		previous = current
 	}
-	rl.DrawLineEx(rl.Vector2{X: lowX, Y: y}, rl.Vector2{X: lowX, Y: y + h}, 1.5, colors.cyan)
-	rl.DrawLineEx(rl.Vector2{X: highX, Y: y}, rl.Vector2{X: highX, Y: y + h}, 1.5, colors.orange)
+	rl.DrawLineEx(rl.Vector2{X: lowX, Y: y}, rl.Vector2{X: lowX, Y: y + h}, 2, colors.cyan)
+	rl.DrawLineEx(rl.Vector2{X: highX, Y: y}, rl.Vector2{X: highX, Y: y + h}, 2, colors.orange)
 }
 
 func formatAudioHz(hz int) string {

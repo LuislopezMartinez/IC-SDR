@@ -32,14 +32,26 @@ const toolContentScaleX = (toolContentRight - toolContentX) / legacyToolWidth
 // compactToolControls maps the controls created for the former full-width
 // workspace into the area remaining beside the fixed utilities sidebar. Only
 // horizontal geometry changes, so text and controls retain their readable height.
+func compactToolX(legacyX float32) float32 {
+	return toolContentX + (legacyX-legacyToolX)*toolContentScaleX
+}
+
+func compactToolWidth(legacyWidth float32) float32 {
+	return legacyWidth * toolContentScaleX
+}
+
+func expandToolX(contentX float32) float32 {
+	return legacyToolX + (contentX-toolContentX)/toolContentScaleX
+}
+
 func compactToolControls(elements []simpleui.Element) {
 	for _, element := range elements {
 		bounds := element.Bounds()
 		if bounds.Y < toolY || bounds.Y >= toolY+toolH {
 			continue
 		}
-		bounds.X = toolContentX + (bounds.X-legacyToolX)*toolContentScaleX
-		bounds.Width *= toolContentScaleX
+		bounds.X = compactToolX(bounds.X)
+		bounds.Width = compactToolWidth(bounds.Width)
 		element.SetBounds(bounds)
 	}
 }
