@@ -62,6 +62,7 @@ func drawMapTiles(centerLat, centerLon, lonSpan float64, b rl.Rectangle) bool {
 	minY := int(math.Floor(float64(cy) - float64(halfH)/float64(tilePx)))
 	maxY := int(math.Floor(float64(cy) + float64(halfH)/float64(tilePx)))
 	drew := false
+	drawn := 0
 	for x := minX; x <= maxX; x++ {
 		tx := ((x % n) + n) % n
 		for y := minY; y <= maxY; y++ {
@@ -81,8 +82,15 @@ func drawMapTiles(centerLat, centerLon, lonSpan float64, b rl.Rectangle) bool {
 			if !ok {
 				continue
 			}
+			if tex.Width <= 0 || tex.Height <= 0 {
+				continue
+			}
 			rl.DrawTexturePro(tex, rl.Rectangle{Width: float32(tex.Width), Height: float32(tex.Height)}, dest, rl.Vector2{}, 0, rl.White)
 			drew = true
+			drawn++
+			if drawn >= 48 {
+				return drew
+			}
 		}
 	}
 	return drew
@@ -98,6 +106,10 @@ func tileTexture(z, x, y int) (rl.Texture2D, bool) {
 	if data, ok := tileBytes[key]; ok {
 		delete(tileBytes, key)
 		tilesMu.Unlock()
+		if !isPNG(data) {
+			requestTile(key)
+			return rl.Texture2D{}, false
+		}
 		img := rl.LoadImageFromMemory(".png", data, int32(len(data)))
 		if img == nil || img.Data == nil {
 			requestTile(key)
@@ -144,7 +156,7 @@ func fetchTile(key tileKey) {
 	default:
 		return
 	}
-	if data, err := os.ReadFile(tilePath(key)); err == nil && len(data) > 32 {
+	if data, err := os.ReadFile(tilePath(key)); err == nil && isPNG(data) {
 		storeTileBytes(key, data)
 		return
 	}
@@ -163,7 +175,7 @@ func fetchTile(key tileKey) {
 		return
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil || len(data) < 32 {
+	if err != nil || !isPNG(data) {
 		return
 	}
 	_ = os.MkdirAll(filepath.Dir(tilePath(key)), 0o755)
@@ -179,4 +191,10 @@ func storeTileBytes(key tileKey, data []byte) {
 
 func tilePath(key tileKey) string {
 	return resources.WritablePath("cache", "map-tiles", fmt.Sprintf("%d", key.z), fmt.Sprintf("%d", key.x), fmt.Sprintf("%d.png", key.y))
+}
+
+func isPNG(data []byte) bool {
+	return len(data) >= 8 &&
+		data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4e && data[3] == 0x47 &&
+		data[4] == 0x0d && data[5] == 0x0a && data[6] == 0x1a && data[7] == 0x0a
 }

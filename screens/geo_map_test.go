@@ -51,3 +51,21 @@ func TestMapZoomMatchesWebMercatorTileScale(t *testing.T) {
 		t.Fatalf("z10 view zoom = %v, want 10", z)
 	}
 }
+
+func TestClampTextureSrcStaysInsideImage(t *testing.T) {
+	tex := rl.Texture2D{Width: 100, Height: 50}
+	got := clampTextureSrc(rl.Rectangle{X: -10, Y: -4, Width: 140, Height: 80}, tex)
+	if got.X != 0 || got.Y != 0 || got.Width != 100 || got.Height != 50 {
+		t.Fatalf("unclamped source %+v", got)
+	}
+}
+
+func TestIsPNGRejectsHTML(t *testing.T) {
+	if isPNG([]byte("<html>not a tile</html>")) {
+		t.Fatal("HTML accepted as a PNG tile")
+	}
+	png := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2, 3}
+	if !isPNG(png) {
+		t.Fatal("PNG signature rejected")
+	}
+}

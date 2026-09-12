@@ -111,10 +111,13 @@ func zoomMap(centerLat, centerLon, lonSpan float64, anchor rl.Vector2, b rl.Rect
 
 func drawGeoMap(centerLat, centerLon, lonSpan float64, b rl.Rectangle) {
 	rl.BeginScissorMode(int32(b.X), int32(b.Y), int32(b.Width), int32(b.Height))
+	defer func() {
+		_ = recover()
+		rl.EndScissorMode()
+	}()
 	rl.DrawRectangleRec(b, rl.Color{R: 164, G: 200, B: 224, A: 255})
 	drawWorldFallback(centerLat, centerLon, lonSpan, b)
 	_ = drawMapTiles(centerLat, centerLon, lonSpan, b)
-	rl.EndScissorMode()
 }
 
 func drawWorldFallback(centerLat, centerLon, lonSpan float64, b rl.Rectangle) {
@@ -122,7 +125,7 @@ func drawWorldFallback(centerLat, centerLon, lonSpan float64, b rl.Rectangle) {
 		return
 	}
 	tex := worldMapTexture()
-	if tex.ID == 0 {
+	if tex.ID == 0 || tex.Width <= 0 || tex.Height <= 0 {
 		return
 	}
 	top, leftLon := unprojectMercator(centerLat, centerLon, lonSpan, rl.Vector2{X: b.X, Y: b.Y}, b)
@@ -133,7 +136,40 @@ func drawWorldFallback(centerLat, centerLon, lonSpan float64, b rl.Rectangle) {
 		Width:  float32(lonSpan / 360 * float64(tex.Width)),
 		Height: float32((top - bottom) / 180 * float64(tex.Height)),
 	}
+	src = clampTextureSrc(src, tex)
+	if src.Width < 1 || src.Height < 1 {
+		return
+	}
 	rl.DrawTexturePro(tex, src, b, rl.Vector2{}, 0, rl.White)
+}
+
+func clampTextureSrc(src rl.Rectangle, tex rl.Texture2D) rl.Rectangle {
+	if src.Width < 0 {
+		src.X += src.Width
+		src.Width = -src.Width
+	}
+	if src.Height < 0 {
+		src.Y += src.Height
+		src.Height = -src.Height
+	}
+	if src.X < 0 {
+		src.Width += src.X
+		src.X = 0
+	}
+	if src.Y < 0 {
+		src.Height += src.Y
+		src.Y = 0
+	}
+	if src.X+src.Width > float32(tex.Width) {
+		src.Width = float32(tex.Width) - src.X
+	}
+	if src.Y+src.Height > float32(tex.Height) {
+		src.Height = float32(tex.Height) - src.Y
+	}
+	if src.Width < 1 || src.Height < 1 {
+		return rl.Rectangle{}
+	}
+	return src
 }
 
 func drawMapGrid(centerLat, centerLon, lonSpan float64, b rl.Rectangle) {

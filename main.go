@@ -134,26 +134,33 @@ func main() {
 	startupStep("Creating controls")
 	mainScreen.CreateControls()
 	startupStep("Controls created")
-	// Open the window before USB/Soapy probing. A HackRF Pro (or missing
-	// SDRplay API) can block in libusb for a long time; users otherwise see
-	// a silent process with no interface.
-	go func() {
-		startupStep("Opening SDR device")
-		if err := receiver.Start(); err != nil {
-			startupStep("Receiver could not start; the interface will remain available: %v", err)
-			return
-		}
-		startupStep("SDR device started successfully")
-	}()
+	// Open the window and finish the first GPU frame before touching USB.
+	// Loading SoapySDR/libusb during InitWindow can abort the process on some
+	// Windows GPU + RTL-SDR combinations with no Go panic.
 	var firstFrame sync.Once
 	simpleui.Run(func() {
 		firstFrame.Do(func() {
 			startupStep("First interface frame started; startup completed")
 			stopWatchdog()
+			go startReceiver(receiver)
 		})
 		mainScreen.Draw()
 	})
 	startupStep("Normal shutdown")
+}
+
+func startReceiver(receiver *sdr.Receiver) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			startupStep("SDR start aborted: %v\n%s", recovered, debug.Stack())
+		}
+	}()
+	startupStep("Opening SDR device")
+	if err := receiver.Start(); err != nil {
+		startupStep("Receiver could not start; the interface will remain available: %v", err)
+		return
+	}
+	startupStep("SDR device started successfully")
 }
 
 func configureStartupLog() (*os.File, error) {

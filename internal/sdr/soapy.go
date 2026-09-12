@@ -260,6 +260,7 @@ func openSoapyCandidate(api *soapyAPI, config Config) (result *soapyDevice, err 
 	if err = api.check(api.activateStream(device, result.stream, 0, 0, 0), "activate stream"); err != nil {
 		return nil, err
 	}
+	config.trace("SoapySDR/%s: stream activate returned", config.Driver)
 	result.refreshAntennas()
 	if wanted := strings.TrimSpace(config.requestedAntenna()); wanted != "" {
 		if setErr := result.setAntenna(wanted); setErr != nil {
