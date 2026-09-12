@@ -95,16 +95,16 @@ func (p *UtilitiesSidebar) moveMemory(delta int) {
 
 func (p *UtilitiesSidebar) Draw() {
 	drawPanel(8, 215, utilitiesRight-8, 685)
-	p.drawSection(225, 158, "SCANNER", colors.cyan)
-	p.drawSection(393, 385, "MEMORIES", colors.blue)
-	p.drawSection(788, 102, "RECORDER", colors.red)
+	p.drawSection(225, 158, T("SCANNER"), colors.cyan)
+	p.drawSection(393, 385, T("MEMORIES"), colors.blue)
+	p.drawSection(788, 102, T("RECORDER"), colors.red)
 
 	scan := p.screen.scanPanel
 	if scan.running {
-		p.scan.SetLabel("STOP")
+		p.scan.SetLabel(T("STOP"))
 		p.scan.SetColors(actionStopFill, colors.red, colors.text)
 	} else {
-		p.scan.SetLabel("START")
+		p.scan.SetLabel(T("START"))
 		p.scan.SetColors(actionStartFill, colors.green, colors.text)
 	}
 	simpleui.DrawTextStyled(scan.displayStatus(), 24, 258, 12, simpleui.FontSemiBold, func() rl.Color {
@@ -114,11 +114,11 @@ func (p *UtilitiesSidebar) Draw() {
 		return colors.muted
 	}())
 	simpleui.DrawText(fmt.Sprintf("%.3f–%.3f MHz · SQL %d", float64(scan.minimumHz)/1e6, float64(scan.maximumHz)/1e6, p.screen.squelchThreshold), 24, 278, 11, colors.muted)
-	p.scanMode.SetLabel("RESUME " + scan.resume)
+	p.scanMode.SetLabel(T("RESUME") + " " + T(scan.resume))
 	if scan.centerToMemory {
-		p.scanMem.SetLabel("MEM ON")
+		p.scanMem.SetLabel(T("MEM ON"))
 	} else {
-		p.scanMem.SetLabel("MEM OFF")
+		p.scanMem.SetLabel(T("MEM OFF"))
 	}
 
 	memory := p.screen.memoryPanel
@@ -135,26 +135,26 @@ func (p *UtilitiesSidebar) Draw() {
 	p.drawMemoryTable(memory)
 
 	state := p.screen.recorder.State()
-	status, statusColor := "READY", colors.muted
+	status, statusColor := T("READY"), colors.muted
 	if state.Recording {
-		status, statusColor = "RECORDING", colors.red
+		status, statusColor = T("RECORDING"), colors.red
 		if state.Paused {
-			status, statusColor = "PAUSED", colors.orange
+			status, statusColor = T("PAUSED"), colors.orange
 		}
-		p.record.SetLabel("STOP")
+		p.record.SetLabel(T("STOP"))
 	} else {
-		p.record.SetLabel("RECORD")
+		p.record.SetLabel(T("RECORD"))
 	}
 	p.pause.SetEnabled(state.Recording)
 	if state.Paused {
-		p.pause.SetLabel("RESUME")
+		p.pause.SetLabel(T("RESUME"))
 	} else {
-		p.pause.SetLabel("PAUSE")
+		p.pause.SetLabel(T("PAUSE"))
 	}
 	if state.SkipSquelchSilence {
-		p.skip.SetLabel("SQL ON")
+		p.skip.SetLabel(T("SQL ON"))
 	} else {
-		p.skip.SetLabel("SQL OFF")
+		p.skip.SetLabel(T("SQL OFF"))
 	}
 	rl.DrawCircle(28, 817, 5, statusColor)
 	simpleui.DrawTextStyled(status+"  "+formatRecordingDuration(state.DurationSeconds), 40, 809, 12, simpleui.FontMono, colors.text)
@@ -166,8 +166,8 @@ func (p *UtilitiesSidebar) Draw() {
 func (p *UtilitiesSidebar) drawMemoryTable(memory *MemoryPanel) {
 	x, y, w, rowH := float32(24), float32(481), float32(310), float32(29)
 	rl.DrawRectangleLinesEx(rl.Rectangle{X: x, Y: y, Width: w, Height: 213}, 1, colors.border)
-	simpleui.DrawTextStyled("GROUP", x+7, y+8, 13, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawTextStyled("NAME", x+92, y+8, 13, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(T("GROUP"), x+7, y+8, 13, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(T("NAME"), x+92, y+8, 13, simpleui.FontSemiBold, colors.cyan)
 	simpleui.DrawTextStyled("MHz", x+215, y+8, 13, simpleui.FontSemiBold, colors.cyan)
 	indices := memory.filteredIndices()
 	memory.scrollOffset = min(max(memory.scrollOffset, 0), max(len(indices)-6, 0))
@@ -217,4 +217,24 @@ func (p *UtilitiesSidebar) UpdateInput() {
 func (p *UtilitiesSidebar) drawSection(y, height float32, title string, accent rl.Color) {
 	rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: 15, Y: y, Width: utilitiesRight - 22, Height: height}, .05, 6, 1, colors.border)
 	simpleui.DrawTextStyled(title, 24, y+8, 12, simpleui.FontSemiBold, accent)
+}
+
+func (p *UtilitiesSidebar) refreshLocale() {
+	p.scanLayer.SetLabel(T("SHOW ON FFT"))
+	p.scanRange.SetLabel(T("FFT RANGE"))
+	p.add.SetLabel(T("+ MEMORY"))
+	p.groupEdit.SetLabel(T("EDIT"))
+	p.recall.SetLabel(T("TUNE"))
+	p.edit.SetLabel(T("EDIT"))
+	p.remove.SetLabel(T("DELETE"))
+	p.folder.SetLabel(T("DIR"))
+	for _, control := range p.controls {
+		button, ok := control.(*simpleui.Button)
+		if !ok {
+			continue
+		}
+		if button.ID() == "utilityMemoryAddGroup" {
+			button.SetLabel(T("+ GROUP"))
+		}
+	}
 }

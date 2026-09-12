@@ -16,48 +16,7 @@ type BandDefinition struct {
 	SpanHz      int64
 }
 
-var bandsByCategory = map[string][]BandDefinition{
-	"HAM": {
-		{Category: "HAM", Name: "160 m", FrequencyHz: 1_900_000, SpanHz: 25_000},
-		{Category: "HAM", Name: "80 m", FrequencyHz: 3_650_000, SpanHz: 50_000},
-		{Category: "HAM", Name: "60 m", FrequencyHz: 5_354_000, SpanHz: 25_000},
-		{Category: "HAM", Name: "40 m", FrequencyHz: 7_100_000, SpanHz: 50_000},
-		{Category: "HAM", Name: "30 m", FrequencyHz: 10_125_000, SpanHz: 25_000},
-		{Category: "HAM", Name: "20 m", FrequencyHz: 14_200_000, SpanHz: 100_000},
-		{Category: "HAM", Name: "17 m", FrequencyHz: 18_100_000, SpanHz: 50_000},
-		{Category: "HAM", Name: "15 m", FrequencyHz: 21_200_000, SpanHz: 100_000},
-		{Category: "HAM", Name: "12 m", FrequencyHz: 24_950_000, SpanHz: 50_000},
-		{Category: "HAM", Name: "10 m", FrequencyHz: 28_500_000, SpanHz: 200_000},
-		{Category: "HAM", Name: "6 m", FrequencyHz: 50_150_000, SpanHz: 200_000},
-		{Category: "HAM", Name: "4 m", FrequencyHz: 70_200_000, SpanHz: 200_000},
-		{Category: "HAM", Name: "2 m", FrequencyHz: 145_000_000, SpanHz: 500_000},
-		{Category: "HAM", Name: "70 cm", FrequencyHz: 433_500_000, SpanHz: 500_000},
-		{Category: "HAM", Name: "23 cm", FrequencyHz: 1_296_000_000, SpanHz: 1_000_000},
-	},
-	"COMMERCIAL": {
-		{Category: "COMMERCIAL", Name: "LW", FrequencyHz: 198_000, SpanHz: 100_000},
-		{Category: "COMMERCIAL", Name: "MW / AM", FrequencyHz: 1_000_000, SpanHz: 500_000},
-		{Category: "COMMERCIAL", Name: "SW 49 m", FrequencyHz: 6_100_000, SpanHz: 200_000},
-		{Category: "COMMERCIAL", Name: "SW 41 m", FrequencyHz: 7_300_000, SpanHz: 200_000},
-		{Category: "COMMERCIAL", Name: "SW 31 m", FrequencyHz: 9_600_000, SpanHz: 200_000},
-		{Category: "COMMERCIAL", Name: "FM", FrequencyHz: 100_000_000, SpanHz: 2_000_000},
-		{Category: "COMMERCIAL", Name: "AIR", FrequencyHz: 125_000_000, SpanHz: 1_000_000},
-		{Category: "COMMERCIAL", Name: "MARINE", FrequencyHz: 156_800_000, SpanHz: 1_000_000},
-		{Category: "COMMERCIAL", Name: "MARINE AIS", FrequencyHz: 162_000_000, SpanHz: 250_000},
-		{Category: "COMMERCIAL", Name: "DAB", FrequencyHz: 220_352_000, SpanHz: 2_000_000},
-		{Category: "COMMERCIAL", Name: "RADIOSONDES", FrequencyHz: 403_000_000, SpanHz: 250_000},
-		{Category: "COMMERCIAL", Name: "UAT 978", FrequencyHz: 978_000_000, SpanHz: 2_000_000},
-		{Category: "COMMERCIAL", Name: "ADS-B 1090", FrequencyHz: 1_090_000_000, SpanHz: 2_000_000},
-	},
-	"ISM": {
-		{Category: "ISM", Name: "CB 27", FrequencyHz: 27_205_000, SpanHz: 500_000},
-		{Category: "ISM", Name: "PMR446", FrequencyHz: 446_006_250, SpanHz: 500_000},
-		{Category: "ISM", Name: "433 MHz", FrequencyHz: 433_920_000, SpanHz: 1_000_000},
-		{Category: "ISM", Name: "868 MHz", FrequencyHz: 868_300_000, SpanHz: 2_000_000},
-		{Category: "ISM", Name: "915 MHz", FrequencyHz: 915_000_000, SpanHz: 2_000_000},
-		{Category: "ISM", Name: "2.4 GHz", FrequencyHz: 2_440_000_000, SpanHz: 2_000_000},
-	},
-}
+var bandsByCategory = map[string][]BandDefinition{}
 
 type BandSelector struct {
 	simpleui.BaseElement
@@ -142,9 +101,9 @@ func (selector *BandSelector) DrawOverlay() {
 	rl.DrawRectangleRounded(modal, .022, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(modal, .022, 8, 2, colors.border)
 	rl.DrawRectangleRounded(rl.Rectangle{X: 130, Y: 70, Width: 10, Height: 530}, .5, 8, accent)
-	simpleui.DrawTextStyled("BAND SELECTION", 170, 91, 27, simpleui.FontRegular, colors.text)
+	simpleui.DrawTextStyled(T("BAND SELECTION"), 170, 91, 27, simpleui.FontRegular, colors.text)
 
-	labels := []string{"AMATEUR / HAM", "COMMERCIAL", "ISM / UNLICENSED"}
+	labels := []string{T("AMATEUR / HAM"), T("COMMERCIAL"), T("ISM / UNLICENSED")}
 	for index, label := range labels {
 		bounds := selector.categoryBounds(index)
 		active := []string{"HAM", "COMMERCIAL", "ISM"}[index] == selector.category
@@ -173,12 +132,12 @@ func (selector *BandSelector) DrawOverlay() {
 		drawCentered(formatBandFrequency(band.FrequencyHz), rl.Rectangle{X: bounds.X, Y: bounds.Y + 28, Width: bounds.Width, Height: 20}, 14, labelColor)
 	}
 
-	simpleui.DrawText("Select a band to change frequency and span.", 170, 540, 15, colors.text)
+	simpleui.DrawText(T("Select a band to change frequency and span."), 170, 540, 15, colors.text)
 	cancel := selector.cancelBounds()
 	cancelFill := colors.panelAlt
 	rl.DrawRectangleRounded(cancel, .16, 8, cancelFill)
 	rl.DrawRectangleRoundedLinesEx(cancel, .16, 8, 2, rl.Color{R: 135, G: 140, B: 145, A: 255})
-	drawCentered("CANCEL", cancel, 16, simpleui.EnsureTextContrast(colors.text, cancelFill))
+	drawCentered(T("CANCEL"), cancel, 16, simpleui.EnsureTextContrast(colors.text, cancelFill))
 }
 
 func (selector *BandSelector) categoryAt(point rl.Vector2) int {

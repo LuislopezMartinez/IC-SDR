@@ -19,6 +19,9 @@ type persistedAppSettings struct {
 	RadiosondeFrequencyHz int64                 `json:"radiosondeFrequencyHz,omitempty"`
 	Version               int                   `json:"version"`
 	Theme                 string                `json:"theme,omitempty"`
+	Language              string                `json:"language,omitempty"`
+	ITURegion             string                `json:"ituRegion,omitempty"`
+	Country               string                `json:"country,omitempty"`
 	BandCategory          string                `json:"bandCategory"`
 	BandName              string                `json:"bandName"`
 	Mode                  string                `json:"mode"`
@@ -86,6 +89,15 @@ func loadAppSettings(path string, screen *MainScreen) {
 	settings.APRSView = englishAPRSView(settings.APRSView)
 	if validTheme(settings.Theme) {
 		screen.themeName = strings.ToUpper(settings.Theme)
+	}
+	if settings.Language != "" {
+		screen.language = settings.Language
+	}
+	if settings.ITURegion != "" {
+		screen.ituRegion = settings.ITURegion
+	}
+	if settings.Country != "" {
+		screen.country = settings.Country
 	}
 	if validBand(settings.BandCategory, settings.BandName) {
 		screen.bandCategory = settings.BandCategory
@@ -250,6 +262,7 @@ func (screen *MainScreen) flushSettings(force bool) {
 	settings := persistedAppSettings{
 		Version:      appSettingsVersion,
 		Theme:        screen.themeName,
+		Language:     screen.language, ITURegion: screen.ituRegion, Country: screen.country,
 		BandCategory: screen.bandCategory, BandName: screen.bandName,
 		Mode: mode, FrequencyHz: screen.frequencyHz, CenterFrequencyHz: screen.centerFrequencyHz,
 		SpanHz: screen.spanHz, TuningStepHz: screen.tuningStepHz, CenterMode: screen.centerMode,

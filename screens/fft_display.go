@@ -218,15 +218,16 @@ func (panel *FFTDisplay) resetWaterfall() {
 }
 
 func (panel *FFTDisplay) refreshLabels() {
-	panel.averageLabel.SetText(fmt.Sprintf("AVERAGING  %d ms", panel.averagingMs))
-	panel.refreshLabel.SetText(fmt.Sprintf("REFRESH  %d FPS", panel.refreshFPS))
-	panel.decayLabel.SetText(fmt.Sprintf("PEAK DECAY  %.0f dB/s", panel.peakDecay))
-	panel.speedLabel.SetText(fmt.Sprintf("SPEED  %d lines/s", panel.screen.waterfallSettings.LinesPerSecond))
-	panel.contrastLabel.SetText(fmt.Sprintf("CONTRAST  %d %%", panel.screen.waterfallSettings.Contrast))
-	panel.windowButton.SetLabel("WINDOW  " + panel.window)
-	panel.paletteButton.SetLabel("PALETTE " + panel.screen.waterfallSettings.Palette)
-	panel.fftRangeLabel.SetText(fmt.Sprintf("FFT RANGE  %.0f / %.0f dB", panel.screen.spectrumMinimumDB, panel.screen.spectrumMaximumDB))
-	panel.waterfallRangeLabel.SetText(fmt.Sprintf("LEVEL  %.0f / %.0f dB", panel.screen.waterfallSettings.MinimumDBm, panel.screen.waterfallSettings.MaximumDBm))
+	panel.averageLabel.SetText(fmt.Sprintf("%s  %d ms", T("AVERAGING"), panel.averagingMs))
+	panel.refreshLabel.SetText(fmt.Sprintf("%s  %d FPS", T("REFRESH"), panel.refreshFPS))
+	panel.decayLabel.SetText(fmt.Sprintf("%s  %.0f dB/s", T("PEAK DECAY"), panel.peakDecay))
+	panel.speedLabel.SetText(fmt.Sprintf("%s  %d %s", T("SPEED"), panel.screen.waterfallSettings.LinesPerSecond, T("lines/s")))
+	panel.contrastLabel.SetText(fmt.Sprintf("%s  %d %%", T("CONTRAST"), panel.screen.waterfallSettings.Contrast))
+	panel.windowButton.SetLabel(T("WINDOW") + "  " + panel.window)
+	panel.paletteButton.SetLabel(T("PALETTE") + " " + T(panel.screen.waterfallSettings.Palette))
+	panel.fftRangeLabel.SetText(fmt.Sprintf("%s  %.0f / %.0f dB", T("FFT RANGE"), panel.screen.spectrumMinimumDB, panel.screen.spectrumMaximumDB))
+	panel.waterfallRangeLabel.SetText(fmt.Sprintf("%s  %.0f / %.0f dB", T("LEVEL"), panel.screen.waterfallSettings.MinimumDBm, panel.screen.waterfallSettings.MaximumDBm))
+	panel.peak.SetLabel(T("PEAK HOLD"))
 }
 
 func indexOf(values []string, wanted string) int {

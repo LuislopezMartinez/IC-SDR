@@ -3,6 +3,7 @@ package screens
 import "testing"
 
 func TestSquelchAndHeaderSwitchLayout(t *testing.T) {
+	restoreDefaultLocaleForTests()
 	screen := NewMainScreen(nil)
 	screen.CreateControls()
 	if got := screen.squelchSwitch.Bounds(); got.Y != 24 || got.Height < 28 {

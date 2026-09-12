@@ -137,17 +137,18 @@ func (modal *SDRSettings) DrawOverlay() {
 	rl.DrawRectangleRounded(panel, .025, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(panel, .025, 8, 2, colors.border)
 	rl.DrawRectangleRounded(rl.Rectangle{X: 420, Y: 100, Width: 10, Height: 550}, .5, 8, colors.blue)
-	drawCentered("SDR SETTINGS", rl.Rectangle{X: 460, Y: 116, Width: 680, Height: 38}, 25, colors.text)
+	drawCentered(T("SDR SETTINGS"), rl.Rectangle{X: 460, Y: 116, Width: 680, Height: 38}, 25, colors.text)
 	rl.DrawLineEx(rl.Vector2{X: 465, Y: 195}, rl.Vector2{X: 1135, Y: 195}, 2, colors.border)
 	if !modal.current.Available {
-		drawCentered("No physical receiver is active.", rl.Rectangle{X: 500, Y: 300, Width: 600, Height: 40}, 18, colors.orange)
+		drawCentered(T("No physical receiver is active."), rl.Rectangle{X: 500, Y: 300, Width: 600, Height: 40}, 18, colors.orange)
+		modal.cancel.SetLabel(T("CANCEL"))
 		modal.cancel.Draw()
 		return
 	}
 	for _, control := range modal.controls {
 		control.Draw()
 	}
-	drawCentered("BIAS-T SUPPLIES VOLTAGE ON THE ANTENNA CONNECTOR", rl.Rectangle{X: 880, Y: 525, Width: 300, Height: 24}, 10, colors.orange)
+	drawCentered(T("BIAS-T SUPPLIES VOLTAGE ON THE ANTENNA CONNECTOR"), rl.Rectangle{X: 880, Y: 525, Width: 300, Height: 24}, 10, colors.orange)
 }
 
 func (modal *SDRSettings) set(settings sdr.HardwareSettings) {
@@ -183,12 +184,23 @@ func (modal *SDRSettings) refresh() {
 }
 
 func (modal *SDRSettings) refreshLabels() {
-	modal.rfLabel.SetText(fmt.Sprintf("LNA / RFGR   STATUS %.0f", modal.current.RFGain))
-	ifText := fmt.Sprintf("IFGR   %.0f dB", modal.current.IFGain)
+	modal.rfLabel.SetText(fmt.Sprintf("%s   STATUS %.0f", T("LNA / RFGR"), modal.current.RFGain))
+	ifText := fmt.Sprintf("%s   %.0f dB", T("IFGR"), modal.current.IFGain)
 	if modal.current.AGC {
-		ifText += "   (CONTROLADO POR AGC)"
+		ifText += "   (" + T("AGC CONTROLLED") + ")"
 	}
 	modal.ifLabel.SetText(ifText)
-	modal.ppmLabel.SetText(fmt.Sprintf("FREQUENCY CORRECTION   %.1f ppm", modal.current.PPM))
-	modal.setpointLabel.SetText(fmt.Sprintf("AGC SETPOINT   %d dB", modal.current.AGCSetpoint))
+	modal.ppmLabel.SetText(fmt.Sprintf("%s   %.1f ppm", T("FREQUENCY CORRECTION"), modal.current.PPM))
+	modal.setpointLabel.SetText(fmt.Sprintf("%s   %d dB", T("AGC SETPOINT"), modal.current.AGCSetpoint))
+}
+
+func (modal *SDRSettings) refreshLocale() {
+	modal.agc.SetLabel(T("AGC"))
+	modal.biasT.SetLabel(T("BIAS-T"))
+	modal.rfNotch.SetLabel(T("RF NOTCH"))
+	modal.dabNotch.SetLabel(T("DAB NOTCH"))
+	modal.iqCorrection.SetLabel(T("IQ CORRECTION"))
+	modal.cancel.SetLabel(T("CANCEL"))
+	modal.apply.SetLabel(T("APPLY"))
+	modal.refreshLabels()
 }

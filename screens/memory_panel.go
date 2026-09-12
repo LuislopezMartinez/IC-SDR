@@ -838,22 +838,22 @@ func (p *MemoryPanel) DrawOverlay() {
 	}
 	rl.DrawRectangleRounded(modal, .035, 8, colors.panel)
 	accent := colors.green
-	title := "SAVE MEMORY"
-	confirm := "SAVE"
+	title := T("SAVE MEMORY")
+	confirm := T("SAVE")
 	if p.modal == "create" && len(p.duplicateNames) > 0 {
-		confirm = "SAVE DUPLICATE"
+		confirm = T("SAVE DUPLICATE")
 	}
 	if p.modal == "delete" {
-		accent, title, confirm = colors.red, "DELETE MEMORY", "DELETE"
+		accent, title, confirm = colors.red, T("DELETE MEMORY"), T("DELETE")
 	} else if p.modal == "group" {
-		accent, title, confirm = memoryGroupPalette[p.pendingGroupColor], "EDIT GROUP", "SAVE CHANGES"
+		accent, title, confirm = memoryGroupPalette[p.pendingGroupColor], T("EDIT GROUP"), T("SAVE CHANGES")
 	} else if p.modal == "new-group" {
-		accent, title, confirm = memoryGroupPalette[p.pendingGroupColor], "NEW GROUP", "CREATE GROUP"
+		accent, title, confirm = memoryGroupPalette[p.pendingGroupColor], T("NEW GROUP"), T("CREATE GROUP")
 	}
 	if p.modal == "edit" {
-		accent, title, confirm = colors.cyan, "EDIT MEMORY", "SAVE CHANGES"
+		accent, title, confirm = colors.cyan, T("EDIT MEMORY"), T("SAVE CHANGES")
 	} else if p.modal == "create" {
-		accent, title, confirm = colors.green, "NEW MEMORY", "SAVE MEMORY"
+		accent, title, confirm = colors.green, T("NEW MEMORY"), T("SAVE MEMORY")
 	}
 	rl.DrawRectangleRoundedLinesEx(modal, .035, 8, 2, accent)
 	titleBounds := rl.Rectangle{X: 470, Y: 286, Width: 660, Height: 34}
@@ -872,7 +872,7 @@ func (p *MemoryPanel) DrawOverlay() {
 	} else {
 		p.drawDeleteModalContent()
 	}
-	drawModalAction(p.modalCancelBounds(), "CANCEL", colors.border, p.modalPressed == 1)
+	drawModalAction(p.modalCancelBounds(), T("CANCEL"), colors.border, p.modalPressed == 1)
 	drawModalAction(p.modalConfirmBounds(), confirm, accent, p.modalPressed == 2)
 }
 
@@ -951,7 +951,7 @@ func (p *MemoryPanel) drawEditModalContent() {
 	if p.editError != "" {
 		drawCentered(p.editError, rl.Rectangle{X: 490, Y: 675, Width: 620, Height: 22}, 13, colors.red)
 	} else if p.modal == "create" && len(p.memoriesAtFrequency(p.pendingMemory.FrequencyHz)) > 0 {
-		drawCentered("Note: another memory already exists on this frequency.", rl.Rectangle{X: 490, Y: 675, Width: 620, Height: 22}, 13, colors.orange)
+		drawCentered(T("Note: another memory already exists on this frequency."), rl.Rectangle{X: 490, Y: 675, Width: 620, Height: 22}, 13, colors.orange)
 	}
 }
 
@@ -970,12 +970,12 @@ func (p *MemoryPanel) groupColorBounds() []rl.Rectangle {
 	return bounds
 }
 func (p *MemoryPanel) drawGroupModalContent() {
-	simpleui.DrawText("GROUP NAME", 500, 252, 14, colors.muted)
+	simpleui.DrawText(T("GROUP NAME"), 500, 252, 14, colors.muted)
 	field := rl.Rectangle{X: 500, Y: 278, Width: 600, Height: 48}
 	rl.DrawRectangleRounded(field, .1, 6, simpleui.CurrentTheme().InputBackground)
 	rl.DrawRectangleRoundedLinesEx(field, .1, 6, 2, colors.cyan)
 	simpleui.DrawText(p.pendingGroup+"|", 514, 293, 17, colors.text)
-	simpleui.DrawText("COLOR", 500, 362, 14, colors.muted)
+	simpleui.DrawText(T("COLOR"), 500, 362, 14, colors.muted)
 	for i, bounds := range p.groupColorBounds() {
 		c := memoryGroupPalette[i]
 		rl.DrawCircle(int32(bounds.X+bounds.Width/2), int32(bounds.Y+bounds.Height/2), 14, c)
@@ -993,7 +993,7 @@ func (p *MemoryPanel) drawGroupModalContent() {
 			count++
 		}
 	}
-	simpleui.DrawTextStyled(fmt.Sprintf("%d MEMORIES", count), 500, 412, 15, simpleui.FontSemiBold, colors.text)
+	simpleui.DrawTextStyled(fmt.Sprintf("%d %s", count, T("MEMORIES")), 500, 412, 15, simpleui.FontSemiBold, colors.text)
 	drawGroupToggle := func(bounds rl.Rectangle, label string, active bool) {
 		accent, state := colors.border, "OFF"
 		if active {
@@ -1048,9 +1048,9 @@ func (p *MemoryPanel) drawSaveModalContent() {
 	detail := fmt.Sprintf("%.6f MHz  ·  %s  ·  %s", float64(p.pendingMemory.FrequencyHz)/1e6, p.pendingMemory.Mode, formatFilterBandwidth(p.pendingMemory.FilterBandwidthHz))
 	drawCentered(detail, rl.Rectangle{X: 490, Y: 374, Width: 620, Height: 28}, 16, colors.cyan)
 	if len(p.duplicateNames) > 0 {
-		drawCentered("THIS FREQUENCY IS ALREADY STORED", rl.Rectangle{X: 490, Y: 420, Width: 620, Height: 28}, 16, colors.orange)
+		drawCentered(T("THIS FREQUENCY IS ALREADY STORED"), rl.Rectangle{X: 490, Y: 420, Width: 620, Height: 28}, 16, colors.orange)
 		drawCentered("Existing: "+strings.Join(p.duplicateNames, ", "), rl.Rectangle{X: 490, Y: 452, Width: 620, Height: 24}, 13, colors.text)
-		drawCentered("A second memory will be saved on the same frequency.", rl.Rectangle{X: 490, Y: 478, Width: 620, Height: 22}, 12, colors.muted)
+		drawCentered(T("A second memory will be saved on the same frequency."), rl.Rectangle{X: 490, Y: 478, Width: 620, Height: 22}, 12, colors.muted)
 	}
 }
 
@@ -1061,7 +1061,7 @@ func (p *MemoryPanel) drawDeleteModalContent() {
 	memory := p.memories[p.pendingDeleteIndex]
 	drawCentered(memory.Name, rl.Rectangle{X: 490, Y: 352, Width: 620, Height: 32}, 20, colors.text)
 	drawCentered(fmt.Sprintf("%.6f MHz  ·  %s", float64(memory.FrequencyHz)/1e6, memory.Mode), rl.Rectangle{X: 490, Y: 394, Width: 620, Height: 28}, 16, colors.cyan)
-	drawCentered("This action cannot be undone.", rl.Rectangle{X: 490, Y: 448, Width: 620, Height: 24}, 14, colors.muted)
+	drawCentered(T("This action cannot be undone."), rl.Rectangle{X: 490, Y: 448, Width: 620, Height: 24}, 14, colors.muted)
 }
 
 func drawModalAction(bounds rl.Rectangle, label string, accent rl.Color, pressed bool) {

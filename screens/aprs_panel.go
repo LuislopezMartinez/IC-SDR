@@ -23,6 +23,7 @@ type APRSPanel struct {
 	controls         []simpleui.Element
 	view             string
 	buttons          map[string]*simpleui.Button
+	tuneButton       *simpleui.Button
 	scroll, selected int
 	feedback         string
 	feedbackUntil    time.Time
@@ -41,7 +42,7 @@ func NewAPRSPanel(screen *MainScreen) *APRSPanel {
 	}{{"PACKETS", "PACKETS", 120, colors.blue}, {"STATIONS", "STATIONS", 130, colors.panelAlt}, {"MESSAGES", "MESSAGES", 120, colors.panelAlt}, {"RADAR", "RADAR", 100, colors.panelAlt}, {"RAW", "RAW", 85, colors.panelAlt}}
 	x := float32(40)
 	for _, item := range items {
-		b := simpleui.NewButton("aprs"+item.id, x, 660, item.w, 40, item.label, uiControlFontSize)
+		b := simpleui.NewButton("aprs"+item.id, x, 660, item.w, 40, T(item.label), uiControlFontSize)
 		b.SetColors(item.color, colors.border, colors.text)
 		view := item.id
 		b.OnClick(func() {
@@ -56,25 +57,26 @@ func NewAPRSPanel(screen *MainScreen) *APRSPanel {
 		p.controls = append(p.controls, b)
 		x += item.w + 10
 	}
-	europe := simpleui.NewButton("aprsEurope", 650, 660, 185, 40, "APRS EU 144.800", uiControlFontSize)
+	europe := simpleui.NewButton("aprsEurope", 650, 660, 185, 40, aprsTuneLabel(), uiControlFontSize)
 	europe.SetColors(rl.Color{R: 68, G: 49, B: 92, A: 255}, rl.Color{R: 175, G: 145, B: 245, A: 255}, colors.text)
-	europe.OnClick(func() { p.tune(144_800_000) })
-	popout := simpleui.NewButton("aprsPopout", 845, 660, 170, 40, "OPEN TABLE", uiControlFontSize)
+	europe.OnClick(func() { p.tune(activeBandPlan.APRSHz) })
+	popout := simpleui.NewButton("aprsPopout", 845, 660, 170, 40, T("OPEN TABLE"), uiControlFontSize)
 	popout.SetColors(colors.blue, colors.border, colors.text)
 	popout.OnClick(p.openViewer)
-	export := simpleui.NewButton("aprsExport", 1025, 660, 180, 40, "EXPORT CSV", uiControlFontSize)
+	export := simpleui.NewButton("aprsExport", 1025, 660, 180, 40, T("EXPORT CSV"), uiControlFontSize)
 	export.SetColors(colors.green, colors.border, colors.background)
 	export.OnClick(p.export)
-	clearButton := simpleui.NewButton("aprsClear", 1215, 660, 125, 40, "CLEAR", uiControlFontSize)
+	clearButton := simpleui.NewButton("aprsClear", 1215, 660, 125, 40, T("CLEAR"), uiControlFontSize)
 	clearButton.SetColors(actionClearFill, colors.red, colors.text)
 	clearButton.OnClick(func() {
 		if screen.receiver != nil {
 			screen.receiver.ClearAPRSPackets()
 		}
 		p.scroll, p.selected = 0, -1
-		p.say("HISTORY CLEARED")
+		p.say(T("HISTORY CLEARED"))
 	})
 	p.controls = append(p.controls, europe, popout, export, clearButton)
+	p.tuneButton = europe
 	p.SetVisible(false)
 	return p
 }
@@ -82,7 +84,7 @@ func (p *APRSPanel) tune(hz int64) {
 	p.screen.frequencyHz, p.screen.centerFrequencyHz, p.screen.centerMode = hz, hz, true
 	p.screen.bandCategory, p.screen.bandName = "HAM", "2 m"
 	if p.screen.band != nil {
-		p.screen.band.SetLabel("BAND  2 m")
+		p.screen.band.SetLabel(T("BAND") + "  2 m")
 	}
 	if p.screen.vfoModeSwitch != nil {
 		p.screen.vfoModeSwitch.SetActive(false)
@@ -94,8 +96,32 @@ func (p *APRSPanel) tune(hz int64) {
 	}
 	p.screen.waterfall.Reset()
 	p.screen.markSettingsDirty()
-	p.say("TUNED TO APRS EUROPE")
+	p.say(T("TUNED TO APRS"))
 }
+func (p *APRSPanel) refreshLocale() {
+	for id, button := range p.buttons {
+		button.SetLabel(T(id))
+	}
+	if p.tuneButton != nil {
+		p.tuneButton.SetLabel(aprsTuneLabel())
+		p.tuneButton.OnClick(func() { p.tune(activeBandPlan.APRSHz) })
+	}
+	for _, control := range p.controls {
+		button, ok := control.(*simpleui.Button)
+		if !ok {
+			continue
+		}
+		switch button.ID() {
+		case "aprsPopout":
+			button.SetLabel(T("OPEN TABLE"))
+		case "aprsExport":
+			button.SetLabel(T("EXPORT CSV"))
+		case "aprsClear":
+			button.SetLabel(T("CLEAR"))
+		}
+	}
+}
+
 func (p *APRSPanel) style() {
 	for id, b := range p.buttons {
 		fill := colors.panelAlt
@@ -214,7 +240,7 @@ func (p *APRSPanel) openViewer() {
 	p.viewerDone = make(chan struct{})
 	done := p.viewerDone
 	go func() { _ = cmd.Wait(); close(done) }()
-	p.say("TABLE OPENED")
+	p.say(T("TABLE OPENED"))
 }
 func (p *APRSPanel) filtered() []aprs.Packet {
 	packets := p.packets()
@@ -255,8 +281,8 @@ func (p *APRSPanel) DrawPanel() {
 	rl.DrawCircle(720, 646, 6, stateColor)
 	simpleui.DrawTextStyled(fmt.Sprintf("%s · %.3f MHz · LEVEL %s · RX %d · ERR %+.0f Hz", status.State, float64(p.screen.frequencyHz)/1e6, levelText(status.AudioLevel), status.PacketCount, status.FrequencyErrorHz), 735, 638, 12, simpleui.FontSemiBold, colors.muted)
 	drawPanel(40, 712, 220, 94)
-	simpleui.DrawTextStyled("RECEIVER", 52, 721, 12, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawText(fmt.Sprintf("KISS  %s", map[bool]string{true: "CONNECTED", false: "WAITING"}[status.KISS]), 52, 745, 13, colors.text)
+	simpleui.DrawTextStyled(T("RECEIVER"), 52, 721, 12, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf("KISS  %s", map[bool]string{true: T("CONNECTED"), false: T("WAITING")}[status.KISS]), 52, 745, 13, colors.text)
 	simpleui.DrawText(fmt.Sprintf("QUEUE %d/16 · DROP %d", status.Queued, status.Dropped), 52, 766, 12, colors.text)
 	simpleui.DrawText(short(status.Detail, 28), 52, 787, 12, colors.muted)
 	if p.view == "RADAR" {
@@ -279,12 +305,12 @@ func (p *APRSPanel) drawTable(packets []aprs.Packet) {
 	headers := []struct {
 		x float32
 		s string
-	}{{288, "TIME"}, {365, "CALLSIGN"}, {485, "TYPE"}, {590, "DESTINATION"}, {700, "PATH"}, {900, "POSITION / MESSAGE"}, {1230, "LEVEL"}}
+	}{{288, T("TIME")}, {365, T("CALLSIGN")}, {485, T("TYPE")}, {590, T("DESTINATION")}, {700, T("PATH")}, {900, T("POSITION / MESSAGE")}, {1230, T("LEVEL")}}
 	for _, h := range headers {
 		simpleui.DrawTextStyled(h.s, h.x, 718, 12, simpleui.FontSemiBold, colors.cyan)
 	}
 	if len(packets) == 0 {
-		simpleui.DrawText("WAITING FOR APRS FRAMES", 730, 760, 14, colors.muted)
+		simpleui.DrawText(T("WAITING FOR APRS FRAMES"), 730, 760, 14, colors.muted)
 		return
 	}
 	p.scroll = min(p.scroll, max(0, len(packets)-5))
@@ -330,7 +356,7 @@ func (p *APRSPanel) drawRadar() {
 	drawPanel(275, 712, 1275, 94)
 	packets := p.filteredPositions()
 	if len(packets) == 0 {
-		simpleui.DrawText("RADAR OFFLINE · WAITING FOR POSITIONS", 680, 758, 14, colors.muted)
+		simpleui.DrawText(T("RADAR OFFLINE · WAITING FOR POSITIONS"), 680, 758, 14, colors.muted)
 		return
 	}
 	minLat, maxLat, minLon, maxLon := packets[0].Latitude, packets[0].Latitude, packets[0].Longitude, packets[0].Longitude

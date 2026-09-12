@@ -6,9 +6,11 @@ import (
 )
 
 func TestAppSettingsRoundTrip(t *testing.T) {
+	restoreDefaultLocaleForTests()
 	path := filepath.Join(t.TempDir(), "settings.json")
 	want := persistedAppSettings{
-		Version: appSettingsVersion, BandCategory: "ISM", BandName: "PMR446", Mode: "NFM",
+		Version: appSettingsVersion, Language: "en", ITURegion: "itu-r1", Country: "auto",
+		BandCategory: "ISM", BandName: "PMR446", Mode: "NFM",
 		FrequencyHz: 446_093_750, CenterFrequencyHz: 446_100_000,
 		SpanHz: 500_000, TuningStepHz: 6_250, CenterMode: false,
 		ScanCenterToMemory: boolSetting(true), ScanResume: "HOLD", ScanPolicy: "STRONGER",
@@ -30,6 +32,10 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 	}
 	screen := NewMainScreen(nil)
 	loadAppSettings(path, screen)
+	screen.applyLocaleAndRegion()
+	if screen.language != "en" || screen.ituRegion != "itu-r1" || screen.country != "auto" {
+		t.Fatalf("restored locale = %s/%s/%s", screen.language, screen.ituRegion, screen.country)
+	}
 	if screen.bandCategory != want.BandCategory || screen.bandName != want.BandName || screen.savedMode != want.Mode {
 		t.Fatalf("restored identity = %s/%s/%s", screen.bandCategory, screen.bandName, screen.savedMode)
 	}

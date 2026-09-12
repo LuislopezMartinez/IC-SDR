@@ -115,7 +115,7 @@ func (p *SDRHeaderPanel) submit() {
 func (p *SDRHeaderPanel) refresh() {
 	s := p.current
 	rtl := s.Driver == "rtlsdr"
-	status := "SDR · NO DEVICE"
+	status := T("SDR · NO DEVICE")
 	if s.Available {
 		status = fmt.Sprintf("SDR %s · %s", s.Device, s.Driver)
 	}
@@ -126,9 +126,9 @@ func (p *SDRHeaderPanel) refresh() {
 	p.rfNotch.SetActive(s.RFNotch)
 	p.dabNotch.SetActive(s.DABNotch)
 	if rtl {
-		p.iqCorrection.SetLabel("D-AGC")
-		p.rfNotch.SetLabel("OFFSET")
-		p.dabNotch.SetLabel("IQ SWAP")
+		p.iqCorrection.SetLabel(T("D-AGC"))
+		p.rfNotch.SetLabel(T("OFFSET"))
+		p.dabNotch.SetLabel(T("IQ SWAP"))
 		p.iqCorrection.SetActive(s.DigitalAGC)
 		p.rfNotch.SetActive(s.OffsetTuning)
 		p.dabNotch.SetActive(s.IQSwap)
@@ -137,9 +137,9 @@ func (p *SDRHeaderPanel) refresh() {
 		p.ifGain.SetRange(0, 2)
 		p.ifGain.SetStep(1)
 	} else {
-		p.iqCorrection.SetLabel("IQ")
-		p.rfNotch.SetLabel("RF NOTCH")
-		p.dabNotch.SetLabel("DAB NOTCH")
+		p.iqCorrection.SetLabel(T("IQ"))
+		p.rfNotch.SetLabel(T("RF NOTCH"))
+		p.dabNotch.SetLabel(T("DAB NOTCH"))
 		p.rfGain.SetRange(0, 9)
 		p.rfGain.SetStep(1)
 		p.ifGain.SetRange(20, 59)
@@ -167,20 +167,26 @@ func (p *SDRHeaderPanel) refresh() {
 	p.refreshLabels()
 }
 func (p *SDRHeaderPanel) refreshLabels() {
-	p.ppmLabel.SetText(fmt.Sprintf("PPM  %+.1f", p.current.PPM))
+	p.ppmLabel.SetText(fmt.Sprintf("%s  %+.1f", T("PPM"), p.current.PPM))
 	if p.current.Driver == "rtlsdr" {
-		p.rfLabel.SetText(fmt.Sprintf("TUNER  %.1f dB", p.current.RFGain))
-		direct := []string{"DIRECT · OFF", "DIRECT · I", "DIRECT · Q"}
+		p.rfLabel.SetText(fmt.Sprintf("%s  %.1f dB", T("TUNER"), p.current.RFGain))
+		direct := []string{T("DIRECT · OFF"), T("DIRECT · I"), T("DIRECT · Q")}
 		mode := min(max(p.current.DirectSampling, 0), 2)
 		p.ifLabel.SetText(direct[mode])
-		p.setpointLabel.SetText("SETPOINT · N/A")
+		p.setpointLabel.SetText(T("SETPOINT · N/A"))
 		return
 	}
-	p.rfLabel.SetText(fmt.Sprintf("RF / LNA  %.0f", p.current.RFGain))
+	p.rfLabel.SetText(fmt.Sprintf("%s  %.0f", T("RF / LNA"), p.current.RFGain))
 	if p.current.AGC {
-		p.ifLabel.SetText("IFGR · AGC")
+		p.ifLabel.SetText(T("IFGR · AGC"))
 	} else {
-		p.ifLabel.SetText(fmt.Sprintf("IFGR  %.0f dB", p.current.IFGain))
+		p.ifLabel.SetText(fmt.Sprintf("%s  %.0f dB", T("IFGR"), p.current.IFGain))
 	}
-	p.setpointLabel.SetText(fmt.Sprintf("SETPOINT  %d dB", p.current.AGCSetpoint))
+	p.setpointLabel.SetText(fmt.Sprintf("%s  %d dB", T("SETPOINT"), p.current.AGCSetpoint))
+}
+
+func (p *SDRHeaderPanel) refreshLocale() {
+	p.agc.SetLabel(T("AGC"))
+	p.biasT.SetLabel(T("BIAS-T"))
+	p.refresh()
 }

@@ -36,13 +36,13 @@ func NewAircraftPanel(screen *MainScreen) *AircraftPanel {
 	p.mode1090 = button("air1090", "1090 ADS-B", 40, 160, func() { p.selectMode(aircraft.Mode1090) })
 	p.mode978 = button("air978", "978 UAT", 215, 140, func() { p.selectMode(aircraft.Mode978) })
 	p.start = button("airStart", "START", 375, 140, func() { p.enabled = !p.enabled; p.apply() })
-	mapButton := button("airMap", "OPEN MAP", 535, 175, p.openMap)
+	mapButton := button("airMap", T("OPEN MAP"), 535, 175, p.openMap)
 	mapButton.SetColors(colors.blue, colors.border, colors.text)
-	clearButton := button("airClear", "CLEAR", 730, 130, func() {
+	clearButton := button("airClear", T("CLEAR"), 730, 130, func() {
 		if screen.receiver != nil {
 			screen.receiver.ClearAircraft()
 		}
-		p.feedback = "List cleared"
+		p.feedback = T("List cleared")
 	})
 	clearButton.SetColors(actionClearFill, colors.red, colors.text)
 	p.SetVisible(false)
@@ -130,10 +130,10 @@ func (p *AircraftPanel) style() {
 		p.mode978.SetColors(colors.blue, colors.border, colors.text)
 	}
 	if p.enabled {
-		p.start.SetLabel("STOP")
+		p.start.SetLabel(T("STOP"))
 		p.start.SetColors(actionStopFill, colors.red, colors.text)
 	} else {
-		p.start.SetLabel("START")
+		p.start.SetLabel(T("START"))
 		p.start.SetColors(actionStartFill, colors.green, colors.text)
 	}
 }
@@ -214,7 +214,7 @@ func (p *AircraftPanel) DrawPanel() {
 	} else if status.Detail != "" {
 		simpleui.DrawText(sondeClip(status.Detail, 72), 880, toolY+38, 12, colors.muted)
 	} else {
-		simpleui.DrawText("1090: ADS-B/Mode S worldwide · 978 UAT: mainly USA", 880, toolY+38, 12, colors.muted)
+		simpleui.DrawText(T("1090: ADS-B/Mode S worldwide · 978 UAT: mainly USA"), 880, toolY+38, 12, colors.muted)
 	}
 	cols := []struct {
 		x    float32
@@ -247,9 +247,9 @@ func (p *AircraftPanel) DrawPanel() {
 		}
 	}
 	if len(list) == 0 {
-		simpleui.DrawText("Select a band and press START. OPEN MAP shows positions, altitude and trails in another window.", 40, toolY+110, 13, colors.muted)
+		simpleui.DrawText(T("Select a band and press START. OPEN MAP shows positions, altitude and trails in another window."), 40, toolY+110, 13, colors.muted)
 	}
-	simpleui.DrawText(sondeClip(p.feedback+"  Local reception from the SDR · no external tracking services", 150), 40, toolY+174, 12, colors.muted)
+	simpleui.DrawText(sondeClip(p.feedback+"  "+T("Local reception from the SDR · no external tracking services"), 150), 40, toolY+174, 12, colors.muted)
 }
 
 func loadAircraftReceiverRef() (float64, float64, bool) {

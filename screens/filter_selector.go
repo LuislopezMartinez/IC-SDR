@@ -129,7 +129,7 @@ func (selector *FilterSelector) DrawOverlay() {
 	rl.DrawRectangleRounded(panel, .025, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(panel, .025, 8, 2, colors.blue)
 	rl.DrawRectangleRounded(rl.Rectangle{X: 410, Y: 150, Width: 10, Height: 530}, .5, 8, colors.blue)
-	drawCentered("FILTER "+selector.mode, rl.Rectangle{X: 450, Y: 180, Width: 700, Height: 45}, 27, colors.text)
+	drawCentered(T("FILTER")+" "+selector.mode, rl.Rectangle{X: 450, Y: 180, Width: 700, Height: 45}, 27, colors.text)
 	for index, preset := range filterCatalog[selector.mode] {
 		bounds := selector.presetBounds(index)
 		fill := colors.panelAlt
@@ -144,17 +144,24 @@ func (selector *FilterSelector) DrawOverlay() {
 		}
 		labelColor := simpleui.EnsureTextContrast(colors.text, fill)
 		drawCentered(name, rl.Rectangle{X: bounds.X, Y: bounds.Y + 12, Width: bounds.Width, Height: 20}, 17, labelColor)
-		drawCentered(preset.Description, rl.Rectangle{X: bounds.X, Y: bounds.Y + 36, Width: bounds.Width, Height: 18}, 11, labelColor)
+		drawCentered(T(preset.Description), rl.Rectangle{X: bounds.X, Y: bounds.Y + 36, Width: bounds.Width, Height: 18}, 11, labelColor)
 		drawCentered(formatFilterBandwidth(preset.BandwidthHz), rl.Rectangle{X: bounds.X, Y: bounds.Y + 58, Width: bounds.Width, Height: 18}, 14, colors.cyan)
 	}
-	drawCentered("CUSTOM lets you set and remember a width for each mode.", rl.Rectangle{X: 460, Y: 420, Width: 680, Height: 36}, 15, colors.text)
+	drawCentered(T("CUSTOM lets you set and remember a width for each mode."), rl.Rectangle{X: 460, Y: 420, Width: 680, Height: 36}, 15, colors.text)
 	if selector.selected[selector.mode] == 3 {
 		selector.custom.Draw()
 		minimum, maximum, _ := customFilterRange(selector.mode)
-		drawCentered(fmt.Sprintf("CUSTOM  %s    (%s - %s)", formatFilterBandwidth(filterCatalog[selector.mode][3].BandwidthHz), formatFilterBandwidth(minimum), formatFilterBandwidth(maximum)), rl.Rectangle{X: 510, Y: 540, Width: 580, Height: 30}, 16, colors.text)
+		drawCentered(fmt.Sprintf("%s  %s    (%s - %s)", T("CUSTOM"), formatFilterBandwidth(filterCatalog[selector.mode][3].BandwidthHz), formatFilterBandwidth(minimum), formatFilterBandwidth(maximum)), rl.Rectangle{X: 510, Y: 540, Width: 580, Height: 30}, 16, colors.text)
+		selector.apply.SetLabel(T("APPLY"))
 		selector.apply.Draw()
 	}
+	selector.cancel.SetLabel(T("CANCEL"))
 	selector.cancel.Draw()
+}
+
+func (selector *FilterSelector) refreshLocale() {
+	selector.cancel.SetLabel(T("CANCEL"))
+	selector.apply.SetLabel(T("APPLY"))
 }
 
 func (selector *FilterSelector) presetBounds(index int) rl.Rectangle {

@@ -167,11 +167,11 @@ func (p *AudioPanel) DrawPanel() {
 	p.pbtLock.SetEnabled(ssb && !p.pbtBypassed)
 	p.pbtClear.SetEnabled(ssb)
 	p.pbtBypass.SetEnabled(ssb)
-	drawCentered("TWIN PBT", rl.Rectangle{X: 30, Y: 634, Width: 410, Height: 24}, 13, colors.text)
+	drawCentered(T("TWIN PBT"), rl.Rectangle{X: 30, Y: 634, Width: 410, Height: 24}, 13, colors.text)
 	drawPanel(470, 642, 326, 174)
 	drawPanel(808, 642, 756, 174)
-	drawSmallText("5-BAND EQ", 482, 650, colors.text)
-	drawSmallText("AUDIO SPECTRUM", 818, 650, colors.text)
+	drawSmallText(T("5-BAND EQ"), 482, 650, colors.text)
+	drawSmallText(T("AUDIO SPECTRUM"), 818, 650, colors.text)
 	p.drawPBT(ssb, mode)
 	for i, hz := range audioEQFrequencies {
 		x := float32(514 + i*53)
@@ -200,7 +200,7 @@ func (p *AudioPanel) drawPBT(enabled bool, mode string) {
 	center := x + w/2
 	rl.DrawLineEx(rl.Vector2{X: center, Y: y}, rl.Vector2{X: center, Y: y + h}, 1.5, colors.green)
 	if !enabled {
-		drawCentered("AVAILABLE IN USB / LSB", rl.Rectangle{X: x, Y: y, Width: w, Height: h}, 10, colors.muted)
+		drawCentered(T("AVAILABLE IN USB / LSB"), rl.Rectangle{X: x, Y: y, Width: w, Height: h}, 10, colors.muted)
 		return
 	}
 	sign := float32(1)
@@ -347,4 +347,23 @@ func formatAudioHz(hz int) string {
 		return fmt.Sprintf("%.1f kHz", float64(hz)/1000)
 	}
 	return fmt.Sprintf("%d Hz", hz)
+}
+
+func (p *AudioPanel) refreshLocale() {
+	if p.pbtLocked {
+		p.pbtLock.SetLabel(T("LOCK ON"))
+	} else {
+		p.pbtLock.SetLabel(T("LOCK"))
+	}
+	p.pbtClear.SetLabel(T("CLEAR"))
+	if p.pbtBypassed {
+		p.pbtBypass.SetLabel(T("BYPASS ON"))
+	} else {
+		p.pbtBypass.SetLabel(T("BYPASS"))
+	}
+	if p.eqEnabled {
+		p.eqSwitch.SetLabel(T("EQ ON"))
+	} else {
+		p.eqSwitch.SetLabel(T("EQ"))
+	}
 }

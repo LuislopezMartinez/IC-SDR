@@ -9,6 +9,7 @@ import (
 )
 
 func TestBandCatalogMatchesOriginalCategories(t *testing.T) {
+	restoreDefaultLocaleForTests()
 	if len(bandsByCategory["HAM"]) != 15 || len(bandsByCategory["COMMERCIAL"]) != 13 || len(bandsByCategory["ISM"]) != 6 {
 		t.Fatalf("unexpected band counts: HAM=%d COMMERCIAL=%d ISM=%d",
 			len(bandsByCategory["HAM"]), len(bandsByCategory["COMMERCIAL"]), len(bandsByCategory["ISM"]))
@@ -16,6 +17,7 @@ func TestBandCatalogMatchesOriginalCategories(t *testing.T) {
 }
 
 func TestPMR446Definition(t *testing.T) {
+	restoreDefaultLocaleForTests()
 	band := bandsByCategory["ISM"][1]
 	if band.Name != "PMR446" || band.FrequencyHz != 446_006_250 || band.SpanHz != 500_000 {
 		t.Fatalf("unexpected PMR446 definition: %+v", band)
@@ -23,6 +25,7 @@ func TestPMR446Definition(t *testing.T) {
 }
 
 func TestBandSelectorSelectsPMR446(t *testing.T) {
+	restoreDefaultLocaleForTests()
 	var selected BandDefinition
 	selector := NewBandSelector("HAM", "20 m", func(band BandDefinition) { selected = band })
 	selector.Open()
@@ -37,6 +40,7 @@ func TestBandSelectorSelectsPMR446(t *testing.T) {
 }
 
 func TestPMR446RecommendsNFM(t *testing.T) {
+	restoreDefaultLocaleForTests()
 	if mode := recommendedModeForBand(bandsByCategory["ISM"][1]); mode != "NFM" {
 		t.Fatalf("PMR446 recommended mode: got %s, want NFM", mode)
 	}

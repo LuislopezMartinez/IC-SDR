@@ -75,7 +75,7 @@ func (selector *StepSelector) DrawOverlay() {
 	rl.DrawRectangleRounded(panel, .03, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(panel, .03, 8, 2, colors.blue)
 	rl.DrawRectangleRounded(rl.Rectangle{X: 430, Y: 170, Width: 10, Height: 360}, .5, 8, colors.blue)
-	drawCentered("SELECT STEP", rl.Rectangle{X: 470, Y: 195, Width: 660, Height: 44}, 25, colors.text)
+	drawCentered(T("SELECT STEP"), rl.Rectangle{X: 470, Y: 195, Width: 660, Height: 44}, 25, colors.text)
 	for index, step := range tuningStepsHz {
 		bounds := selector.stepBounds(index)
 		fill := colors.panelAlt
@@ -90,7 +90,12 @@ func (selector *StepSelector) DrawOverlay() {
 		rl.DrawRectangleRoundedLinesEx(bounds, .12, 8, 2, border)
 		drawCentered(formatStep(step), bounds, 16, simpleui.EnsureTextContrast(colors.text, fill))
 	}
+	selector.close.SetLabel(T("CLOSE"))
 	selector.close.Draw()
+}
+
+func (selector *StepSelector) refreshLocale() {
+	selector.close.SetLabel(T("CLOSE"))
 }
 
 func (selector *StepSelector) stepBounds(index int) rl.Rectangle {

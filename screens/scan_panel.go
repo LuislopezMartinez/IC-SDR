@@ -277,7 +277,7 @@ func (p *ScanPanel) ToggleRunning() {
 }
 
 func (p *ScanPanel) DrawPanel() {
-	simpleui.DrawTextStyled("SCANNER", 42, 644, 16, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(T("SCANNER"), 42, 644, 16, simpleui.FontSemiBold, colors.cyan)
 	simpleui.DrawTextStyled(p.displayStatus(), 165, 643, 15, simpleui.FontSemiBold, func() rl.Color {
 		if p.running {
 			return colors.green
@@ -291,12 +291,12 @@ func (p *ScanPanel) DrawPanel() {
 		memoryColor = rl.Color{R: 20, G: 120, B: 155, A: 255}
 		memoryDetail = "ON · If it matches a channel"
 	}
-	drawScanButton(42, 678, 220, 58, "SNAP TO MEMORY", memoryDetail, memoryColor)
-	drawScanButton(276, 678, 220, 58, "WHEN SIGNAL LOST  ▾", p.resumeDescription(), rl.Color{R: 150, G: 95, B: 18, A: 255})
+	drawScanButton(42, 678, 220, 58, T("SNAP TO MEMORY"), memoryDetail, memoryColor)
+	drawScanButton(276, 678, 220, 58, T("WHEN SIGNAL LOST")+"  ▾", p.resumeDescription(), rl.Color{R: 150, G: 95, B: 18, A: 255})
 	drawScanButton(510, 678, 190, 58, fmt.Sprintf("DWELL %d s  ▾", p.dwellMs/1000), "Before continuing", rl.Color{R: 70, G: 68, B: 55, A: 255})
-	startColor, startText, startDetail := rl.Color{R: 25, G: 125, B: 65, A: 255}, "START SCAN", "Search between MIN and MAX"
+	startColor, startText, startDetail := rl.Color{R: 25, G: 125, B: 65, A: 255}, T("START SCAN"), T("Search between MIN and MAX")
 	if p.running {
-		startColor, startText, startDetail = rl.Color{R: 155, G: 42, B: 35, A: 255}, "STOP SCAN", "Keep current frequency"
+		startColor, startText, startDetail = rl.Color{R: 155, G: 42, B: 35, A: 255}, T("STOP SCAN"), T("Keep current frequency")
 	}
 	drawScanButton(714, 678, 190, 58, startText, startDetail, startColor)
 	saveTitle, saveDetail := "SAVE MEMORY", "Current frequency and settings"
@@ -487,19 +487,19 @@ func (p *ScanPanel) policyDescription() string {
 func (p *ScanPanel) displayStatus() string {
 	switch {
 	case p.status == "READY":
-		return "READY"
+		return T("READY")
 	case p.status == "SCANNING":
-		return "SEARCHING FOR TRANSMISSIONS"
+		return T("SEARCHING FOR TRANSMISSIONS")
 	case p.status == "HOLD":
-		return "HOLDING AUDIO"
+		return T("HOLDING AUDIO")
 	case strings.HasPrefix(p.status, "VERIFY"):
-		return "VERIFYING" + strings.TrimPrefix(p.status, "VERIFY")
+		return T("VERIFYING") + strings.TrimPrefix(p.status, "VERIFY")
 	case strings.HasPrefix(p.status, "SIGNAL"):
-		return "LISTENING" + strings.TrimPrefix(p.status, "SIGNAL")
+		return T("LISTENING") + strings.TrimPrefix(p.status, "SIGNAL")
 	case strings.HasPrefix(p.status, "LISTENING"):
-		return "LISTENING" + strings.TrimPrefix(p.status, "LISTENING")
+		return T("LISTENING") + strings.TrimPrefix(p.status, "LISTENING")
 	case strings.HasPrefix(p.status, "JUMP"):
-		return "JUMP" + strings.TrimPrefix(p.status, "JUMP")
+		return T("JUMP") + strings.TrimPrefix(p.status, "JUMP")
 	default:
 		return p.status
 	}

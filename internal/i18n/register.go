@@ -1,0 +1,43 @@
+package i18n
+
+func registerCatalogs() {
+	packs["es"] = catalogES
+	packs["ca"] = catalogCA
+	packs["gl"] = catalogGL
+	packs["eu"] = catalogEU
+	packs["pt"] = catalogPT
+	packs["pt-BR"] = catalogPTBR
+	packs["fr"] = catalogFR
+	packs["de"] = catalogDE
+	packs["it"] = catalogIT
+	packs["nl"] = catalogNL
+	packs["pl"] = catalogPL
+	packs["cs"] = catalogCS
+	packs["sk"] = catalogSK
+	packs["hu"] = catalogHU
+	packs["ro"] = catalogRO
+	packs["hr"] = catalogHR
+	packs["sl"] = catalogSL
+	packs["sr"] = catalogSR
+	packs["tr"] = catalogTR
+	packs["sv"] = catalogSV
+	packs["da"] = catalogDA
+	packs["nb"] = catalogNB
+	packs["fi"] = catalogFI
+	packs["et"] = catalogET
+	packs["lv"] = catalogLV
+	packs["lt"] = catalogLT
+	packs["el"] = catalogEL
+	packs["ru"] = catalogRU
+	packs["uk"] = catalogUK
+	packs["bg"] = catalogBG
+	packs["id"] = catalogID
+	packs["vi"] = catalogVI
+	packs["sq"] = catalogSQ
+	packs["bs"] = catalogBS
+	packs["is"] = catalogIS
+	packs["ga"] = catalogGA
+	packs["cy"] = catalogCY
+	packs["mk"] = catalogMK
+	packs["be"] = catalogBE
+}

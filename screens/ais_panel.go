@@ -40,13 +40,13 @@ func NewAISPanel(screen *MainScreen) *AISPanel {
 		p.enabled = !p.enabled
 		p.apply()
 	})
-	mapButton := button("aisMap", "OPEN MAP", 205, 180, p.openMap)
+	mapButton := button("aisMap", T("OPEN MAP"), 205, 180, p.openMap)
 	mapButton.SetColors(colors.blue, colors.border, colors.text)
-	clearButton := button("aisClear", "CLEAR", 405, 135, func() {
+	clearButton := button("aisClear", T("CLEAR"), 405, 135, func() {
 		if screen.receiver != nil {
 			screen.receiver.ClearAIS()
 		}
-		p.feedback = "List cleared"
+		p.feedback = T("List cleared")
 	})
 	clearButton.SetColors(actionClearFill, colors.red, colors.text)
 	p.apply()
@@ -93,10 +93,10 @@ func (p *AISPanel) apply() {
 		}
 	}
 	if p.enabled {
-		p.start.SetLabel("STOP")
+		p.start.SetLabel(T("STOP"))
 		p.start.SetColors(actionStopFill, colors.red, colors.text)
 	} else {
-		p.start.SetLabel("START")
+		p.start.SetLabel(T("START"))
 		p.start.SetColors(actionStartFill, colors.green, colors.text)
 	}
 }
@@ -115,7 +115,7 @@ func (p *AISPanel) Tick() {
 	p.writeSnapshot(vessels)
 	if p.enabled && !p.screen.receiver.AISStatus().Running {
 		p.enabled = false
-		p.start.SetLabel("START")
+		p.start.SetLabel(T("START"))
 	}
 	if p.viewerDone != nil {
 		select {
@@ -176,7 +176,7 @@ func (p *AISPanel) DrawPanel() {
 	if status.Error != "" {
 		simpleui.DrawText(sondeClip(status.Error, 100), 570, toolY+38, 12, colors.red)
 	} else {
-		simpleui.DrawText("Simultaneous reception of both AIS channels", 570, toolY+38, 12, colors.muted)
+		simpleui.DrawText(T("Simultaneous reception of both AIS channels"), 570, toolY+38, 12, colors.muted)
 	}
 	cols := []struct {
 		x    float32
@@ -213,7 +213,7 @@ func (p *AISPanel) DrawPanel() {
 		}
 	}
 	if len(vessels) == 0 {
-		simpleui.DrawText("Press START to decode AIS from the SDR receiver. OPEN MAP shows positions in another window.", 40, toolY+110, 13, colors.muted)
+		simpleui.DrawText(T("Press START to decode AIS from the SDR receiver. OPEN MAP shows positions in another window."), 40, toolY+110, 13, colors.muted)
 	}
 	simpleui.DrawText(sondeClip(p.feedback+"  AIS-catcher · local map with no Internet connection", 150), 40, toolY+174, 12, colors.muted)
 }

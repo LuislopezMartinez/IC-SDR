@@ -118,8 +118,17 @@ func fontData(style FontStyle) []byte {
 }
 
 func supportedCodepoints() []rune {
-	codepoints := make([]rune, 0, 256)
-	for value := rune(32); value <= 255; value++ {
+	codepoints := make([]rune, 0, 2500)
+	for value := rune(32); value <= 0x024F; value++ {
+		codepoints = append(codepoints, value)
+	}
+	for value := rune(0x0370); value <= 0x03FF; value++ {
+		codepoints = append(codepoints, value)
+	}
+	for value := rune(0x0400); value <= 0x04FF; value++ {
+		codepoints = append(codepoints, value)
+	}
+	for value := rune(0x1E00); value <= 0x1EFF; value++ {
 		codepoints = append(codepoints, value)
 	}
 	return append(codepoints, '€', '₽', 'Ω', 'Δ', 'π', '∞', '≈', '≠', '≤', '≥', '±', '×', '÷', '√', '→', '←', '↑', '↓', '—', '–', '…', '•', '✓')

@@ -51,7 +51,7 @@ func NewRadiosondePanel(screen *MainScreen) *RadiosondePanel {
 	csvButton := button("sondeCSV", "CSV", 755, 105, func() { p.export(true) })
 	jsonButton.SetColors(actionExportFill, colors.green, colors.text)
 	csvButton.SetColors(actionExportFill, colors.green, colors.text)
-	clearButton := button("sondeClear", "CLEAR", 870, 120, func() {
+	clearButton := button("sondeClear", T("CLEAR"), 870, 120, func() {
 		if screen.receiver != nil {
 			screen.receiver.ClearRadiosondeEvents()
 		}
@@ -107,10 +107,10 @@ func (p *RadiosondePanel) style() {
 		b.SetColors(c, colors.border, colors.text)
 	}
 	if p.enabled {
-		p.start.SetLabel("STOP")
+		p.start.SetLabel(T("STOP"))
 		p.start.SetColors(actionStopFill, colors.red, colors.text)
 	} else {
-		p.start.SetLabel("START")
+		p.start.SetLabel(T("START"))
 		p.start.SetColors(actionStartFill, colors.green, colors.text)
 	}
 }

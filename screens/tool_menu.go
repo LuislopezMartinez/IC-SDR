@@ -105,12 +105,12 @@ func (menu *ToolMenu) DrawOverlay() {
 	rl.DrawRectangleRounded(modal, .018, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(modal, .018, 8, 2, colors.border)
 	rl.DrawRectangle(192, 57, 896, 55, colors.panelAlt)
-	simpleui.DrawTextStyled("MENU", 588, 67, 27, simpleui.FontSemiBold, colors.text)
+	simpleui.DrawTextStyled(T("MENU"), 588, 67, 27, simpleui.FontSemiBold, colors.text)
 	rl.DrawLine(210, 112, 1070, 112, rl.Color{R: 75, G: 75, B: 75, A: 255})
 
-	menu.drawCategory(0, "VIEWS", colors.cyan)
-	menu.drawCategory(1, "DECODERS", rl.Color{R: 155, G: 115, B: 225, A: 255})
-	menu.drawCategory(2, "TOOLS", rl.Color{R: 235, G: 165, B: 45, A: 255})
+	menu.drawCategory(0, T("VIEWS"), colors.cyan)
+	menu.drawCategory(1, T("DECODERS"), rl.Color{R: 155, G: 115, B: 225, A: 255})
+	menu.drawCategory(2, T("TOOLS"), rl.Color{R: 235, G: 165, B: 45, A: 255})
 	for index := range toolMenuItems {
 		menu.drawItem(index)
 	}
@@ -121,7 +121,7 @@ func (menu *ToolMenu) DrawOverlay() {
 	}
 	rl.DrawRectangleRounded(back, .2, 8, backColor)
 	rl.DrawRectangleRoundedLinesEx(back, .2, 8, 2, rl.Color{R: 130, G: 145, B: 160, A: 255})
-	drawCenteredStyled("BACK", back, 17, simpleui.FontSemiBold, simpleui.EnsureTextContrast(colors.text, backColor))
+	drawCenteredStyled(T("BACK"), back, 17, simpleui.FontSemiBold, simpleui.EnsureTextContrast(colors.text, backColor))
 }
 
 func (menu *ToolMenu) drawCategory(row int, label string, accent rl.Color) {
@@ -166,7 +166,7 @@ func (menu *ToolMenu) drawItem(index int) {
 	if bounds.Width < 130 {
 		labelSize = 15
 	}
-	drawCenteredStyled(item.label, rl.Rectangle{X: bounds.X, Y: bounds.Y + 75, Width: bounds.Width, Height: 27}, labelSize, simpleui.FontSemiBold, textColor)
+	drawCenteredStyled(T(item.label), rl.Rectangle{X: bounds.X, Y: bounds.Y + 75, Width: bounds.Width, Height: 27}, labelSize, simpleui.FontSemiBold, textColor)
 	if active {
 		rl.DrawRectangleRounded(rl.Rectangle{X: bounds.X + 25, Y: bounds.Y + bounds.Height - 6, Width: bounds.Width - 50, Height: 3}, 1, 4, accent)
 	}

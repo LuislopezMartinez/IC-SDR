@@ -85,6 +85,15 @@ type MainScreen struct {
 	step                   *simpleui.Button
 	viewButton             *simpleui.Button
 	themeButton            *simpleui.Button
+	localeButton           *simpleui.Button
+	localeSettings         *LocaleSettings
+	menuButton             *simpleui.Button
+	muteSwitch             *simpleui.Switch
+	holdLabel              *simpleui.Label
+	closeLabel             *simpleui.Label
+	language               string
+	ituRegion              string
+	country                string
 	themeName              string
 	filterSelector         *FilterSelector
 	bandSelector           *BandSelector
@@ -243,6 +252,7 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		sMeter:                 &SMeter{},
 	}
 	loadAppSettings(screen.settingsPath, screen)
+	screen.applyLocaleAndRegion()
 	screen.waterfall = NewWaterfall(&screen.waterfallSettings, len(screen.spectrum))
 	screen.audioPlayer = NewAudioPlayer(receiver, nil)
 	screen.uiSounds = &UISounds{}
@@ -277,54 +287,57 @@ func (screen *MainScreen) CreateControls() {
 	screen.filter = simpleui.NewButton("filter", 216, 16, 130, 48, filterButtonLabel(initialFilter), 14)
 	screen.filter.OnClick(func() { screen.filterSelector.Open(screen.mode.SelectedText()) })
 
-	screen.band = simpleui.NewButton("band", 358, 16, 150, 48, "BAND  "+screen.bandName, 14)
+	screen.band = simpleui.NewButton("band", 358, 16, 150, 48, T("BAND")+"  "+screen.bandName, 14)
 	screen.bandSelector = NewBandSelector(screen.bandCategory, screen.bandName, screen.selectBand)
 	screen.band.OnClick(screen.bandSelector.Open)
 
-	squelch := simpleui.NewSwitch("squelch", 972, 24, 82, 28, "SQL", screen.squelchEnabled, 12)
+	squelch := simpleui.NewSwitch("squelch", 972, 24, 82, 28, T("SQL"), screen.squelchEnabled, 12)
 	screen.squelchSwitch = squelch
 	squelch.OnChange(func(active bool) { screen.squelchEnabled = active; screen.applySquelch(); screen.markSettingsDirty() })
-	screen.squelchLabel = simpleui.NewLabel("squelchLabel", 1059, 24, 103, 22, fmt.Sprintf("LEVEL %d dBm", screen.squelchThreshold), 10)
+	screen.squelchLabel = simpleui.NewLabel("squelchLabel", 1059, 24, 103, 22, squelchLevelText(screen.squelchThreshold), 10)
 	screen.squelchLabel.SetColor(colors.orange)
 	screen.squelchSlider = simpleui.NewSlider("squelchLevel", 1152, 27, 92, 20, screen.spectrumMinimumDB, screen.spectrumMaximumDB, float32(screen.squelchThreshold))
 	screen.squelchSlider.SetStep(1)
 	screen.squelchSlider.OnChange(func(value float32) {
 		screen.squelchThreshold = int(value)
-		screen.squelchLabel.SetText(fmt.Sprintf("LEVEL %.0f dBm", value))
+		screen.squelchLabel.SetText(squelchLevelText(int(value)))
 		screen.applySquelch()
 		screen.markSettingsDirty()
 	})
-	holdLabel := simpleui.NewLabel("holdLabel", 972, 83, 108, 20, fmt.Sprintf("HOLD TIME %d ms", screen.squelchHoldMs), 10)
+	holdLabel := simpleui.NewLabel("holdLabel", 972, 83, 108, 20, holdTimeText(screen.squelchHoldMs), 10)
 	holdLabel.SetColor(colors.muted)
+	screen.holdLabel = holdLabel
 	holdSlider := simpleui.NewSlider("hold", 1082, 85, 162, 18, 0, 300, float32(screen.squelchHoldMs))
 	holdSlider.SetStep(1)
 	holdSlider.OnChange(func(value float32) {
 		screen.squelchHoldMs = int(value)
-		holdLabel.SetText(fmt.Sprintf("HOLD TIME %.0f ms", value))
+		holdLabel.SetText(holdTimeText(int(value)))
 		screen.applySquelch()
 		screen.markSettingsDirty()
 	})
-	closeLabel := simpleui.NewLabel("closeLabel", 972, 116, 108, 20, fmt.Sprintf("CLOSE TIME %d ms", screen.squelchCloseMs), 10)
+	closeLabel := simpleui.NewLabel("closeLabel", 972, 116, 108, 20, closeTimeText(screen.squelchCloseMs), 10)
 	closeLabel.SetColor(colors.muted)
+	screen.closeLabel = closeLabel
 	closeSlider := simpleui.NewSlider("close", 1082, 118, 162, 18, 20, 500, float32(screen.squelchCloseMs))
 	closeSlider.SetStep(1)
 	closeSlider.OnChange(func(value float32) {
 		screen.squelchCloseMs = int(value)
-		closeLabel.SetText(fmt.Sprintf("CLOSE TIME %.0f ms", value))
+		closeLabel.SetText(closeTimeText(int(value)))
 		screen.applySquelch()
 		screen.markSettingsDirty()
 	})
 	screen.syncSquelchToSpectrumRange()
 
-	mute := simpleui.NewSwitch("mute", 338, 111, 166, 28, "MUTE", screen.muted, uiMinimumFontSize)
-	screen.volumeLabel = simpleui.NewLabel("volumeLabel", 338, 148, 58, 22, fmt.Sprintf("VOL %.0f%%", screen.volume), uiMinimumFontSize)
+	mute := simpleui.NewSwitch("mute", 338, 111, 166, 28, T("MUTE"), screen.muted, uiMinimumFontSize)
+	screen.muteSwitch = mute
+	screen.volumeLabel = simpleui.NewLabel("volumeLabel", 338, 148, 58, 22, fmt.Sprintf("%s %.0f%%", T("VOL"), screen.volume), uiMinimumFontSize)
 	screen.volumeLabel.SetColor(colors.cyan)
 	screen.volumeSlider = simpleui.NewSlider("volume", 397, 149, 107, 22, 0, 100, screen.volume)
 	screen.volumeSlider.SetStep(1)
 	screen.volumeSlider.OnChange(func(value float32) {
 		screen.volume = value
 		screen.audioPlayer.SetVolume(value / 100)
-		screen.volumeLabel.SetText(fmt.Sprintf("VOL %.0f%%", value))
+		screen.volumeLabel.SetText(fmt.Sprintf("%s %.0f%%", T("VOL"), value))
 		screen.markSettingsDirty()
 	})
 	mute.OnChange(func(active bool) {
@@ -332,26 +345,26 @@ func (screen *MainScreen) CreateControls() {
 		screen.audioPlayer.SetMuted(active)
 		screen.volumeSlider.SetEnabled(!active)
 		if active {
-			screen.volumeLabel.SetText("MUTED")
+			screen.volumeLabel.SetText(T("MUTED"))
 			screen.volumeLabel.SetColor(colors.red)
 		} else {
-			screen.volumeLabel.SetText(fmt.Sprintf("VOL %.0f%%", screen.volume))
+			screen.volumeLabel.SetText(fmt.Sprintf("%s %.0f%%", T("VOL"), screen.volume))
 			screen.volumeLabel.SetColor(colors.cyan)
 		}
 		screen.markSettingsDirty()
 	})
 
-	modeLabel := "CENTER"
+	modeLabel := T("CENTER")
 	if !screen.centerMode {
-		modeLabel = "FIX"
+		modeLabel = T("FIX")
 	}
 	screen.vfoModeSwitch = simpleui.NewSwitch("vfoMode", 1110, 159, 136, 28, modeLabel, !screen.centerMode, 12)
 	screen.vfoModeSwitch.SetTrackColors(rl.Color{R: 51, G: 61, B: 70, A: 255}, colors.orange)
 	screen.vfoModeSwitch.OnChange(func(fixed bool) {
 		screen.centerMode = !fixed
-		screen.vfoModeSwitch.SetLabel("FIX")
+		screen.vfoModeSwitch.SetLabel(T("FIX"))
 		if screen.centerMode {
-			screen.vfoModeSwitch.SetLabel("CENTER")
+			screen.vfoModeSwitch.SetLabel(T("CENTER"))
 			screen.centerFrequencyHz = screen.frequencyHz
 		}
 		if screen.receiver != nil {
@@ -363,15 +376,19 @@ func (screen *MainScreen) CreateControls() {
 		}
 		screen.markSettingsDirty()
 	})
-	screen.memViewSwitch = simpleui.NewSwitch("memView", 972, 159, 128, 28, "MEM VIEW", screen.memoryViewEnabled, 12)
+	screen.memViewSwitch = simpleui.NewSwitch("memView", 972, 159, 128, 28, T("MEM VIEW"), screen.memoryViewEnabled, 12)
 	screen.memViewSwitch.SetTrackColors(rl.Color{R: 51, G: 61, B: 70, A: 255}, colors.blue)
 	screen.memViewSwitch.OnChange(screen.setMemoryView)
 	spanDown := simpleui.NewButton("spanDown", frequencyPanelX+16, frequencyPanelY+36, 36, 32, "-", 16)
 	spanUp := simpleui.NewButton("spanUp", frequencyPanelX+58, frequencyPanelY+36, 36, 32, "+", 16)
-	menu := simpleui.NewButton("menu", toolContentX, 842, 130, 40, "MENU", 15)
-	screen.viewButton = simpleui.NewButton("view", toolContentX+140, 842, 115, 40, "VIEW 1", 14)
-	screen.step = simpleui.NewButton("step", toolContentX+265, 842, 250, 40, "STEP  "+formatStep(screen.tuningStepHz), 15)
-	screen.themeButton = simpleui.NewButton("theme", toolContentX+525, 842, 190, 40, "THEME  "+themeDisplayName(screen.themeName), 13)
+	menu := simpleui.NewButton("menu", toolContentX, 842, 110, 40, T("MENU"), 15)
+	screen.menuButton = menu
+	screen.viewButton = simpleui.NewButton("view", toolContentX+120, 842, 100, 40, T("VIEW")+"  "+formatView(screen.viewMode), 14)
+	screen.step = simpleui.NewButton("step", toolContentX+230, 842, 220, 40, T("STEP")+"  "+formatStep(screen.tuningStepHz), 15)
+	screen.themeButton = simpleui.NewButton("theme", toolContentX+460, 842, 150, 40, T("THEME")+"  "+T(themeDisplayName(screen.themeName)), 13)
+	screen.localeButton = simpleui.NewButton("locale", toolContentX+620, 842, 140, 40, T("LANGUAGE"), 13)
+	screen.localeSettings = NewLocaleSettings(screen)
+	screen.localeButton.OnClick(screen.localeSettings.Open)
 	spanDown.OnClick(func() { screen.changeSpan(-1) })
 	spanUp.OnClick(func() { screen.changeSpan(1) })
 	screen.toolMenu = NewToolMenu(screen.activeTool, screen.selectTool)
@@ -442,7 +459,7 @@ func (screen *MainScreen) CreateControls() {
 		screen.mode, screen.filter, screen.band,
 		squelch, screen.squelchLabel, screen.squelchSlider, holdLabel, holdSlider, closeLabel, closeSlider,
 		mute, screen.volumeLabel, screen.volumeSlider, screen.vfoModeSwitch, screen.memViewSwitch,
-		spanDown, spanUp, menu, screen.viewButton, screen.step, screen.themeButton,
+		spanDown, spanUp, menu, screen.viewButton, screen.step, screen.themeButton, screen.localeButton,
 	} {
 		simpleui.Add(element)
 	}
@@ -499,11 +516,13 @@ func (screen *MainScreen) CreateControls() {
 		simpleui.Add(element)
 	}
 	simpleui.Add(screen.toolMenu)
+	simpleui.Add(screen.localeSettings)
 	simpleui.Add(screen.bandSelector)
 	simpleui.Add(screen.stepSelector)
 	simpleui.Add(screen.filterSelector)
 	simpleui.Add(screen.recorderPanel)
 	screen.applyTheme(screen.themeName)
+	screen.refreshLocaleChrome()
 	// Apply the restored workspace only after every tool control exists.
 	screen.setViewMode(screen.viewMode)
 	if screen.activeTool == "RTL_433" {
@@ -542,9 +561,9 @@ func (screen *MainScreen) CreateControls() {
 func (screen *MainScreen) Draw() {
 	if screen.vfoModeSwitch != nil {
 		if screen.centerMode {
-			screen.vfoModeSwitch.SetLabel("CENTER")
+			screen.vfoModeSwitch.SetLabel(T("CENTER"))
 		} else {
-			screen.vfoModeSwitch.SetLabel("FIX")
+			screen.vfoModeSwitch.SetLabel(T("FIX"))
 		}
 	}
 	screen.flushSettings(false)
@@ -1110,8 +1129,8 @@ func (screen *MainScreen) createWaterfallControls() {
 	screen.wfSpeedSlider.SetStep(1)
 
 	screen.wfPaletteButton = simpleui.NewButton("wfPalette", 850, 657, 150, 48, "PALETTE  BLUE", 12)
-	reset := simpleui.NewButton("wfReset", 1015, 657, 90, 48, "RESET", 12)
-	closeButton := simpleui.NewButton("wfClose", 1120, 657, 110, 48, "CLOSE", 12)
+	reset := simpleui.NewButton("wfReset", 1015, 657, 90, 48, T("RESET"), 12)
+	closeButton := simpleui.NewButton("wfClose", 1120, 657, 110, 48, T("CLOSE"), 12)
 
 	screen.wfOffsetSlider.OnChange(func(value float32) {
 		screen.waterfallSettings.ColorOffsetDB = int(value)
@@ -1180,11 +1199,11 @@ func (screen *MainScreen) refreshWaterfallControls() {
 	if settings.ColorOffsetDB > 0 {
 		offset = "+" + offset
 	}
-	screen.wfOffsetLabel.SetText("COLOR OFFSET  " + offset + " dB")
-	screen.wfContrastLabel.SetText(fmt.Sprintf("CONTRAST  %d %%", settings.Contrast))
-	screen.wfRangeLabel.SetText(fmt.Sprintf("LEVEL  %.0f / %.0f dBm", settings.MinimumDBm, settings.MaximumDBm))
-	screen.wfSpeedLabel.SetText(fmt.Sprintf("SPEED  %d lines/s", settings.LinesPerSecond))
-	screen.wfPaletteButton.SetLabel("PALETTE  " + settings.Palette)
+	screen.wfOffsetLabel.SetText(T("COLOR OFFSET") + "  " + offset + " dB")
+	screen.wfContrastLabel.SetText(fmt.Sprintf("%s  %d %%", T("CONTRAST"), settings.Contrast))
+	screen.wfRangeLabel.SetText(fmt.Sprintf("%s  %.0f / %.0f dBm", T("LEVEL"), settings.MinimumDBm, settings.MaximumDBm))
+	screen.wfSpeedLabel.SetText(fmt.Sprintf("%s  %d %s", T("SPEED"), settings.LinesPerSecond, T("lines/s")))
+	screen.wfPaletteButton.SetLabel(T("PALETTE") + "  " + T(settings.Palette))
 }
 
 func (screen *MainScreen) setWaterfallControlsVisible(visible bool) {
@@ -1351,7 +1370,7 @@ func (screen *MainScreen) setViewMode(mode int) {
 	}
 	screen.viewMode = mode
 	if screen.viewButton != nil {
-		screen.viewButton.SetLabel(fmt.Sprintf("VIEW %d", mode))
+		screen.viewButton.SetLabel(T("VIEW") + "  " + formatView(mode))
 	}
 	showTool := mode == 1
 	if screen.waterfallControls != nil {
@@ -1553,10 +1572,10 @@ func (screen *MainScreen) setFrequencyDigitHover(exponent int) {
 		return
 	}
 	if exponent >= 0 {
-		screen.step.SetLabel("DIGIT STEP\n" + formatStep(screen.digitStepHz()))
+		screen.step.SetLabel(T("DIGIT STEP") + "\n" + formatStep(screen.digitStepHz()))
 		screen.step.SetColors(rl.Color{R: 25, G: 125, B: 190, A: 255}, rl.Color{R: 125, G: 205, B: 255, A: 255}, rl.White)
 	} else {
-		screen.step.SetLabel("STEP  " + formatStep(screen.tuningStepHz))
+		screen.step.SetLabel(T("STEP") + "  " + formatStep(screen.tuningStepHz))
 		screen.step.ClearColors()
 	}
 }
@@ -1587,8 +1606,10 @@ func recommendedStepForBand(band BandDefinition) int64 {
 		switch band.Name {
 		case "23 cm":
 			return 25_000
-		case "4 m", "2 m", "70 cm":
+		case "4 m", "2 m", "70 cm", "1.25 m":
 			return 12_500
+		case "33 cm":
+			return 25_000
 		default:
 			return 100
 		}
@@ -1609,6 +1630,8 @@ func recommendedStepForBand(band BandDefinition) int64 {
 			return 10_000
 		case "PMR446":
 			return 6_250
+		case "FRS / GMRS", "MURS", "UHF CB":
+			return 12_500
 		case "433 MHz", "868 MHz", "915 MHz":
 			return 25_000
 		case "2.4 GHz":
@@ -1635,7 +1658,7 @@ func recommendedModeForBand(band BandDefinition) string {
 		switch band.Name {
 		case "160 m", "80 m", "40 m":
 			return "LSB"
-		case "4 m", "2 m", "70 cm", "23 cm":
+		case "4 m", "2 m", "70 cm", "23 cm", "1.25 m", "33 cm":
 			return "NFM"
 		default:
 			return "USB"
@@ -1903,7 +1926,8 @@ func (screen *MainScreen) overlayOpen() bool {
 		(screen.sdrSettings != nil && screen.sdrSettings.OverlayOpen()) ||
 		(screen.stepSelector != nil && screen.stepSelector.OverlayOpen()) ||
 		(screen.filterSelector != nil && screen.filterSelector.OverlayOpen()) ||
-		(screen.memoryPanel != nil && screen.memoryPanel.OverlayOpen())
+		(screen.memoryPanel != nil && screen.memoryPanel.OverlayOpen()) ||
+		(screen.localeSettings != nil && screen.localeSettings.OverlayOpen())
 }
 
 func (screen *MainScreen) visibleBin(normalized float32) (int, bool) {

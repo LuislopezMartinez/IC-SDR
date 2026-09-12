@@ -158,10 +158,10 @@ func (p *TETRAPanel) apply() {
 		p.screen.receiver.SetTETRAAudioPolicy(p.listenSlot, p.clearOnly)
 	}
 	if p.enabled {
-		p.start.SetLabel("STOP")
+		p.start.SetLabel(T("STOP"))
 		p.start.SetColors(actionStopFill, colors.red, colors.text)
 	} else {
-		p.start.SetLabel("START")
+		p.start.SetLabel(T("START"))
 		p.start.SetColors(actionStartFill, colors.green, colors.text)
 	}
 }
