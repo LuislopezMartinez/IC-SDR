@@ -68,7 +68,7 @@ configure_libusb() {
 run_cmake() {
   local srcdir="$1" builddir="$2"
   shift 2
-  local args=("$@")
+  local args=("$@" -DCMAKE_POLICY_VERSION_MINIMUM=3.5)
   if [[ "$GOOS_VAL" == "darwin" && "$GOARCH_VAL" == "amd64" ]]; then
     args+=(-DCMAKE_OSX_ARCHITECTURES=x86_64)
   elif [[ "$GOOS_VAL" == "darwin" ]]; then
