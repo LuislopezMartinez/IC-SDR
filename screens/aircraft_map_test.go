@@ -102,6 +102,19 @@ func TestAircraftMapKeepsSelectionWhenListReorders(t *testing.T) {
 	}
 }
 
+func TestAircraftMarkerColorsAreDark(t *testing.T) {
+	for name, c := range map[string]rl.Color{
+		"1090":  aircraftMarker1090,
+		"978":   aircraftMarker978,
+		"stale": aircraftMarkerStale,
+		"label": mapCalloutText,
+	} {
+		if int(c.R)+int(c.G)+int(c.B) > 180 {
+			t.Fatalf("%s marker/label is too light for the street map: %+v", name, c)
+		}
+	}
+}
+
 func TestAircraftMapRender(t *testing.T) {
 	dir := os.Getenv("AIRCRAFT_MAP_RENDER_DIR")
 	if dir == "" {

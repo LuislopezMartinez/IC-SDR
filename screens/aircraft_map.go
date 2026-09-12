@@ -11,6 +11,15 @@ import (
 	"time"
 )
 
+var (
+	aircraftMarker1090  = rl.Color{R: 8, G: 32, B: 72, A: 255}
+	aircraftMarker978   = rl.Color{R: 92, G: 32, B: 6, A: 255}
+	aircraftMarkerStale = rl.Color{R: 22, G: 22, B: 24, A: 255}
+	mapCalloutFill      = rl.Color{R: 255, G: 255, B: 255, A: 235}
+	mapCalloutEdge      = rl.Color{R: 16, G: 18, B: 22, A: 220}
+	mapCalloutText      = rl.Color{R: 8, G: 10, B: 12, A: 255}
+)
+
 func RunAircraftMap(path string) {
 	simpleui.SetMode(1360, 800, simpleui.Fit)
 	simpleui.SetCanvasFilter(rl.FilterBilinear)
@@ -198,20 +207,21 @@ func (v *aircraftMap) draw() {
 		if !rl.CheckCollisionPointRec(p, b) {
 			continue
 		}
-		c := colors.cyan
+		c := aircraftMarker1090
 		if a.Source == aircraft.Mode978 {
-			c = colors.orange
+			c = aircraftMarker978
 		}
 		if time.Since(a.LastSeen) > 60*time.Second {
-			c = colors.muted
+			c = aircraftMarkerStale
 		}
 		angle := float32(0)
 		if a.Track != nil {
 			angle = float32(*a.Track)
 		}
-		size := float32(12)
+		size := float32(14)
 		if i == v.selected {
-			size = 16
+			size = 18
+			rl.DrawCircleLines(int32(p.X), int32(p.Y), 23, rl.Black)
 			rl.DrawCircleLines(int32(p.X), int32(p.Y), 22, colors.orange)
 		}
 		drawAircraftSymbol(p, size, angle, c)
@@ -223,14 +233,20 @@ func (v *aircraftMap) draw() {
 		if a.Altitude != nil {
 			alt = fmt.Sprintf(" · %d ft", *a.Altitude)
 		}
-		simpleui.DrawText(label+alt, p.X+13, p.Y-8, 10, colors.text)
+		drawMapCallout(label+alt, p.X+14, p.Y-9)
 	}
 	simpleui.DrawText("LIVE AIR TRAFFIC", 24, 20, 24, colors.cyan)
-	simpleui.DrawText(fmt.Sprintf("%d aircraft · %d with position · cyan 1090 · orange 978 · drag and use the wheel", len(v.list), located), 340, 29, 13, colors.muted)
+	simpleui.DrawText(fmt.Sprintf("%d aircraft · %d with position · dark blue 1090 · dark orange 978 · drag and use the wheel", len(v.list), located), 340, 29, 13, colors.muted)
 	v.details()
 	simpleui.DrawText("© OpenStreetMap · Esri · positions received directly by radio", 1015, 742, 9, colors.muted)
 }
 func drawAircraftSymbol(p rl.Vector2, size, angle float32, c rl.Color) {
+	drawAircraftPoly(p, size+2.4, angle, rl.White)
+	drawAircraftPoly(p, size+1.1, angle, rl.Black)
+	drawAircraftPoly(p, size, angle, c)
+}
+
+func drawAircraftPoly(p rl.Vector2, size, angle float32, c rl.Color) {
 	r := float64(angle) * math.Pi / 180
 	rot := func(x, y float32) rl.Vector2 {
 		return rl.Vector2{X: p.X + x*float32(math.Cos(r)) - y*float32(math.Sin(r)), Y: p.Y + x*float32(math.Sin(r)) + y*float32(math.Cos(r))}

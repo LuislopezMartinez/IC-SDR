@@ -172,6 +172,16 @@ func clampTextureSrc(src rl.Rectangle, tex rl.Texture2D) rl.Rectangle {
 	return src
 }
 
+func drawMapCallout(text string, x, y float32) {
+	size := int32(11)
+	m := simpleui.MeasureText(text, size)
+	padX, padY := float32(4), float32(2)
+	box := rl.Rectangle{X: x - padX, Y: y - padY, Width: m.X + padX*2, Height: m.Y + padY*2}
+	rl.DrawRectangleRounded(box, .18, 4, mapCalloutFill)
+	rl.DrawRectangleRoundedLinesEx(box, .18, 4, 1, mapCalloutEdge)
+	simpleui.DrawText(text, x, y, size, mapCalloutText)
+}
+
 func drawMapGrid(centerLat, centerLon, lonSpan float64, b rl.Rectangle) {
 	for i := 0; i <= 10; i++ {
 		x := b.X + b.Width*float32(i)/10
