@@ -7,7 +7,7 @@ import (
 )
 
 func TestDevelopmentResourceCanBeLocatedOutsideWorkingDirectory(t *testing.T) {
-	path := Path("tools", "aprs", "config", "direwolf-rx.conf")
+	path := Path("config", "settings.json")
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("resource path %q is not usable: %v", path, err)
 	}

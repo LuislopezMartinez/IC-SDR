@@ -1,6 +1,6 @@
 // Package resources locates files shipped with IC-SDR independently of the
 // process working directory. Release builds place them in DATA beside the exe;
-// development builds transparently fall back to ORIGEN/IC_SDR in the checkout.
+// development builds fall back to ORIGEN/IC_SDR, then the checkout DATA folder.
 package resources
 
 import (
@@ -24,13 +24,10 @@ func dataRoot() string {
 		return release
 	}
 	for _, start := range []string{workingDir(), base} {
-		for dir := start; dir != ""; dir = filepath.Dir(dir) {
-			if exists(filepath.Join(dir, "go.mod")) && exists(filepath.Join(dir, "ORIGEN", "IC_SDR")) {
-				return filepath.Join(dir, "DATA")
-			}
-			parent := filepath.Dir(dir)
-			if parent == dir {
-				break
+		if root := checkoutRoot(start); root != "" {
+			dev := filepath.Join(root, "DATA")
+			if exists(dev) || exists(filepath.Join(root, "ORIGEN", "IC_SDR")) {
+				return dev
 			}
 		}
 	}
@@ -47,22 +44,41 @@ func Path(parts ...string) string {
 	}
 
 	for _, start := range []string{workingDir(), base} {
-		for dir := start; dir != ""; dir = filepath.Dir(dir) {
-			candidate := filepath.Join(append([]string{dir, "ORIGEN", "IC_SDR"}, parts...)...)
-			if exists(candidate) {
-				absolute, err := filepath.Abs(candidate)
-				if err == nil {
-					return absolute
-				}
-				return candidate
-			}
-			parent := filepath.Dir(dir)
-			if parent == dir {
-				break
-			}
+		root := checkoutRoot(start)
+		if root == "" {
+			continue
+		}
+		origen := filepath.Join(append([]string{root, "ORIGEN", "IC_SDR"}, parts...)...)
+		if exists(origen) {
+			return absOrSelf(origen)
+		}
+		dev := filepath.Join(append([]string{root, "DATA"}, parts...)...)
+		if exists(dev) {
+			return absOrSelf(dev)
 		}
 	}
 	return release
+}
+
+func checkoutRoot(start string) string {
+	for dir := start; dir != ""; dir = filepath.Dir(dir) {
+		if exists(filepath.Join(dir, "go.mod")) {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+	}
+	return ""
+}
+
+func absOrSelf(path string) string {
+	absolute, err := filepath.Abs(path)
+	if err == nil {
+		return absolute
+	}
+	return path
 }
 
 func executableDir() string {

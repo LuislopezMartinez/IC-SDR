@@ -30,7 +30,16 @@ jobs:
           cache: true
 
       - name: Test
-        run: go test ./...
+        run: |
+          set -euo pipefail
+          go test ./internal/... ./cmd/...
+          mkdir -p dist/testbin
+          go test -c -o dist/testbin/screens.test ./screens
+          go test -c -o dist/testbin/simpleui.test ./simpleui
+          go test -c -o dist/testbin/main.test .
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri libx11-6 libxcursor1 libxinerama1 libxi6 libxrandr2 libxext6
+          xvfb-run -a go test -p 1 ./screens ./simpleui
 
       - name: Cross-compile
         run: |
