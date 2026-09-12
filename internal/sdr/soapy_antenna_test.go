@@ -42,3 +42,14 @@ func TestDefaultSDRplayAntennasAreABC(t *testing.T) {
 		t.Fatal("RTL-SDR should not invent extra antenna ports")
 	}
 }
+
+func TestSoapyAntennaSwitchIsSDRplayOnly(t *testing.T) {
+	if !soapyAntennaSwitchSupported("sdrplay") || !soapyAntennaSwitchSupported("sdrplay3") {
+		t.Fatal("SDRplay should use Soapy listAntennas / getAntenna")
+	}
+	for _, driver := range []string{"rtlsdr", "hackrf", "airspy"} {
+		if soapyAntennaSwitchSupported(driver) {
+			t.Fatalf("%s must not call Soapy antenna APIs after the IQ stream starts", driver)
+		}
+	}
+}

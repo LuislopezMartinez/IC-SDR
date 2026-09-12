@@ -60,13 +60,27 @@ func defaultAntennasFor(driver string) []string {
 	return nil
 }
 
+func soapyAntennaSwitchSupported(driver string) bool {
+	return ProfileFor(driver) == ProfileSDRplay
+}
+
+const maxSoapyAntennas = 16
+
 func (api *soapyAPI) listAntennaNames(device uintptr) []string {
+	if api == nil || device == 0 {
+		return nil
+	}
 	var length uintptr
 	list := api.listAntennas(device, soapyRX, 0, &length)
 	if list == 0 || length == 0 {
 		return nil
 	}
-	defer api.stringsClear(list, length)
+	if length > maxSoapyAntennas {
+		// A garbage length would walk off the list and crash. Skip the free
+		// rather than pass a truncated count into SoapySDRStrings_clear.
+		return nil
+	}
+	defer api.stringsClear(&list, length)
 	pointerSize := unsafe.Sizeof(uintptr(0))
 	out := make([]string, 0, int(length))
 	for index := uintptr(0); index < length; index++ {
@@ -82,6 +96,11 @@ func (device *soapyDevice) refreshAntennas() {
 	if device == nil || device.api == nil {
 		return
 	}
+	if !soapyAntennaSwitchSupported(device.driver) {
+		device.antennas = nil
+		device.antenna = ""
+		return
+	}
 	antennas := device.api.listAntennaNames(device.device)
 	if len(antennas) == 0 {
 		antennas = defaultAntennasFor(device.driver)
@@ -95,6 +114,9 @@ func (device *soapyDevice) refreshAntennas() {
 }
 
 func (device *soapyDevice) antennaState() (string, []string) {
+	if !soapyAntennaSwitchSupported(device.driver) {
+		return "", nil
+	}
 	if len(device.antennas) == 0 {
 		device.refreshAntennas()
 	}
@@ -115,6 +137,9 @@ func (device *soapyDevice) antennaState() (string, []string) {
 
 func (device *soapyDevice) setAntenna(name string) error {
 	if device == nil || device.api == nil {
+		return nil
+	}
+	if !soapyAntennaSwitchSupported(device.driver) {
 		return nil
 	}
 	if len(device.antennas) == 0 {

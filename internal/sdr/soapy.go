@@ -92,7 +92,8 @@ type soapyAPI struct {
 	listAntennas           func(uintptr, int32, uintptr, *uintptr) uintptr
 	getAntenna             func(uintptr, int32, uintptr) uintptr
 	setAntenna             func(uintptr, int32, uintptr, string) int32
-	stringsClear           func(uintptr, uintptr)
+	// SoapySDRStrings_clear(char ***elems, size_t length) — pointer to the list pointer.
+	stringsClear func(*uintptr, uintptr)
 }
 
 type soapyDevice struct {
@@ -251,6 +252,11 @@ func openSoapyCandidate(api *soapyAPI, config Config) (result *soapyDevice, err 
 	if err = api.check(api.setFrequency(device, soapyRX, 0, float64(config.FrequencyHz), 0), "set frequency"); err != nil {
 		return nil, err
 	}
+	if soapyAntennaSwitchSupported(config.Driver) {
+		config.trace("SoapySDR/%s: reading antennas", config.Driver)
+		result.refreshAntennas()
+		config.trace("SoapySDR/%s: antennas=%d current=%s", config.Driver, len(result.antennas), result.antenna)
+	}
 	config.trace("SoapySDR/%s: creating CF32 stream", config.Driver)
 	result.stream = api.setupStream(device, soapyRX, "CF32", 0, 0, 0)
 	if result.stream == 0 {
@@ -261,8 +267,7 @@ func openSoapyCandidate(api *soapyAPI, config Config) (result *soapyDevice, err 
 		return nil, err
 	}
 	config.trace("SoapySDR/%s: stream activate returned", config.Driver)
-	result.refreshAntennas()
-	if wanted := strings.TrimSpace(config.requestedAntenna()); wanted != "" {
+	if wanted := strings.TrimSpace(config.requestedAntenna()); wanted != "" && soapyAntennaSwitchSupported(config.Driver) {
 		if setErr := result.setAntenna(wanted); setErr != nil {
 			config.trace("SoapySDR/%s: antenna %q after stream: %v", config.Driver, wanted, setErr)
 		}
@@ -674,12 +679,14 @@ func cString(pointer uintptr) string {
 	if pointer == 0 {
 		return ""
 	}
+	const maxCString = 4096
 	bytes := make([]byte, 0, 128)
-	for offset := uintptr(0); ; offset++ {
+	for offset := uintptr(0); offset < maxCString; offset++ {
 		value := *(*byte)(unsafe.Pointer(pointer + offset))
 		if value == 0 {
 			return string(bytes)
 		}
 		bytes = append(bytes, value)
 	}
+	return string(bytes)
 }
