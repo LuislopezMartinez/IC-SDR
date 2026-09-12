@@ -7,7 +7,7 @@
 IC-SDR brings together reception, demodulation, spectrum analysis and digital signal decoding in a desktop interface designed for daily use.
 
 > [!IMPORTANT]
-> IC-SDR is designed specifically for **Windows**. The binary and all components required for portable distribution are located in the `dist/IC-SDR-Go` folder after generating the package.
+IC-SDR is designed for **Windows** portable SDR use, and also compiles for **Linux** and **macOS** (UI; SoapySDR hardware is currently Windows-only).
 
 ![IC-SDR main interface](docs/images/ic-sdr-main.png)
 
@@ -65,9 +65,10 @@ The `dist/` folder is generated locally and is not part of the versioned source 
 
 ## Requirements
 
-- Windows.
+- **Windows** for the portable SoapySDR / RTL-SDR runtime (RSP and RTL dongles).
+- Linux and macOS builds compile and run the desktop UI; hardware SDR via SoapySDR is still Windows-only.
 - Go 1.22 or later to compile from source (see `go.mod`).
-- A receiver compatible with RTL-SDR or SoapySDR/SDRplay.
+- A receiver compatible with RTL-SDR or SoapySDR/SDRplay on Windows.
 
 ## Compilation
 
@@ -76,6 +77,14 @@ From the repository root:
 ```powershell
 go build .
 ```
+
+GitHub Actions tests and compiles on Windows, Linux, and macOS. To cross-compile all desktop targets locally:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build-all.ps1
+```
+
+That produces `dist/multi/IC-SDR-{windows,linux,darwin}-{amd64,arm64}` with `CGO_ENABLED=0` (embedded raylib). Hardware SDR via SoapySDR is currently Windows x64; Linux and macOS still start the UI without a receiver.
 
 To generate the portable Windows distribution:
 

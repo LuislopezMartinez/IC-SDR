@@ -1,0 +1,99 @@
+# Build every supported OS/arch and publish a GitHub release.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create or update
+        required: true
+        default: v0.3.1-english.8
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+      - name: Cross-compile
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          build() {
+            local goos="$1" goarch="$2" ext="$3" extra="${4:-}"
+            echo "Building $goos/$goarch"
+            GOOS="$goos" GOARCH="$goarch" go build -trimpath \
+              -ldflags "-s -w $extra" \
+              -o "dist/IC-SDR-${goos}-${goarch}${ext}" .
+          }
+          build windows amd64 .exe -H=windowsgui
+          build windows arm64 .exe -H=windowsgui
+          build linux amd64 ""
+          build linux arm64 ""
+          build darwin amd64 ""
+          build darwin arm64 ""
+          ls -lh dist
+
+      - name: Package archives
+        run: |
+          set -euo pipefail
+          cd dist
+          zip IC-SDR-windows-amd64.zip IC-SDR-windows-amd64.exe
+          zip IC-SDR-windows-arm64.zip IC-SDR-windows-arm64.exe
+          tar -czf IC-SDR-linux-amd64.tar.gz IC-SDR-linux-amd64
+          tar -czf IC-SDR-linux-arm64.tar.gz IC-SDR-linux-arm64
+          tar -czf IC-SDR-darwin-amd64.tar.gz IC-SDR-darwin-amd64
+          tar -czf IC-SDR-darwin-arm64.tar.gz IC-SDR-darwin-arm64
+          sha256sum IC-SDR-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          TITLE="IC-SDR ${TAG} — Windows, Linux, macOS"
+          NOTES="$(cat <<'EOF'
+          Multi-OS build of the English IC-SDR branch (UI, languages, and region band plans).
+
+          Binaries are compiled with `CGO_ENABLED=0` (embedded raylib).
+
+          - **Windows amd64/arm64** — GUI executable. The portable SoapySDR/RTL-SDR runtime is still Windows x64 only; copy `DATA` next to the exe as in previous English releases.
+          - **Linux amd64/arm64** and **macOS amd64/arm64** — the desktop UI builds and runs. Hardware SDR via SoapySDR is currently Windows-only; the app still opens without a receiver.
+
+          SHA-256 checksums are in `SHA256SUMS.txt`.
+          EOF
+          )"
+          assets=(
+            dist/IC-SDR-windows-amd64.zip
+            dist/IC-SDR-windows-arm64.zip
+            dist/IC-SDR-linux-amd64.tar.gz
+            dist/IC-SDR-linux-arm64.tar.gz
+            dist/IC-SDR-darwin-amd64.tar.gz
+            dist/IC-SDR-darwin-arm64.tar.gz
+            dist/SHA256SUMS.txt
+          )
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${assets[@]}" --clobber
+            gh release edit "$TAG" --title "$TITLE" --notes "$NOTES"
+          else
+            gh release create "$TAG" "${assets[@]}" --title "$TITLE" --notes "$NOTES" --target "${GITHUB_SHA}"
+          fi

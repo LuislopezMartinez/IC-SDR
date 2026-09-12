@@ -9,7 +9,11 @@ const (
 	soapyOverflow = -4
 )
 
-type soapyDevice struct{}
+type soapyDevice struct {
+	hardware   string
+	driver     string
+	sampleRate float64
+}
 
 func openSoapy(Config) (*soapyDevice, error) {
 	return nil, fmt.Errorf("the first SoapySDR backend is currently available only on Windows")

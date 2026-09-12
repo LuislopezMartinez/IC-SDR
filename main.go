@@ -95,7 +95,7 @@ func main() {
 	logPortableResources()
 	startupStep("Building receiver and decoders")
 	receiver := sdr.NewReceiver(sdr.Config{
-		RuntimeRoot: resources.Path("runtime", "windows-x64"),
+		RuntimeRoot: sdrRuntimeRoot(),
 		Driver:      "sdrplay",
 		// Empty serial accepts any connected RSP. If none is available the
 		// receiver automatically falls back to an RTL-SDR device.
@@ -105,18 +105,18 @@ func main() {
 		FFTSize:                   4096,
 		CalibrationDB:             23,
 		InitialHardware:           initialHardware,
-		DMRExecutable:             resources.Path("tools", "dmr", "runtime", "bin", "dmr_sample_runner.exe"),
-		RTL433Executable:          resources.Path("tools", "rtl_433", "runtime", "bin", "rtl_433.exe"),
+		DMRExecutable:             toolExecutable("dmr", "dmr_sample_runner"),
+		RTL433Executable:          toolExecutable("rtl_433", "rtl_433"),
 		RadiosondeDirectory:       resources.Path("tools", "radiosonde", "runtime", "bin"),
-		AISExecutable:             resources.Path("tools", "ais", "runtime", "bin", "AIS-catcher.exe"),
-		Aircraft1090Executable:    resources.Path("tools", "aircraft", "runtime", "bin", "dump1090.exe"),
-		Aircraft978Executable:     resources.Path("tools", "aircraft", "runtime", "bin", "dump978.exe"),
-		AircraftUATTextExecutable: resources.Path("tools", "aircraft", "runtime", "bin", "uat2text.exe"),
-		APRSExecutable:            resources.Path("tools", "aprs", "runtime", "bin", "direwolf.exe"),
+		AISExecutable:             toolExecutable("ais", "AIS-catcher"),
+		Aircraft1090Executable:    toolExecutable("aircraft", "dump1090"),
+		Aircraft978Executable:     toolExecutable("aircraft", "dump978"),
+		AircraftUATTextExecutable: toolExecutable("aircraft", "uat2text"),
+		APRSExecutable:            toolExecutable("aprs", "direwolf"),
 		APRSConfig:                resources.Path("tools", "aprs", "config", "direwolf-rx.conf"),
 		APRSWorkingDirectory:      resources.Path("tools", "aprs", "runtime"),
-		SSTVExecutable:            resources.Path("tools", "sstv", "runtime", "bin", "sstv_decoder_runner.exe"),
-		TETRACodec:                resources.Path("tools", "tetra", "runtime", "bin", "libtetradec.dll"),
+		SSTVExecutable:            toolExecutable("sstv", "sstv_decoder_runner"),
+		TETRACodec:                tetraCodecPath(),
 		SSTVOutputDirectory:       resources.WritablePath("captures", "sstv"),
 		StartupLog:                startupStep,
 	})
