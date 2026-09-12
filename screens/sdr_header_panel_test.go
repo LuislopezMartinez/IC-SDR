@@ -99,6 +99,15 @@ func TestDCSpikeSwitchUpdatesReceiver(t *testing.T) {
 	}
 }
 
+func TestHeaderDeviceDropdownStaysEnabled(t *testing.T) {
+	p := NewSDRHeaderPanel(nil, nil)
+	p.current = sdr.HardwareSettings{Available: false}
+	p.refresh()
+	if p.deviceSelect == nil || !p.deviceSelect.Enabled() {
+		t.Fatal("SDR picker must stay usable with no radio open")
+	}
+}
+
 func TestRTLHeaderHidesAntennaSwitch(t *testing.T) {
 	p := NewSDRHeaderPanel(nil, nil)
 	p.current = sdr.HardwareSettings{Available: true, Driver: "rtlsdr", Device: "R820T"}

@@ -51,7 +51,7 @@ func NewSatellitePanel(screen *MainScreen) *SatellitePanel {
 	p.signalSelect = simpleui.NewDropdown("satelliteSignal", 1000, toolY+30, 280, 34, "SIGNAL", nil, uiControlFontSize)
 	p.groupSelect.SetMaxVisibleItems(8)
 	p.satelliteSelect.SetMaxVisibleItems(8)
-	p.signalSelect.SetMaxVisibleItems(6)
+	p.signalSelect.SetMaxVisibleItems(12)
 	p.groupSelect.OnChange(func(_ int, group string) {
 		p.currentGroup = group
 		p.populateSatellites(0)
@@ -217,7 +217,7 @@ func (p *SatellitePanel) selectSearchMatch(sat satellite.Satellite) {
 func (p *SatellitePanel) refreshSignals(s satellite.Satellite) {
 	items := make([]string, len(s.Signals))
 	for i, x := range s.Signals {
-		items[i] = x.Name + " · " + x.Mode
+		items[i] = satellite.FormatSignalLabel(x)
 	}
 	if len(items) == 0 {
 		items = []string{"No catalogued frequency"}
@@ -381,13 +381,22 @@ func (p *SatellitePanel) tune() {
 	p.screen.frequencyHz = hz
 	p.screen.centerFrequencyHz = hz
 	p.screen.centerMode = true
+	mode := satellite.DemodForSignal(signals[j].Mode)
+	p.screen.savedMode = mode
+	if p.screen.mode != nil {
+		for index, item := range p.screen.mode.Items() {
+			if item == mode {
+				p.screen.mode.SetSelected(index)
+				break
+			}
+		}
+	}
 	p.screen.updateBandForFrequency(hz)
+	if p.screen.filterSelector != nil {
+		p.screen.selectFilter(p.screen.filterSelector.Current(mode))
+	}
 	if p.screen.receiver != nil {
 		p.screen.receiver.SetCenterFrequency(hz)
-		mode := "NFM"
-		if signals[j].Mode == "SSB/CW" {
-			mode = "USB"
-		}
 		p.screen.receiver.SetDemodulator(mode, hz, p.screen.demodBandwidthHz)
 	}
 	p.feedback = fmt.Sprintf("TUNED TO %.6f MHz", float64(hz)/1e6)

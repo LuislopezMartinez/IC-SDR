@@ -309,7 +309,10 @@ func (screen *MainScreen) flushSettings(force bool) {
 	if screen.receiver != nil {
 		settings.RemoveDCSpike = boolSetting(screen.receiver.RemoveDCSpike())
 		hardware := screen.receiver.HardwareSettings()
-		if hardware.Available {
+		if hardware.Driver == "" && screen.savedHardware != nil {
+			hardware = *screen.savedHardware
+		}
+		if hardware.Driver != "" || hardware.Available {
 			settings.Hardware = &hardware
 		}
 	}

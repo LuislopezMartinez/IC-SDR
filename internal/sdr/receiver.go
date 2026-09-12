@@ -76,7 +76,7 @@ type Stats struct {
 type HardwareSettings struct {
 	Available, AGC, BiasT, RFNotch, DABNotch, IQCorrection bool
 	DigitalAGC, OffsetTuning, IQSwap                       bool
-	Device, Driver, Antenna                                string
+	Device, Driver, Antenna, Serial                        string
 	Antennas                                               []string `json:"-"`
 	RFGain, IFGain, PPM                                    float32
 	AGCSetpoint, DirectSampling                            int
@@ -111,6 +111,8 @@ type Receiver struct {
 	closeOnce     sync.Once
 	startMu       sync.Mutex
 	closed        atomic.Bool
+	switching     atomic.Bool
+	devices       []DeviceOption
 
 	mu                                 sync.RWMutex
 	spectrum                           []float32
@@ -198,8 +200,99 @@ func (receiver *Receiver) Start() error {
 	if receiver.closed.Load() {
 		return fmt.Errorf("receiver closed")
 	}
+	if receiver.running.Load() {
+		return nil
+	}
+	return receiver.openAndRunLocked(false)
+}
+
+func (receiver *Receiver) SetPreferredDevice(driver, serial string) {
+	receiver.startMu.Lock()
+	defer receiver.startMu.Unlock()
+	if strings.TrimSpace(driver) != "" {
+		receiver.config.Driver = driver
+	}
+	receiver.config.Serial = serial
+}
+
+func (receiver *Receiver) SelectDevice(driver, serial string) error {
+	receiver.startMu.Lock()
+	defer receiver.startMu.Unlock()
+	if receiver.closed.Load() {
+		return fmt.Errorf("receiver closed")
+	}
+	driver = strings.TrimSpace(driver)
+	if driver == "" {
+		return fmt.Errorf("no SDR selected")
+	}
+	if receiver.device != nil && receiver.running.Load() && strings.EqualFold(receiver.device.driver, driver) && receiver.device.serial == serial {
+		return nil
+	}
+	receiver.switching.Store(true)
+	defer receiver.switching.Store(false)
+	previous := receiver.config
+	receiver.stopCaptureLocked()
+	receiver.config.Driver, receiver.config.Serial = driver, serial
+	if err := receiver.openAndRunLocked(true); err != nil {
+		receiver.config = previous
+		if reopenErr := receiver.openAndRunLocked(false); reopenErr != nil {
+			receiver.mu.Lock()
+			receiver.stats.Status = "ERROR: " + err.Error()
+			receiver.mu.Unlock()
+			return err
+		}
+		return fmt.Errorf("could not open %s: %w", driver, err)
+	}
+	return nil
+}
+
+func (receiver *Receiver) ListDevices() []DeviceOption {
+	list, err := listSoapyDevices(receiver.config)
+	if err != nil {
+		return nil
+	}
+	receiver.mu.Lock()
+	receiver.devices = list
+	receiver.mu.Unlock()
+	return list
+}
+
+func (receiver *Receiver) CachedDevices() []DeviceOption {
+	receiver.mu.RLock()
+	defer receiver.mu.RUnlock()
+	return append([]DeviceOption(nil), receiver.devices...)
+}
+
+func (receiver *Receiver) stopCaptureLocked() {
+	if receiver.device != nil {
+		receiver.device.stopStream()
+	}
+	if receiver.running.Swap(false) {
+		close(receiver.stop)
+		<-receiver.done
+		<-receiver.tuneDone
+		if receiver.device != nil {
+			receiver.device.close()
+			receiver.device = nil
+		}
+		receiver.stop = make(chan struct{})
+		receiver.done = make(chan struct{})
+		receiver.tuneDone = make(chan struct{})
+		return
+	}
+	if receiver.device != nil {
+		receiver.device.close()
+		receiver.device = nil
+	}
+}
+
+func (receiver *Receiver) openAndRunLocked(exact bool) error {
 	receiver.trace("SDR: searching for device candidates")
-	device, err := openSoapy(receiver.config)
+	open := openSoapy
+	if exact {
+		open = openSoapyExact
+	}
+	device, err := open(receiver.config)
 	if err != nil {
 		receiver.setError(err)
 		return err
@@ -222,6 +315,7 @@ func (receiver *Receiver) Start() error {
 		initial.Available = true
 		initial.Device = hardware.Device
 		initial.Driver = hardware.Driver
+		initial.Serial = hardware.Serial
 		initial.Antennas = hardware.Antennas
 		if initial.Antenna == "" {
 			initial.Antenna = hardware.Antenna
@@ -241,6 +335,7 @@ func (receiver *Receiver) Start() error {
 	receiver.stats.SpectrumCenterHz = receiver.config.FrequencyHz
 	receiver.stats.Status = "IQ waiting for first samples"
 	receiver.hardware = hardware
+	receiver.devices = mergeDeviceOptions(receiver.devices, []DeviceOption{{Driver: device.driver, Serial: device.serial, Label: device.hardware}})
 	receiver.mu.Unlock()
 	receiver.running.Store(true)
 	go receiver.run()
@@ -694,7 +789,9 @@ func (receiver *Receiver) run() {
 		}
 		read, code, err := receiver.device.read(readBuffer)
 		if err != nil {
-			receiver.setError(err)
+			if !receiver.switching.Load() {
+				receiver.setError(err)
+			}
 			return
 		}
 		if code == soapyTimeout {
@@ -1001,6 +1098,9 @@ func (receiver *Receiver) addEvent(timeout, overflow bool) {
 }
 
 func (receiver *Receiver) setError(err error) {
+	if receiver.switching.Load() {
+		return
+	}
 	receiver.mu.Lock()
 	receiver.stats.Status = "ERROR: " + err.Error()
 	receiver.mu.Unlock()

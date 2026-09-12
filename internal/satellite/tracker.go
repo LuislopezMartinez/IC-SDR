@@ -75,12 +75,14 @@ type Snapshot struct {
 }
 
 type Tracker struct {
-	mu         sync.RWMutex
-	satellites []Satellite
-	station    Station
-	selected   int
-	source     string
-	cachePath  string
+	mu              sync.RWMutex
+	satellites      []Satellite
+	transmitters    map[int][]Signal
+	station         Station
+	selected        int
+	source          string
+	cachePath       string
+	transmitterPath string
 }
 
 var groups = []struct{ Name, Query string }{
@@ -91,9 +93,18 @@ var groups = []struct{ Name, Query string }{
 }
 
 func NewTracker(cachePath string) *Tracker {
-	t := &Tracker{cachePath: cachePath, station: DefaultStation(""), selected: 25544, source: "built-in catalog"}
+	t := &Tracker{
+		cachePath:       cachePath,
+		transmitterPath: filepath.Join(filepath.Dir(cachePath), "satellites-transmitters.json"),
+		transmitters:    builtinTransmitters(),
+		station:         DefaultStation(""),
+		selected:        25544,
+		source:          "built-in catalog",
+	}
+	_ = t.loadTransmitters()
 	t.satellites = fallbackCatalog()
 	_ = t.loadCache()
+	t.attachSignalsLocked()
 	return t
 }
 
@@ -108,7 +119,7 @@ func (t *Tracker) Satellites() []Satellite {
 }
 
 func (t *Tracker) Refresh(ctx context.Context) error {
-	client := &http.Client{Timeout: 18 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second}
 	seen := map[int]Satellite{}
 	// Keep the two promised anchor objects available even if a remote group is
 	// temporarily incomplete. Fresh TLEs replace these entries when received.
@@ -140,9 +151,12 @@ func (t *Tracker) Refresh(ctx context.Context) error {
 	if remoteCount == 0 {
 		return fmt.Errorf("could not update orbital catalog (%d groups failed)", failures)
 	}
+	var remoteTransmitters map[int][]Signal
+	if table, err := fetchSatnogsTransmitters(client); err == nil {
+		remoteTransmitters = table
+	}
 	list := make([]Satellite, 0, len(seen))
 	for _, sat := range seen {
-		applyKnownSignals(&sat)
 		list = append(list, sat)
 	}
 	sort.Slice(list, func(i, j int) bool {
@@ -152,9 +166,16 @@ func (t *Tracker) Refresh(ctx context.Context) error {
 		return priority(list[i].Group) < priority(list[j].Group)
 	})
 	t.mu.Lock()
+	if remoteTransmitters != nil {
+		t.transmitters = mergeTransmitterTables(builtinTransmitters(), remoteTransmitters)
+	}
 	t.satellites = list
-	t.source = "CelesTrak · " + time.Now().Format("02 Jan 15:04")
+	t.attachSignalsLocked()
+	t.source = "CelesTrak · SatNOGS · " + time.Now().Format("02 Jan 15:04")
 	t.mu.Unlock()
+	if remoteTransmitters != nil {
+		_ = t.saveTransmitters()
+	}
 	return t.saveCache()
 }
 
@@ -433,12 +454,7 @@ func (t *Tracker) loadCache() error {
 }
 
 func applyKnownSignals(s *Satellite) {
-	switch s.NORAD {
-	case 25544:
-		s.Signals = []Signal{{"Voice / SSTV", "FM", 145800000}, {"APRS", "AFSK", 145825000}}
-	case 43700:
-		s.Signals = []Signal{{"PSK beacon", "BPSK", 10489750000}, {"NB transponder", "SSB/CW", 10489500000}, {"WB transponder", "DVB-S2", 10491000000}}
-	}
+	s.Signals = mergeSignals(knownSignals(s.NORAD), s.Signals)
 }
 func fallbackCatalog() []Satellite {
 	raw := [][4]string{{"ISS (ZARYA)", "Space stations", "1 25544U 98067A   25250.50000000  .00012000  00000-0  22000-3 0  9991", "2 25544  51.6340 150.0000 0004000 100.0000 260.0000 15.50000000123456"}, {"QO-100 (ES'HAIL 2)", "Amateur radio", "1 43700U 18090A   25250.50000000  .00000010  00000-0  00000-0 0  9991", "2 43700   0.0150  85.0000 0001800 270.0000  90.0000  1.00270000 25000"}}

@@ -3,6 +3,7 @@ package screens
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"go-zero/internal/sdr"
@@ -10,16 +11,19 @@ import (
 )
 
 type SDRHeaderPanel struct {
-	receiver                                          *sdr.Receiver
-	controls                                          []simpleui.Element
-	current                                           sdr.HardwareSettings
-	nextSync                                          float64
-	onChanged                                         func()
-	status, rfLabel, ifLabel, ppmLabel, setpointLabel *simpleui.Label
-	agc, biasT, iqCorrection, rfNotch, dabNotch       *simpleui.Switch
-	rfGain, ifGain, ppm, setpoint                     *simpleui.Slider
-	antenna                                           [3]*simpleui.Button
-	dcSpike                                           *simpleui.Switch
+	receiver                                    *sdr.Receiver
+	controls                                    []simpleui.Element
+	current                                     sdr.HardwareSettings
+	devices                                     []sdr.DeviceOption
+	nextSync                                    float64
+	listing, listOpen                           bool
+	onChanged                                   func()
+	deviceSelect                                *simpleui.Dropdown
+	rfLabel, ifLabel, ppmLabel, setpointLabel   *simpleui.Label
+	agc, biasT, iqCorrection, rfNotch, dabNotch *simpleui.Switch
+	rfGain, ifGain, ppm, setpoint               *simpleui.Slider
+	antenna                                     [3]*simpleui.Button
+	dcSpike                                     *simpleui.Switch
 }
 
 func NewSDRHeaderPanel(receiver *sdr.Receiver, onChanged func()) *SDRHeaderPanel {
@@ -29,7 +33,22 @@ func NewSDRHeaderPanel(receiver *sdr.Receiver, onChanged func()) *SDRHeaderPanel
 		v.SetAlignment(simpleui.AlignCenter)
 		return v
 	}
-	p.status = label("headerSDRStatus", 1268, 5, 304)
+	p.deviceSelect = simpleui.NewDropdown("headerSDRDevice", 1268, 5, 304, 22, T("SDR · NO DEVICE"), nil, 11)
+	p.deviceSelect.SetMaxVisibleItems(6)
+	p.deviceSelect.OnChange(func(index int, _ string) {
+		if p.receiver == nil || index < 0 || index >= len(p.devices) {
+			return
+		}
+		opt := p.devices[index]
+		go func() {
+			if err := p.receiver.SelectDevice(opt.Driver, opt.Serial); err != nil {
+				return
+			}
+			if p.onChanged != nil {
+				p.onChanged()
+			}
+		}()
+	})
 	p.agc = simpleui.NewSwitch("headerSDRAGC", 1270, 27, 92, 27, "AGC", false, 12)
 	p.biasT = simpleui.NewSwitch("headerSDRBiasT", 1370, 27, 92, 27, "BIAS-T", false, 12)
 	p.iqCorrection = simpleui.NewSwitch("headerSDRIQ", 1470, 27, 100, 27, "IQ", true, 12)
@@ -109,12 +128,24 @@ func NewSDRHeaderPanel(receiver *sdr.Receiver, onChanged func()) *SDRHeaderPanel
 	p.ppm.OnRelease(func(float32) { p.submit() })
 	p.setpoint.OnChange(func(v float32) { p.current.AGCSetpoint = int(math.Round(float64(v))); p.refreshLabels() })
 	p.setpoint.OnRelease(func(float32) { p.submit() })
-	p.controls = []simpleui.Element{p.status, p.agc, p.biasT, p.iqCorrection, p.rfLabel, p.ifLabel, p.rfGain, p.ifGain, p.ppmLabel, p.setpointLabel, p.ppm, p.setpoint, p.antenna[0], p.antenna[1], p.antenna[2], p.dcSpike, p.rfNotch, p.dabNotch}
+	p.controls = []simpleui.Element{p.deviceSelect, p.agc, p.biasT, p.iqCorrection, p.rfLabel, p.ifLabel, p.rfGain, p.ifGain, p.ppmLabel, p.setpointLabel, p.ppm, p.setpoint, p.antenna[0], p.antenna[1], p.antenna[2], p.dcSpike, p.rfNotch, p.dabNotch}
 	p.sync()
 	return p
 }
 
 func (p *SDRHeaderPanel) Tick() {
+	if p.receiver != nil && p.deviceSelect != nil && p.deviceSelect.Open() {
+		if !p.listOpen && !p.listing {
+			p.listing = true
+			p.listOpen = true
+			go func() {
+				_ = p.receiver.ListDevices()
+				p.listing = false
+			}()
+		}
+	} else {
+		p.listOpen = false
+	}
 	if p.receiver != nil && !rl.IsMouseButtonDown(rl.MouseButtonLeft) && rl.GetTime() >= p.nextSync {
 		p.sync()
 		p.nextSync = rl.GetTime() + .25
@@ -140,11 +171,7 @@ func (p *SDRHeaderPanel) refresh() {
 	profile := sdr.ProfileFor(s.Driver)
 	rtl := profile == sdr.ProfileRTLSDR
 	generic := profile == sdr.ProfileGeneric
-	status := T("SDR · NO DEVICE")
-	if s.Available {
-		status = fmt.Sprintf("SDR %s · %s", s.Device, s.Driver)
-	}
-	p.status.SetText(status)
+	p.refreshDeviceList()
 	p.agc.SetActive(s.AGC)
 	p.biasT.SetActive(s.BiasT)
 	p.iqCorrection.SetActive(s.IQCorrection)
@@ -193,7 +220,7 @@ func (p *SDRHeaderPanel) refresh() {
 	for _, c := range p.controls {
 		c.SetEnabled(s.Available)
 	}
-	p.status.SetEnabled(true)
+	p.deviceSelect.SetEnabled(true)
 	switch {
 	case rtl:
 		p.ifGain.SetEnabled(s.Available)
@@ -209,8 +236,46 @@ func (p *SDRHeaderPanel) refresh() {
 	}
 	p.rfGain.SetEnabled(s.Available && !s.AGC && (!rtl || s.DirectSampling == 0))
 	p.dcSpike.SetEnabled(true)
+	p.deviceSelect.SetEnabled(true)
 	p.refreshAntennaButtons()
 	p.refreshLabels()
+}
+
+func (p *SDRHeaderPanel) refreshDeviceList() {
+	if p.deviceSelect == nil {
+		return
+	}
+	var list []sdr.DeviceOption
+	if p.receiver != nil {
+		list = p.receiver.CachedDevices()
+	}
+	if len(list) == 0 && p.current.Available && p.current.Driver != "" {
+		list = []sdr.DeviceOption{{Driver: p.current.Driver, Serial: p.current.Serial, Label: p.current.Device}}
+	}
+	if p.deviceSelect.Open() && len(p.deviceSelect.Items()) > 0 && len(list) == len(p.devices) {
+		return
+	}
+	p.devices = list
+	items := make([]string, len(list))
+	selected := -1
+	for i, opt := range list {
+		items[i] = sdr.FormatDeviceLabel(opt)
+		if strings.EqualFold(opt.Driver, p.current.Driver) && (p.current.Serial == "" || opt.Serial == p.current.Serial) {
+			selected = i
+		}
+	}
+	p.deviceSelect.SetItems(items)
+	if selected >= 0 {
+		p.deviceSelect.SetSelected(selected)
+	} else if p.current.Available && p.current.Device != "" {
+		p.deviceSelect.SetDisabledText(fmt.Sprintf("SDR %s · %s", p.current.Device, p.current.Driver))
+	} else {
+		p.deviceSelect.SetDisabledText("")
+	}
+}
+
+func (p *SDRHeaderPanel) OverlayOpen() bool {
+	return p.deviceSelect != nil && p.deviceSelect.OverlayOpen()
 }
 
 func (p *SDRHeaderPanel) refreshAntennaButtons() {

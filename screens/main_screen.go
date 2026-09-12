@@ -411,6 +411,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.toolMenu.SetSelectSound(screen.uiSounds.PlayToolSelect)
 	simpleui.SetActivationFeedback(screen.uiSounds.PlayButton)
 	if screen.receiver != nil && screen.savedHardware != nil {
+		screen.receiver.SetPreferredDevice(screen.savedHardware.Driver, screen.savedHardware.Serial)
 		screen.receiver.ApplyHardwareSettings(*screen.savedHardware)
 	}
 	screen.sdrHeader = NewSDRHeaderPanel(screen.receiver, screen.markSettingsDirty)
@@ -2015,6 +2016,7 @@ func (screen *MainScreen) overlayOpen() bool {
 	return simpleui.PointerInputBlocked() ||
 		(screen.toolMenu != nil && screen.toolMenu.OverlayOpen()) ||
 		(screen.bandSelector != nil && screen.bandSelector.OverlayOpen()) ||
+		(screen.sdrHeader != nil && screen.sdrHeader.OverlayOpen()) ||
 		(screen.sdrSettings != nil && screen.sdrSettings.OverlayOpen()) ||
 		(screen.stepSelector != nil && screen.stepSelector.OverlayOpen()) ||
 		(screen.filterSelector != nil && screen.filterSelector.OverlayOpen()) ||

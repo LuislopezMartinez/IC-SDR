@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
@@ -50,6 +51,93 @@ type soapyIdentity struct {
 	Driver string
 	Serial string
 	Label  string
+}
+
+// DeviceOption is one enumerated radio the user can pick in the header.
+type DeviceOption struct {
+	Driver, Serial, Label string
+}
+
+func FormatDeviceLabel(opt DeviceOption) string {
+	name := strings.TrimSpace(opt.Label)
+	if name == "" {
+		name = strings.TrimSpace(opt.Driver)
+	}
+	if name == "" {
+		name = "SDR"
+	}
+	if opt.Serial != "" {
+		serial := opt.Serial
+		if len(serial) > 10 {
+			serial = serial[len(serial)-8:]
+		}
+		return name + " · " + serial
+	}
+	if opt.Driver != "" && !strings.EqualFold(name, opt.Driver) {
+		return name + " · " + opt.Driver
+	}
+	return name
+}
+
+var (
+	soapyLoadMu sync.Mutex
+	soapyOpMu   sync.Mutex
+	soapyLoaded *soapyAPI
+)
+
+func sharedSoapy(config Config) (*soapyAPI, error) {
+	soapyLoadMu.Lock()
+	defer soapyLoadMu.Unlock()
+	if soapyLoaded != nil {
+		return soapyLoaded, nil
+	}
+	api, err := loadSoapy(config)
+	if err != nil {
+		return nil, err
+	}
+	soapyLoaded = api
+	return api, nil
+}
+
+func identitiesToOptions(list []soapyIdentity) []DeviceOption {
+	out := make([]DeviceOption, 0, len(list))
+	seen := map[string]struct{}{}
+	for _, ident := range list {
+		key := strings.ToLower(ident.Driver) + "\x00" + ident.Serial
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, DeviceOption{Driver: ident.Driver, Serial: ident.Serial, Label: ident.Label})
+	}
+	return out
+}
+
+func mergeDeviceOptions(base, extra []DeviceOption) []DeviceOption {
+	out := append([]DeviceOption(nil), base...)
+	seen := map[string]struct{}{}
+	for _, opt := range out {
+		seen[strings.ToLower(opt.Driver)+"\x00"+opt.Serial] = struct{}{}
+	}
+	for _, opt := range extra {
+		key := strings.ToLower(opt.Driver) + "\x00" + opt.Serial
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, opt)
+	}
+	return out
+}
+
+func listSoapyDevices(config Config) ([]DeviceOption, error) {
+	api, err := sharedSoapy(config)
+	if err != nil {
+		return nil, err
+	}
+	soapyOpMu.Lock()
+	defer soapyOpMu.Unlock()
+	return identitiesToOptions(api.discoverDevices(config)), nil
 }
 
 type soapyKwargs struct {
@@ -102,6 +190,7 @@ type soapyDevice struct {
 	stream     uintptr
 	hardware   string
 	driver     string
+	serial     string
 	antenna    string
 	antennas   []string
 	sampleRate float64
@@ -197,13 +286,48 @@ func sampleRateAttempts(driver string, requested float64) []float64 {
 }
 
 func openSoapy(config Config) (*soapyDevice, error) {
+	return openSoapyWith(config, false)
+}
+
+func openSoapyExact(config Config) (*soapyDevice, error) {
+	return openSoapyWith(config, true)
+}
+
+func openSoapyWith(config Config, exact bool) (*soapyDevice, error) {
 	config.trace("SoapySDR: loading runtime and modules")
-	api, err := loadSoapy(config)
+	api, err := sharedSoapy(config)
 	if err != nil {
 		return nil, err
 	}
+	soapyOpMu.Lock()
+	defer soapyOpMu.Unlock()
 	discovered := api.discoverDevices(config)
-	candidates := deviceCandidates(config, discovered)
+	var candidates []Config
+	if exact {
+		if soapyDriverNeedsSerial(config.Driver) && strings.TrimSpace(config.Serial) == "" {
+			return nil, fmt.Errorf("driver %s needs a serial", config.Driver)
+		}
+		if len(discovered) > 0 {
+			matched := false
+			for _, ident := range discovered {
+				if !strings.EqualFold(ident.Driver, config.Driver) {
+					continue
+				}
+				if config.Serial != "" && ident.Serial != config.Serial {
+					continue
+				}
+				config.Serial = ident.Serial
+				matched = true
+				break
+			}
+			if !matched {
+				return nil, fmt.Errorf("%s %s is not connected", config.Driver, strings.TrimSpace(config.Serial))
+			}
+		}
+		candidates = []Config{config}
+	} else {
+		candidates = deviceCandidates(config, discovered)
+	}
 	var failures []error
 	for _, candidate := range candidates {
 		config.trace("SoapySDR: trying driver=%s serial=%q", candidate.Driver, candidate.Serial)
@@ -215,7 +339,6 @@ func openSoapy(config Config) (*soapyDevice, error) {
 		config.trace("SoapySDR: driver %s rejected: %v", candidate.Driver, err)
 		failures = append(failures, fmt.Errorf("%s: %w", candidate.Driver, err))
 	}
-	api.close()
 	if len(failures) == 0 {
 		return nil, fmt.Errorf("no SDR device found")
 	}
@@ -228,7 +351,7 @@ func openSoapyCandidate(api *soapyAPI, config Config) (result *soapyDevice, err 
 	if device == 0 {
 		return nil, fmt.Errorf("SoapySDR make device: %s", api.deviceError())
 	}
-	result = &soapyDevice{api: api, device: device, driver: config.Driver, buffer: make([]float32, config.FFTSize*2)}
+	result = &soapyDevice{api: api, device: device, driver: config.Driver, serial: config.Serial, buffer: make([]float32, config.FFTSize*2)}
 	defer func() {
 		if err != nil {
 			result.close()
@@ -419,6 +542,9 @@ func uniqueStrings(in []string) []string {
 }
 
 func (device *soapyDevice) read(destination []float32) (int, int32, error) {
+	if device == nil || device.api == nil || device.device == 0 || device.stream == 0 {
+		return 0, 0, fmt.Errorf("device closed")
+	}
 	requested := min(len(destination)/2, len(device.buffer)/2)
 	device.buffers[0] = uintptr(unsafe.Pointer(&device.buffer[0]))
 	var flags int32
@@ -435,6 +561,9 @@ func (device *soapyDevice) read(destination []float32) (int, int32, error) {
 }
 
 func (device *soapyDevice) setCenterFrequency(frequencyHz int64) error {
+	if device == nil || device.api == nil || device.device == 0 {
+		return fmt.Errorf("device closed")
+	}
 	err := device.api.check(
 		device.api.setFrequency(device.device, soapyRX, 0, float64(frequencyHz), 0),
 		"set center frequency",
@@ -454,7 +583,7 @@ func (device *soapyDevice) hardwareSettings() HardwareSettings {
 	switch ProfileFor(device.driver) {
 	case ProfileRTLSDR:
 		return HardwareSettings{
-			Available: true, Device: device.hardware, Driver: device.driver,
+			Available: true, Device: device.hardware, Driver: device.driver, Serial: device.serial,
 			Antenna: antenna, Antennas: antennas,
 			AGC:            device.api.getGainMode(device.device, soapyRX, 0),
 			RFGain:         float32(device.api.getGainElement(device.device, soapyRX, 0, "TUNER")),
@@ -467,7 +596,7 @@ func (device *soapyDevice) hardwareSettings() HardwareSettings {
 		}
 	case ProfileSDRplay:
 		return HardwareSettings{
-			Available: true, Device: device.hardware, Driver: device.driver,
+			Available: true, Device: device.hardware, Driver: device.driver, Serial: device.serial,
 			Antenna: antenna, Antennas: antennas,
 			AGC:          device.api.getGainMode(device.device, soapyRX, 0),
 			RFGain:       float32(device.api.getGainElement(device.device, soapyRX, 0, "RFGR")),
@@ -481,7 +610,7 @@ func (device *soapyDevice) hardwareSettings() HardwareSettings {
 		}
 	default:
 		return HardwareSettings{
-			Available: true, Device: device.hardware, Driver: device.driver,
+			Available: true, Device: device.hardware, Driver: device.driver, Serial: device.serial,
 			Antenna: antenna, Antennas: antennas,
 			AGC:    device.api.getGainMode(device.device, soapyRX, 0),
 			RFGain: float32(device.api.getGain(device.device, soapyRX, 0)),
@@ -619,7 +748,7 @@ func boolString(value bool) string {
 	return "false"
 }
 
-func (device *soapyDevice) close() {
+func (device *soapyDevice) stopStream() {
 	if device == nil || device.api == nil {
 		return
 	}
@@ -628,6 +757,13 @@ func (device *soapyDevice) close() {
 		device.api.closeStream(device.device, device.stream)
 		device.stream = 0
 	}
+}
+
+func (device *soapyDevice) close() {
+	if device == nil || device.api == nil {
+		return
+	}
+	device.stopStream()
 	if device.device != 0 {
 		device.api.unmakeDevice(device.device)
 		device.device = 0

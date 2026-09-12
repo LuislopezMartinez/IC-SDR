@@ -70,6 +70,34 @@ func TestDeviceCandidatesDoNotRequireRSPForRTLSDR(t *testing.T) {
 	}
 }
 
+func TestDeviceCandidatesPreferSavedRTLWhenEnumerated(t *testing.T) {
+	candidates := deviceCandidates(
+		Config{Driver: "rtlsdr", Serial: "00000001"},
+		[]soapyIdentity{
+			{Driver: "sdrplay", Serial: "RSP1", Label: "RSP1B"},
+			{Driver: "rtlsdr", Serial: "00000001", Label: "Generic RTL2832U"},
+		},
+	)
+	if len(candidates) == 0 || candidates[0].Driver != "rtlsdr" || candidates[0].Serial != "00000001" {
+		t.Fatalf("saved RTL-SDR must open first: %+v", candidates)
+	}
+}
+
+func TestFormatDeviceLabelUsesSerialSuffix(t *testing.T) {
+	got := FormatDeviceLabel(DeviceOption{Driver: "rtlsdr", Serial: "00000001", Label: "Generic RTL2832U"})
+	if got != "Generic RTL2832U · 00000001" {
+		t.Fatal(got)
+	}
+}
+
+func TestSelectDeviceRejectedAfterClose(t *testing.T) {
+	receiver := NewReceiver(Config{SampleRate: 2_048_000, FFTSize: 4096, Driver: "rtlsdr"})
+	receiver.Close()
+	if err := receiver.SelectDevice("rtlsdr", "00000001"); err == nil {
+		t.Fatal("SelectDevice after Close must fail")
+	}
+}
+
 func TestProfileForDrivers(t *testing.T) {
 	if ProfileFor("rtlsdr") != ProfileRTLSDR {
 		t.Fatal("rtlsdr profile")
