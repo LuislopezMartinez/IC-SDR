@@ -42,25 +42,40 @@ export CMAKE_PREFIX_PATH="$prefix${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
 export PATH="$prefix/bin:$PATH"
 
 jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)"
-cmake_arch=()
-configure_host=()
-libusb_opts=()
 if [[ "$GOOS_VAL" == "darwin" ]]; then
   if [[ "$GOARCH_VAL" == "amd64" ]]; then
     export CFLAGS="${CFLAGS:-} -arch x86_64"
     export CXXFLAGS="${CXXFLAGS:-} -arch x86_64"
     export LDFLAGS="${LDFLAGS:-} -arch x86_64"
-    cmake_arch=(-DCMAKE_OSX_ARCHITECTURES=x86_64)
-    configure_host=(--host=x86_64-apple-darwin)
   else
     export CFLAGS="${CFLAGS:-} -arch arm64"
     export CXXFLAGS="${CXXFLAGS:-} -arch arm64"
     export LDFLAGS="${LDFLAGS:-} -arch arm64"
-    cmake_arch=(-DCMAKE_OSX_ARCHITECTURES=arm64)
   fi
-else
-  libusb_opts=(--disable-udev)
 fi
+
+configure_libusb() {
+  local cfg=(./configure --prefix="$prefix" --disable-static)
+  if [[ "$GOOS_VAL" == "linux" ]]; then
+    cfg+=(--disable-udev)
+  fi
+  if [[ "$GOOS_VAL" == "darwin" && "$GOARCH_VAL" == "amd64" ]]; then
+    cfg+=(--host=x86_64-apple-darwin)
+  fi
+  "${cfg[@]}"
+}
+
+run_cmake() {
+  local srcdir="$1" builddir="$2"
+  shift 2
+  local args=("$@")
+  if [[ "$GOOS_VAL" == "darwin" && "$GOARCH_VAL" == "amd64" ]]; then
+    args+=(-DCMAKE_OSX_ARCHITECTURES=x86_64)
+  elif [[ "$GOOS_VAL" == "darwin" ]]; then
+    args+=(-DCMAKE_OSX_ARCHITECTURES=arm64)
+  fi
+  cmake -S "$srcdir" -B "$builddir" "${args[@]}"
+}
 
 fetch() {
   local url="$1" dest="$2"
@@ -96,44 +111,41 @@ fi
 echo "Building libusb ${LIBUSB_VER}"
 pushd "$src/libusb" >/dev/null
 if [[ ! -f Makefile ]]; then
-  ./configure --prefix="$prefix" --disable-static "${libusb_opts[@]}" "${configure_host[@]}"
+  configure_libusb
 fi
 make -j"$jobs"
 make install
 popd >/dev/null
 
 echo "Building librtlsdr ${RTLSDR_VER}"
-cmake -S "$src/rtl-sdr" -B "$src/rtl-sdr/build" \
+run_cmake "$src/rtl-sdr" "$src/rtl-sdr/build" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$prefix" \
   -DCMAKE_PREFIX_PATH="$prefix" \
   -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
   -DINSTALL_UDEV_RULES=OFF \
-  -DDETACH_KERNEL_DRIVER=ON \
-  "${cmake_arch[@]}"
+  -DDETACH_KERNEL_DRIVER=ON
 cmake --build "$src/rtl-sdr/build" --config Release -j"$jobs"
 cmake --install "$src/rtl-sdr/build"
 
 echo "Building SoapySDR ${SOAPY_VER}"
-cmake -S "$src/SoapySDR" -B "$src/SoapySDR/build" \
+run_cmake "$src/SoapySDR" "$src/SoapySDR/build" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$prefix" \
   -DCMAKE_PREFIX_PATH="$prefix" \
   -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
   -DENABLE_PYTHON=OFF \
   -DENABLE_PYTHON3=OFF \
-  -DENABLE_DOCS=OFF \
-  "${cmake_arch[@]}"
+  -DENABLE_DOCS=OFF
 cmake --build "$src/SoapySDR/build" --config Release -j"$jobs"
 cmake --install "$src/SoapySDR/build"
 
 echo "Building SoapyRTLSDR ${SOAPYRTL_VER}"
-cmake -S "$src/SoapyRTLSDR" -B "$src/SoapyRTLSDR/build" \
+run_cmake "$src/SoapyRTLSDR" "$src/SoapyRTLSDR/build" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$prefix" \
   -DCMAKE_PREFIX_PATH="$prefix" \
-  -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
-  "${cmake_arch[@]}"
+  -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
 cmake --build "$src/SoapyRTLSDR/build" --config Release -j"$jobs"
 cmake --install "$src/SoapyRTLSDR/build"
 
