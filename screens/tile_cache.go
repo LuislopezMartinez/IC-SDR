@@ -23,7 +23,8 @@ var (
 	tileBytes       = map[tileKey][]byte{}
 	worldTex        rl.Texture2D
 	httpTiles       = &http.Client{Timeout: 8 * time.Second}
-	tileFetchTokens = make(chan struct{}, 6)
+	tileFetchTokens = make(chan struct{}, 4)
+	mapTileUA       = "IC-SDR/0.5 (+https://github.com/blkph0x/IC-SDR)"
 )
 
 func worldMapTexture() rl.Texture2D {
@@ -106,11 +107,12 @@ func tileTexture(z, x, y int) (rl.Texture2D, bool) {
 	if data, ok := tileBytes[key]; ok {
 		delete(tileBytes, key)
 		tilesMu.Unlock()
-		if !isPNG(data) {
+		kind := tileImageType(data)
+		if kind == "" {
 			requestTile(key)
 			return rl.Texture2D{}, false
 		}
-		img := rl.LoadImageFromMemory(".png", data, int32(len(data)))
+		img := rl.LoadImageFromMemory(kind, data, int32(len(data)))
 		if img == nil || img.Data == nil {
 			requestTile(key)
 			return rl.Texture2D{}, false
@@ -156,31 +158,49 @@ func fetchTile(key tileKey) {
 	default:
 		return
 	}
-	if data, err := os.ReadFile(tilePath(key)); err == nil && isPNG(data) {
+	if data, err := os.ReadFile(tilePath(key)); err == nil && tileImageType(data) != "" {
 		storeTileBytes(key, data)
 		return
 	}
-	url := fmt.Sprintf("https://basemaps.cartocdn.com/rastertiles/voyager/%d/%d/%d.png", key.z, key.x, key.y)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
+	for _, url := range mapTileURLs(key) {
+		data := downloadMapTile(url)
+		if tileImageType(data) == "" {
+			continue
+		}
+		_ = os.MkdirAll(filepath.Dir(tilePath(key)), 0o755)
+		_ = os.WriteFile(tilePath(key), data, 0o644)
+		storeTileBytes(key, data)
 		return
 	}
-	req.Header.Set("User-Agent", "IC-SDR/0.5 (+https://github.com/blkph0x/IC-SDR)")
+}
+
+func mapTileURLs(key tileKey) []string {
+	return []string{
+		fmt.Sprintf("https://tile.openstreetmap.de/%d/%d/%d.png", key.z, key.x, key.y),
+		fmt.Sprintf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/%d/%d/%d", key.z, key.y, key.x),
+	}
+}
+
+func downloadMapTile(url string) []byte {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("User-Agent", mapTileUA)
+	req.Header.Set("Accept", "image/png,image/jpeg;q=0.9,*/*;q=0.1")
 	resp, err := httpTiles.Do(req)
 	if err != nil {
-		return
+		return nil
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return
+		return nil
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil || !isPNG(data) {
-		return
+	if err != nil {
+		return nil
 	}
-	_ = os.MkdirAll(filepath.Dir(tilePath(key)), 0o755)
-	_ = os.WriteFile(tilePath(key), data, 0o644)
-	storeTileBytes(key, data)
+	return data
 }
 
 func storeTileBytes(key tileKey, data []byte) {
@@ -190,11 +210,25 @@ func storeTileBytes(key tileKey, data []byte) {
 }
 
 func tilePath(key tileKey) string {
-	return resources.WritablePath("cache", "map-tiles", fmt.Sprintf("%d", key.z), fmt.Sprintf("%d", key.x), fmt.Sprintf("%d.png", key.y))
+	return resources.WritablePath("cache", "map-tiles-v2", fmt.Sprintf("%d", key.z), fmt.Sprintf("%d", key.x), fmt.Sprintf("%d.tile", key.y))
+}
+
+func tileImageType(data []byte) string {
+	if isPNG(data) {
+		return ".png"
+	}
+	if isJPEG(data) {
+		return ".jpg"
+	}
+	return ""
 }
 
 func isPNG(data []byte) bool {
 	return len(data) >= 8 &&
 		data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4e && data[3] == 0x47 &&
 		data[4] == 0x0d && data[5] == 0x0a && data[6] == 0x1a && data[7] == 0x0a
+}
+
+func isJPEG(data []byte) bool {
+	return len(data) >= 3 && data[0] == 0xff && data[1] == 0xd8 && data[2] == 0xff
 }

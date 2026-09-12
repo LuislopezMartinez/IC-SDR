@@ -212,7 +212,7 @@ func (v *aircraftMap) draw() {
 	simpleui.DrawText("LIVE AIR TRAFFIC", 24, 20, 24, colors.cyan)
 	simpleui.DrawText(fmt.Sprintf("%d aircraft · %d with position · cyan 1090 · orange 978 · drag and use the wheel", len(v.list), located), 340, 29, 13, colors.muted)
 	v.details()
-	simpleui.DrawText("© OpenStreetMap · © CARTO · positions received directly by radio", 1015, 742, 9, colors.muted)
+	simpleui.DrawText("© OpenStreetMap · Esri · positions received directly by radio", 1015, 742, 9, colors.muted)
 }
 func drawAircraftSymbol(p rl.Vector2, size, angle float32, c rl.Color) {
 	r := float64(angle) * math.Pi / 180

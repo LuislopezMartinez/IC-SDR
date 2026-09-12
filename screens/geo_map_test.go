@@ -2,6 +2,7 @@ package screens
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -67,5 +68,34 @@ func TestIsPNGRejectsHTML(t *testing.T) {
 	png := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2, 3}
 	if !isPNG(png) {
 		t.Fatal("PNG signature rejected")
+	}
+}
+
+func TestTileImageTypeAcceptsJPEG(t *testing.T) {
+	jpeg := []byte{0xff, 0xd8, 0xff, 0xe0, 0, 0x10}
+	if tileImageType(jpeg) != ".jpg" {
+		t.Fatal("JPEG tile rejected")
+	}
+	if tileImageType([]byte("API KEY REQUIRED")) != "" {
+		t.Fatal("text accepted as a map tile")
+	}
+}
+
+func TestMapTileURLsAreKeyless(t *testing.T) {
+	urls := mapTileURLs(tileKey{z: 10, x: 512, y: 340})
+	if len(urls) < 2 {
+		t.Fatal("need a primary tile host and a fallback")
+	}
+	for _, url := range urls {
+		lower := strings.ToLower(url)
+		if strings.Contains(lower, "carto") || strings.Contains(lower, "apikey") || strings.Contains(lower, "api_key") {
+			t.Fatalf("tile URL still needs a key or Carto: %s", url)
+		}
+	}
+	if urls[0] != "https://tile.openstreetmap.de/10/512/340.png" {
+		t.Fatalf("primary tile URL = %s", urls[0])
+	}
+	if urls[1] != "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/10/340/512" {
+		t.Fatalf("fallback tile URL = %s", urls[1])
 	}
 }

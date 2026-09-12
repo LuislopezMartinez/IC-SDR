@@ -252,7 +252,7 @@ func (v *aisMap) draw() {
 	simpleui.DrawText("LIVE AIS MAP", 24, 20, 24, colors.cyan)
 	simpleui.DrawText(fmt.Sprintf("%d ships with signal · drag to pan · wheel to zoom", len(v.vessels)), 310, 29, 13, colors.muted)
 	v.drawDetails()
-	simpleui.DrawText("© OpenStreetMap · © CARTO · positions received directly by radio", 1015, 742, 9, colors.muted)
+	simpleui.DrawText("© OpenStreetMap · Esri · positions received directly by radio", 1015, 742, 9, colors.muted)
 }
 
 func (v *aisMap) drawDetails() {
