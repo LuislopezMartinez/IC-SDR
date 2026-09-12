@@ -44,3 +44,35 @@ func TestGenericHeaderUsesOverallGain(t *testing.T) {
 		t.Fatalf("generic gain label incorrect: %q", p.rfLabel.Text())
 	}
 }
+
+func TestRSPDxHeaderShowsThreeAntennaPorts(t *testing.T) {
+	p := NewSDRHeaderPanel(nil, nil)
+	p.current = sdr.HardwareSettings{
+		Available: true, Driver: "sdrplay", Device: "RSPdx",
+		Antenna:  "Antenna A",
+		Antennas: []string{"Antenna A", "Antenna B", "Antenna C"},
+	}
+	p.refresh()
+	for index, want := range []string{"A", "B", "C"} {
+		if !p.antenna[index].Visible() || !p.antenna[index].Enabled() || p.antenna[index].Label() != want {
+			t.Fatalf("antenna %d: visible=%v enabled=%v label=%q want %q",
+				index, p.antenna[index].Visible(), p.antenna[index].Enabled(), p.antenna[index].Label(), want)
+		}
+	}
+	p.current.Antenna = "Antenna C"
+	p.refresh()
+	if p.antenna[2].Label() != "C" {
+		t.Fatal("port C was not selected")
+	}
+}
+
+func TestRTLHeaderHidesAntennaSwitch(t *testing.T) {
+	p := NewSDRHeaderPanel(nil, nil)
+	p.current = sdr.HardwareSettings{Available: true, Driver: "rtlsdr", Device: "R820T"}
+	p.refresh()
+	for index, button := range p.antenna {
+		if button.Visible() {
+			t.Fatalf("RTL-SDR showed antenna button %d", index)
+		}
+	}
+}

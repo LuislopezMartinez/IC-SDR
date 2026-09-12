@@ -20,10 +20,11 @@ type SDRSettings struct {
 	current  sdr.HardwareSettings
 	controls []simpleui.Element
 
-	deviceLabel, rfLabel, ifLabel, ppmLabel, setpointLabel *simpleui.Label
-	agc, biasT, rfNotch, dabNotch, iqCorrection            *simpleui.Switch
-	rfGain, ifGain, ppm, setpoint                          *simpleui.Slider
-	apply, cancel                                          *simpleui.Button
+	deviceLabel, rfLabel, ifLabel, ppmLabel, setpointLabel, antennaLabel *simpleui.Label
+	agc, biasT, rfNotch, dabNotch, iqCorrection                          *simpleui.Switch
+	rfGain, ifGain, ppm, setpoint                                        *simpleui.Slider
+	antenna                                                              [3]*simpleui.Button
+	apply, cancel                                                        *simpleui.Button
 }
 
 func NewSDRSettings(receiver *sdr.Receiver) *SDRSettings {
@@ -42,6 +43,19 @@ func (modal *SDRSettings) createControls() {
 		return result
 	}
 	modal.deviceLabel = label("settingsDevice", 500, 158, 600, "", 14)
+	modal.antennaLabel = label("settingsAntennaLabel", 500, 190, 180, "ANTENNA", 13)
+	for index := range modal.antenna {
+		i := index
+		modal.antenna[i] = simpleui.NewButton("settingsAntenna"+fmt.Sprintf("%d", i), 690+float32(i)*140, 186, 128, 32, []string{"A", "B", "C"}[i], 16)
+		modal.antenna[i].OnClick(func() {
+			if i >= len(modal.current.Antennas) {
+				return
+			}
+			modal.current.Antenna = modal.current.Antennas[i]
+			modal.submit()
+			modal.refresh()
+		})
+	}
 	modal.agc = simpleui.NewSwitch("settingsAGC", 500, 235, 300, 34, "AGC", false, 16)
 	modal.rfLabel = label("settingsRFLabel", 500, 298, 360, "LNA / RFGR", 14)
 	modal.rfGain = simpleui.NewSlider("settingsRF", 500, 332, 360, 26, 0, 9, 0)
@@ -84,7 +98,8 @@ func (modal *SDRSettings) createControls() {
 	modal.setpoint.OnRelease(func(float32) { modal.submit() })
 
 	modal.controls = []simpleui.Element{
-		modal.deviceLabel, modal.agc, modal.rfLabel, modal.rfGain, modal.ifLabel, modal.ifGain,
+		modal.deviceLabel, modal.antennaLabel, modal.antenna[0], modal.antenna[1], modal.antenna[2],
+		modal.agc, modal.rfLabel, modal.rfGain, modal.ifLabel, modal.ifGain,
 		modal.ppmLabel, modal.ppm, modal.biasT, modal.rfNotch, modal.dabNotch,
 		modal.iqCorrection, modal.setpointLabel, modal.setpoint, modal.cancel, modal.apply,
 	}
@@ -202,7 +217,29 @@ func (modal *SDRSettings) refresh() {
 		modal.iqCorrection.SetEnabled(settings.Available)
 	}
 	modal.rfGain.SetEnabled(settings.Available && !settings.AGC)
+	showAntenna := settings.Available && len(settings.Antennas) >= 2
+	modal.antennaLabel.SetVisible(showAntenna)
+	selected := sdr.AntennaShortLabel(settings.Antenna)
+	theme := simpleui.CurrentTheme()
+	for index, button := range modal.antenna {
+		if !showAntenna || index >= len(settings.Antennas) {
+			button.SetVisible(false)
+			button.SetEnabled(false)
+			continue
+		}
+		button.SetVisible(true)
+		button.SetEnabled(true)
+		button.SetLabel(sdr.AntennaShortLabel(settings.Antennas[index]))
+		if sdr.AntennaShortLabel(settings.Antennas[index]) == selected {
+			button.SetColors(theme.ControlPressed, theme.Accent, theme.Text)
+		} else {
+			button.ClearColors()
+		}
+	}
 	for _, control := range modal.controls {
+		if control == modal.antennaLabel || control == modal.antenna[0] || control == modal.antenna[1] || control == modal.antenna[2] {
+			continue
+		}
 		control.SetVisible(settings.Available)
 	}
 	modal.cancel.SetVisible(true)
@@ -234,6 +271,7 @@ func (modal *SDRSettings) refreshLabels() {
 func (modal *SDRSettings) refreshLocale() {
 	modal.agc.SetLabel(T("AGC"))
 	modal.biasT.SetLabel(T("BIAS-T"))
+	modal.antennaLabel.SetText(T("ANTENNA"))
 	modal.rfNotch.SetLabel(T("RF NOTCH"))
 	modal.dabNotch.SetLabel(T("DAB NOTCH"))
 	modal.iqCorrection.SetLabel(T("IQ CORRECTION"))

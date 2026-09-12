@@ -3,6 +3,7 @@ package sdr
 import (
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -47,6 +48,13 @@ type Config struct {
 	StartupLog                                       func(string, ...any)
 }
 
+func (config Config) requestedAntenna() string {
+	if config.InitialHardware == nil {
+		return ""
+	}
+	return strings.TrimSpace(config.InitialHardware.Antenna)
+}
+
 func (config Config) trace(format string, args ...any) {
 	if config.StartupLog != nil {
 		config.StartupLog(format, args...)
@@ -68,7 +76,8 @@ type Stats struct {
 type HardwareSettings struct {
 	Available, AGC, BiasT, RFNotch, DABNotch, IQCorrection bool
 	DigitalAGC, OffsetTuning, IQSwap                       bool
-	Device, Driver                                         string
+	Device, Driver, Antenna                                string
+	Antennas                                               []string `json:"-"`
 	RFGain, IFGain, PPM                                    float32
 	AGCSetpoint, DirectSampling                            int
 }
@@ -200,6 +209,10 @@ func (receiver *Receiver) Start() error {
 		initial.Available = true
 		initial.Device = hardware.Device
 		initial.Driver = hardware.Driver
+		initial.Antennas = hardware.Antennas
+		if initial.Antenna == "" {
+			initial.Antenna = hardware.Antenna
+		}
 		if err := device.applyHardwareSettings(initial); err != nil {
 			device.close()
 			receiver.device = nil

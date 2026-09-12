@@ -89,6 +89,10 @@ type soapyAPI struct {
 	deactivateStream       func(uintptr, uintptr, int32, int64) int32
 	readStream             func(uintptr, uintptr, *uintptr, uintptr, *int32, *int64, int64) int32
 	errToString            func(int32) uintptr
+	listAntennas           func(uintptr, int32, uintptr, *uintptr) uintptr
+	getAntenna             func(uintptr, int32, uintptr) uintptr
+	setAntenna             func(uintptr, int32, uintptr, string) int32
+	stringsClear           func(uintptr, uintptr)
 }
 
 type soapyDevice struct {
@@ -97,6 +101,8 @@ type soapyDevice struct {
 	stream     uintptr
 	hardware   string
 	driver     string
+	antenna    string
+	antennas   []string
 	sampleRate float64
 	buffer     []float32
 	buffers    [1]uintptr
@@ -226,7 +232,13 @@ func openSoapyCandidate(api *soapyAPI, config Config) (result *soapyDevice, err 
 	if err = api.check(api.activateStream(device, result.stream, 0, 0, 0), "activate stream"); err != nil {
 		return nil, err
 	}
-	config.trace("SoapySDR/%s: stream active", config.Driver)
+	result.refreshAntennas()
+	if wanted := strings.TrimSpace(config.requestedAntenna()); wanted != "" {
+		if setErr := result.setAntenna(wanted); setErr != nil {
+			config.trace("SoapySDR/%s: antenna %q after stream: %v", config.Driver, wanted, setErr)
+		}
+	}
+	config.trace("SoapySDR/%s: stream active · antenna=%s", config.Driver, result.antenna)
 	return result, nil
 }
 
@@ -260,6 +272,10 @@ func registerSoapy(core uintptr) *soapyAPI {
 	purego.RegisterLibFunc(&api.deactivateStream, core, "SoapySDRDevice_deactivateStream")
 	purego.RegisterLibFunc(&api.readStream, core, "SoapySDRDevice_readStream")
 	purego.RegisterLibFunc(&api.errToString, core, "SoapySDR_errToStr")
+	purego.RegisterLibFunc(&api.listAntennas, core, "SoapySDRDevice_listAntennas")
+	purego.RegisterLibFunc(&api.getAntenna, core, "SoapySDRDevice_getAntenna")
+	purego.RegisterLibFunc(&api.setAntenna, core, "SoapySDRDevice_setAntenna")
+	purego.RegisterLibFunc(&api.stringsClear, core, "SoapySDRStrings_clear")
 	return api
 }
 
@@ -385,10 +401,14 @@ func (device *soapyDevice) read(destination []float32) (int, int32, error) {
 }
 
 func (device *soapyDevice) setCenterFrequency(frequencyHz int64) error {
-	return device.api.check(
+	err := device.api.check(
 		device.api.setFrequency(device.device, soapyRX, 0, float64(frequencyHz), 0),
 		"set center frequency",
 	)
+	if device.antenna != "" {
+		_ = device.setAntenna(device.antenna)
+	}
+	return err
 }
 
 func (device *soapyDevice) centerFrequency() int64 {
@@ -396,10 +416,12 @@ func (device *soapyDevice) centerFrequency() int64 {
 }
 
 func (device *soapyDevice) hardwareSettings() HardwareSettings {
+	antenna, antennas := device.antennaState()
 	switch ProfileFor(device.driver) {
 	case ProfileRTLSDR:
 		return HardwareSettings{
 			Available: true, Device: device.hardware, Driver: device.driver,
+			Antenna: antenna, Antennas: antennas,
 			AGC:            device.api.getGainMode(device.device, soapyRX, 0),
 			RFGain:         float32(device.api.getGainElement(device.device, soapyRX, 0, "TUNER")),
 			PPM:            float32(device.api.getFrequencyCorrection(device.device, soapyRX, 0)),
@@ -412,6 +434,7 @@ func (device *soapyDevice) hardwareSettings() HardwareSettings {
 	case ProfileSDRplay:
 		return HardwareSettings{
 			Available: true, Device: device.hardware, Driver: device.driver,
+			Antenna: antenna, Antennas: antennas,
 			AGC:          device.api.getGainMode(device.device, soapyRX, 0),
 			RFGain:       float32(device.api.getGainElement(device.device, soapyRX, 0, "RFGR")),
 			IFGain:       float32(device.api.getGainElement(device.device, soapyRX, 0, "IFGR")),
@@ -425,6 +448,7 @@ func (device *soapyDevice) hardwareSettings() HardwareSettings {
 	default:
 		return HardwareSettings{
 			Available: true, Device: device.hardware, Driver: device.driver,
+			Antenna: antenna, Antennas: antennas,
 			AGC:    device.api.getGainMode(device.device, soapyRX, 0),
 			RFGain: float32(device.api.getGain(device.device, soapyRX, 0)),
 			PPM:    float32(device.api.getFrequencyCorrection(device.device, soapyRX, 0)),
@@ -512,6 +536,9 @@ func (device *soapyDevice) applyHardwareSettings(settings HardwareSettings) erro
 		if current.BiasT != settings.BiasT {
 			device.writeSettingAny(soapyBiasSettings, boolString(settings.BiasT))
 		}
+	}
+	if err := device.applyAntenna(settings.Antenna); err != nil {
+		failures = append(failures, err)
 	}
 	return errors.Join(failures...)
 }
