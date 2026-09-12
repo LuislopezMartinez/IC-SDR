@@ -9,6 +9,7 @@ import (
 
 	"go-zero/internal/aircraft"
 	"go-zero/internal/resources"
+	"go-zero/internal/satellite"
 	"go-zero/simpleui"
 )
 
@@ -253,20 +254,8 @@ func (p *AircraftPanel) DrawPanel() {
 }
 
 func loadAircraftReceiverRef() (float64, float64, bool) {
-	data, err := os.ReadFile(resources.WritablePath("config", "satellite-station.json"))
-	if err != nil {
-		return 0, 0, false
-	}
-	var station struct {
-		Latitude, Longitude float64
-	}
-	if json.Unmarshal(data, &station) != nil {
-		return 0, 0, false
-	}
-	if station.Latitude == 0 && station.Longitude == 0 {
-		return 0, 0, false
-	}
-	if station.Latitude < -90 || station.Latitude > 90 || station.Longitude < -180 || station.Longitude > 180 {
+	station, ok := satellite.LoadStationFile(resources.WritablePath("config", "satellite-station.json"))
+	if !ok || (station.Latitude == 0 && station.Longitude == 0) {
 		return 0, 0, false
 	}
 	return station.Latitude, station.Longitude, true

@@ -45,7 +45,7 @@ type SatellitePanel struct {
 func NewSatellitePanel(screen *MainScreen) *SatellitePanel {
 	cache := resources.WritablePath("cache", "satellites-celestrak.json")
 	p := &SatellitePanel{screen: screen, tracker: satellite.NewTracker(cache), snapshotPath: resources.WritablePath("cache", "satellites-live.json"), stationPath: resources.WritablePath("config", "satellite-station.json")}
-	p.loadStation()
+	p.resolveStation()
 	p.groupSelect = simpleui.NewDropdown("satelliteGroup", 470, toolY+30, 250, 34, "GROUP", nil, uiControlFontSize)
 	p.satelliteSelect = simpleui.NewDropdown("satelliteObject", 730, toolY+30, 260, 34, "SATELLITE", nil, uiControlFontSize)
 	p.signalSelect = simpleui.NewDropdown("satelliteSignal", 1000, toolY+30, 280, 34, "SIGNAL", nil, uiControlFontSize)
@@ -78,21 +78,25 @@ func NewSatellitePanel(screen *MainScreen) *SatellitePanel {
 	mapButton := button("satelliteMap", "▦  MAP", 1290, 285, p.openMap)
 	mapButton.SetBounds(rl.Rectangle{X: 1290, Y: toolY + 78, Width: 285, Height: 30})
 	mapButton.SetColors(colors.blue, colors.border, colors.text)
-	station := p.tracker.Station()
 	p.searchField = simpleui.NewTextField("satelliteSearch", 40, toolY+30, 390, 34, "SEARCH NAME, NORAD OR GROUP", 13)
 	p.searchField.SetMaxLength(64)
 	p.searchField.OnChange(p.updateSearch)
-	p.stationName = simpleui.NewTextField("satelliteStationName", 470, toolY+78, 140, 30, "STATION", 12)
-	p.stationLat = simpleui.NewTextField("satelliteStationLat", 620, toolY+78, 110, 30, "LATITUDE", 12)
-	p.stationLon = simpleui.NewTextField("satelliteStationLon", 740, toolY+78, 110, 30, "LONGITUDE", 12)
-	p.stationAlt = simpleui.NewTextField("satelliteStationAlt", 860, toolY+78, 80, 30, "ALT m", 12)
-	p.stationName.SetText(station.Name)
-	p.stationLat.SetText(strconv.FormatFloat(station.Latitude, 'f', 5, 64))
-	p.stationLon.SetText(strconv.FormatFloat(station.Longitude, 'f', 5, 64))
-	p.stationAlt.SetText(strconv.FormatFloat(station.AltitudeMeters, 'f', 0, 64))
+	p.stationName = simpleui.NewTextField("satelliteStationName", 470, toolY+78, 130, 30, "NAME", 12)
+	p.stationLat = simpleui.NewTextField("satelliteStationLat", 608, toolY+78, 118, 30, "LATITUDE", 12)
+	p.stationLon = simpleui.NewTextField("satelliteStationLon", 734, toolY+78, 128, 30, "LONGITUDE", 12)
+	p.stationAlt = simpleui.NewTextField("satelliteStationAlt", 870, toolY+78, 78, 30, "ALT m", 12)
+	p.stationName.SetMaxLength(32)
+	p.stationLat.SetMaxLength(12)
+	p.stationLon.SetMaxLength(12)
+	p.stationAlt.SetMaxLength(6)
+	p.syncStationFields()
+	p.stationName.OnSubmit(func(string) { p.applyStation() })
+	p.stationLat.OnSubmit(func(string) { p.applyStation() })
+	p.stationLon.OnSubmit(func(string) { p.applyStation() })
+	p.stationAlt.OnSubmit(func(string) { p.applyStation() })
 	p.controls = append(p.controls, p.searchField, p.stationName, p.stationLat, p.stationLon, p.stationAlt)
-	applyStation := button("satelliteStationApply", "APPLY", 950, 115, p.applyStation)
-	applyStation.SetBounds(rl.Rectangle{X: 950, Y: toolY + 78, Width: 115, Height: 30})
+	applyStation := button("satelliteStationApply", "APPLY", 956, 115, p.applyStation)
+	applyStation.SetBounds(rl.Rectangle{X: 956, Y: toolY + 78, Width: 110, Height: 30})
 	p.populate()
 	p.SetVisible(false)
 	p.writeSnapshot(true)
@@ -222,35 +226,82 @@ func (p *SatellitePanel) refreshSignals(s satellite.Satellite) {
 	p.signalSelect.SetSelected(0)
 }
 
-func (p *SatellitePanel) loadStation() {
-	data, err := os.ReadFile(p.stationPath)
-	if err != nil {
+func (p *SatellitePanel) resolveStation() {
+	country := ""
+	if p.screen != nil {
+		country = p.screen.country
+	}
+	p.tracker.SetStation(satellite.ResolveStation(p.stationPath, country))
+	p.applyReceiverReference()
+}
+
+func (p *SatellitePanel) syncStationFields() {
+	station := p.tracker.Station()
+	if p.stationName == nil {
 		return
 	}
-	var station satellite.Station
-	if json.Unmarshal(data, &station) == nil && station.Name != "" && station.Latitude >= -90 && station.Latitude <= 90 && station.Longitude >= -180 && station.Longitude <= 180 {
-		p.tracker.SetStation(station)
+	p.stationName.SetText(station.Name)
+	p.stationLat.SetText(strconv.FormatFloat(station.Latitude, 'f', 5, 64))
+	p.stationLon.SetText(strconv.FormatFloat(station.Longitude, 'f', 5, 64))
+	p.stationAlt.SetText(strconv.FormatFloat(station.AltitudeMeters, 'f', 0, 64))
+}
+
+func (p *SatellitePanel) stationFieldsFocused() bool {
+	return p.stationName != nil && (p.stationName.Focused() || p.stationLat.Focused() || p.stationLon.Focused() || p.stationAlt.Focused())
+}
+
+func (p *SatellitePanel) applyReceiverReference() {
+	if p.screen == nil || p.screen.receiver == nil {
+		return
 	}
+	station := p.tracker.Station()
+	p.screen.receiver.SetAircraftReference(station.Latitude, station.Longitude, station.Valid() && (station.Latitude != 0 || station.Longitude != 0))
+}
+
+func (p *SatellitePanel) reloadStationFromDisk() {
+	if p.stationFieldsFocused() {
+		return
+	}
+	station, ok := satellite.LoadStationFile(p.stationPath)
+	if !ok {
+		return
+	}
+	current := p.tracker.Station()
+	if station == current {
+		return
+	}
+	p.tracker.SetStation(station)
+	p.syncStationFields()
+	p.applyReceiverReference()
+	p.writeSnapshot(true)
 }
 
 func (p *SatellitePanel) applyStation() {
 	lat, latErr := strconv.ParseFloat(strings.TrimSpace(p.stationLat.Text()), 64)
 	lon, lonErr := strconv.ParseFloat(strings.TrimSpace(p.stationLon.Text()), 64)
-	alt, altErr := strconv.ParseFloat(strings.TrimSpace(p.stationAlt.Text()), 64)
+	altText := strings.TrimSpace(p.stationAlt.Text())
+	alt := 0.0
+	var altErr error
+	if altText != "" {
+		alt, altErr = strconv.ParseFloat(altText, 64)
+	}
 	name := strings.TrimSpace(p.stationName.Text())
-	if name == "" || latErr != nil || lonErr != nil || altErr != nil || lat < -90 || lat > 90 || lon < -180 || lon > 180 || alt < -500 || alt > 9000 {
-		p.feedback = "INVALID STATION · CHECK NAME, LATITUDE, LONGITUDE AND ALTITUDE"
+	if latErr != nil || lonErr != nil || altErr != nil || lat < -90 || lat > 90 || lon < -180 || lon > 180 || alt < -500 || alt > 9000 {
+		p.feedback = "INVALID LOCATION · CHECK LATITUDE, LONGITUDE AND ALTITUDE"
 		return
+	}
+	if name == "" {
+		name = "Home"
+		p.stationName.SetText(name)
 	}
 	station := satellite.Station{Name: name, Latitude: lat, Longitude: lon, AltitudeMeters: alt}
 	p.tracker.SetStation(station)
-	data, _ := json.MarshalIndent(station, "", "  ")
-	_ = os.MkdirAll(filepath.Dir(p.stationPath), 0755)
-	if err := os.WriteFile(p.stationPath, data, 0644); err != nil {
-		p.feedback = "COULD NOT SAVE STATION: " + err.Error()
+	if err := satellite.SaveStationFile(p.stationPath, station); err != nil {
+		p.feedback = "COULD NOT SAVE LOCATION: " + err.Error()
 		return
 	}
-	p.feedback = "STATION APPLIED: " + name
+	p.applyReceiverReference()
+	p.feedback = "LOCATION SET: " + name
 	p.writeSnapshot(true)
 }
 func (p *SatellitePanel) SetVisible(v bool) {
@@ -266,6 +317,7 @@ func (p *SatellitePanel) Enter() {
 }
 func (p *SatellitePanel) Leave() {}
 func (p *SatellitePanel) Tick() {
+	p.reloadStationFromDisk()
 	p.readMapSelection()
 	p.handleSearchResultInput()
 	if p.updateDone != nil {
@@ -470,6 +522,7 @@ func (p *SatellitePanel) DrawPanel() {
 		}
 	}
 
+	simpleui.DrawText("YOUR LOCATION  ·  Enter or APPLY  ·  or click the map", 470, toolY+62, 10, colors.muted)
 	simpleui.DrawText("CURRENT SELECTION", 470, toolY+119, 10, colors.muted)
 	simpleui.DrawText(fmt.Sprintf("AZ %.1f°   EL %.1f°   ALT %.0f km   DIST %.0f km", selected.Azimuth, selected.Elevation, selected.AltitudeKM, selected.RangeKM), 495, toolY+142, 12, colors.text)
 	simpleui.DrawText(fmt.Sprintf("%s · %s · %d objects · %s", freq, selected.Mode, len(snap.Satellites), snap.Source), 495, toolY+168, 11, colors.muted)

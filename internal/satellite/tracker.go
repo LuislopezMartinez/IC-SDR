@@ -91,7 +91,7 @@ var groups = []struct{ Name, Query string }{
 }
 
 func NewTracker(cachePath string) *Tracker {
-	t := &Tracker{cachePath: cachePath, station: Station{Name: "Madrid", Latitude: 40.4168, Longitude: -3.7038, AltitudeMeters: 657}, selected: 25544, source: "built-in catalog"}
+	t := &Tracker{cachePath: cachePath, station: DefaultStation(""), selected: 25544, source: "built-in catalog"}
 	t.satellites = fallbackCatalog()
 	_ = t.loadCache()
 	return t

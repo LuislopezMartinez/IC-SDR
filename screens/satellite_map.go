@@ -11,6 +11,7 @@ import (
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
+	"go-zero/internal/resources"
 	"go-zero/internal/satellite"
 	"go-zero/simpleui"
 )
@@ -73,6 +74,17 @@ func worldProject(lat, lon float64, b rl.Rectangle) rl.Vector2 {
 	return rl.Vector2{X: b.X + float32((lon+180)/360)*b.Width, Y: b.Y + float32((90-lat)/180)*b.Height}
 }
 
+func worldUnproject(p rl.Vector2, b rl.Rectangle) (lat, lon float64) {
+	if b.Width <= 0 || b.Height <= 0 {
+		return 0, 0
+	}
+	lon = (float64(p.X-b.X)/float64(b.Width))*360 - 180
+	lat = 90 - (float64(p.Y-b.Y)/float64(b.Height))*180
+	lat = math.Min(90, math.Max(-90, lat))
+	lon = math.Min(180, math.Max(-180, lon))
+	return lat, lon
+}
+
 func drawDisclosureIcon(center rl.Vector2, open bool, color rl.Color) {
 	if open {
 		left := rl.Vector2{X: center.X - 6, Y: center.Y - 4}
@@ -125,7 +137,7 @@ func (v *satelliteMap) drawHeader() {
 			visible++
 		}
 	}
-	simpleui.DrawText(fmt.Sprintf("%d objects · %d visible from %s · %s", len(v.snapshot.Satellites), visible, v.snapshot.Station.Name, v.snapshot.Source), 380, 27, 13, colors.muted)
+	simpleui.DrawText(fmt.Sprintf("%d objects · %d visible from %s · click empty map to set your location · %s", len(v.snapshot.Satellites), visible, v.snapshot.Station.Name, v.snapshot.Source), 380, 27, 13, colors.muted)
 }
 func (v *satelliteMap) grouped() ([]string, map[string][]satellite.State) {
 	m := map[string][]satellite.State{}
@@ -215,6 +227,7 @@ func catalogMaxScroll(contentHeight, viewportHeight float32) int {
 	return int(math.Ceil(float64((contentHeight - viewportHeight) / 24)))
 }
 func (v *satelliteMap) drawMap(b rl.Rectangle) {
+	v.handleMapClick(b)
 	if v.mapTexture.ID == 0 {
 		img := rl.LoadImageFromMemory(".png", aisWorldPNG, int32(len(aisWorldPNG)))
 		if img != nil && img.Data != nil {
@@ -287,7 +300,7 @@ func (v *satelliteMap) drawMap(b rl.Rectangle) {
 	simpleui.DrawText("below the horizon", b.X+367, legendY, 11, colors.muted)
 }
 
-func (v *satelliteMap) drawPassCard(mapBounds rl.Rectangle, target rl.Vector2, pass satellite.PassPrediction) {
+func passCardRect(mapBounds rl.Rectangle, target rl.Vector2) rl.Rectangle {
 	const width, height = float32(244), float32(132)
 	usableBottom := mapBounds.Y + mapBounds.Height - 36
 	x, y := target.X+18, target.Y+18
@@ -299,7 +312,60 @@ func (v *satelliteMap) drawPassCard(mapBounds rl.Rectangle, target rl.Vector2, p
 	}
 	x = min(max(x, mapBounds.X+8), mapBounds.X+mapBounds.Width-width-8)
 	y = min(max(y, mapBounds.Y+8), usableBottom-height)
-	card := rl.Rectangle{X: x, Y: y, Width: width, Height: height}
+	return rl.Rectangle{X: x, Y: y, Width: width, Height: height}
+}
+
+func (v *satelliteMap) handleMapClick(b rl.Rectangle) {
+	if !rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
+		return
+	}
+	mouse := simpleui.MousePosition()
+	legend := rl.Rectangle{X: b.X + 1, Y: b.Y + b.Height - 28, Width: b.Width - 2, Height: 27}
+	if !rl.CheckCollisionPointRec(mouse, b) || rl.CheckCollisionPointRec(mouse, legend) {
+		return
+	}
+	bestNORAD := 0
+	bestDist := 14.0
+	var selectedPoint rl.Vector2
+	haveSelected := false
+	for i := range v.snapshot.Satellites {
+		s := &v.snapshot.Satellites[i]
+		if !v.enabled[s.NORAD] {
+			continue
+		}
+		p := worldProject(s.Latitude, s.Longitude, b)
+		if s.NORAD == v.selected {
+			selectedPoint, haveSelected = p, true
+		}
+		d := math.Hypot(float64(mouse.X-p.X), float64(mouse.Y-p.Y))
+		if d < bestDist {
+			bestDist = d
+			bestNORAD = s.NORAD
+		}
+	}
+	if bestNORAD != 0 {
+		v.selected = bestNORAD
+		v.enabled[bestNORAD] = true
+		_ = os.WriteFile(v.path+".select", []byte(strconv.Itoa(bestNORAD)), 0644)
+		return
+	}
+	if haveSelected && rl.CheckCollisionPointRec(mouse, passCardRect(b, selectedPoint)) {
+		return
+	}
+	lat, lon := worldUnproject(mouse, b)
+	station := v.snapshot.Station
+	if strings.TrimSpace(station.Name) == "" || satellite.IsFactoryDefault(station) {
+		station.Name = "Home"
+	}
+	station.Latitude, station.Longitude = lat, lon
+	if err := satellite.SaveStationFile(resources.WritablePath("config", "satellite-station.json"), station); err != nil {
+		return
+	}
+	v.snapshot.Station = station
+}
+
+func (v *satelliteMap) drawPassCard(mapBounds rl.Rectangle, target rl.Vector2, pass satellite.PassPrediction) {
+	card := passCardRect(mapBounds, target)
 
 	anchor := rl.Vector2{X: min(max(target.X, card.X), card.X+card.Width), Y: min(max(target.Y, card.Y), card.Y+card.Height)}
 	rl.DrawLineEx(target, anchor, 2, colors.orange)
@@ -399,14 +465,14 @@ func (v *satelliteMap) drawDetails(b rl.Rectangle) {
 
 	x := b.X + 304
 	simpleui.DrawText("ORBITAL POSITION", x, b.Y+45, 11, colors.muted)
-simpleui.DrawText(fmt.Sprintf("Latitude      %.4f°", s.Latitude), x, b.Y+72, 13, colors.text)
-		simpleui.DrawText(fmt.Sprintf("Longitude     %.4f°", s.Longitude), x, b.Y+98, 13, colors.text)
-		simpleui.DrawText(fmt.Sprintf("Altitude      %.0f km", s.AltitudeKM), x, b.Y+124, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf("Latitude      %.4f°", s.Latitude), x, b.Y+72, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf("Longitude     %.4f°", s.Longitude), x, b.Y+98, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf("Altitude      %.0f km", s.AltitudeKM), x, b.Y+124, 13, colors.text)
 
 	x = b.X + 566
 	simpleui.DrawText("FROM "+v.snapshot.Station.Name, x, b.Y+45, 11, colors.muted)
-simpleui.DrawText(fmt.Sprintf("Azimuth       %.1f°", s.Azimuth), x, b.Y+72, 13, colors.text)
-		simpleui.DrawText(fmt.Sprintf("Elevation    %.1f°", s.Elevation), x, b.Y+98, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf("Azimuth       %.1f°", s.Azimuth), x, b.Y+72, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf("Elevation    %.1f°", s.Elevation), x, b.Y+98, 13, colors.text)
 	simpleui.DrawText(fmt.Sprintf("Distance     %.0f km", s.RangeKM), x, b.Y+124, 13, colors.text)
 
 	x = b.X + 808

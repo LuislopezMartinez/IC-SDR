@@ -72,6 +72,10 @@ func (screen *MainScreen) applyLocaleAndRegion() {
 		def := activeBandPlan.Default
 		screen.bandCategory, screen.bandName = def.Category, def.Name
 	}
+	if screen.satellitePanel != nil {
+		screen.satellitePanel.resolveStation()
+		screen.satellitePanel.syncStationFields()
+	}
 	if detected {
 		screen.markSettingsDirty()
 	}
@@ -97,6 +101,10 @@ func (screen *MainScreen) setLocale(language, region, country string) {
 	}
 	if screen.aprsPanel != nil {
 		screen.aprsPanel.refreshLocale()
+	}
+	if screen.satellitePanel != nil {
+		screen.satellitePanel.resolveStation()
+		screen.satellitePanel.syncStationFields()
 	}
 	screen.refreshLocaleChrome()
 	screen.markSettingsDirty()
