@@ -108,6 +108,8 @@ type Receiver struct {
 	averagingMs  atomic.Int64
 	deemphasisUs atomic.Int64
 	closeOnce    sync.Once
+	startMu      sync.Mutex
+	closed       atomic.Bool
 
 	mu                                 sync.RWMutex
 	spectrum                           []float32
@@ -189,11 +191,20 @@ func NewReceiver(config Config) *Receiver {
 }
 
 func (receiver *Receiver) Start() error {
+	receiver.startMu.Lock()
+	defer receiver.startMu.Unlock()
+	if receiver.closed.Load() {
+		return fmt.Errorf("receiver closed")
+	}
 	receiver.trace("SDR: searching for device candidates")
 	device, err := openSoapy(receiver.config)
 	if err != nil {
 		receiver.setError(err)
 		return err
+	}
+	if receiver.closed.Load() {
+		device.close()
+		return fmt.Errorf("receiver closed")
 	}
 	receiver.device = device
 	receiver.trace("SDR: device opened · hardware=%s · driver=%s", device.hardware, device.driver)
@@ -262,7 +273,10 @@ func (receiver *Receiver) trace(format string, args ...any) {
 }
 
 func (receiver *Receiver) Close() {
+	receiver.closed.Store(true)
 	receiver.closeOnce.Do(func() {
+		receiver.startMu.Lock()
+		defer receiver.startMu.Unlock()
 		if receiver.dmr != nil {
 			receiver.dmr.Stop()
 		}

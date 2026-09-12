@@ -225,7 +225,7 @@ jobs:
           Binaries are compiled with `CGO_ENABLED=0` (embedded raylib). Each archive includes four timeslot copies of `libtetradec`.
 
           - **Windows amd64 / arm64** — GUI executable plus a native TETRA codec. The portable SoapySDR runtime for x64 is still the Windows bundle from previous English releases (`DATA/runtime/windows-x64`); ARM64 Windows prefers `windows-arm64` when present and otherwise falls back to that x64 tree. Plug in any radio whose Soapy module is in that runtime (RTL-SDR, SDRplay with the vendor API, and extra modules shipped in the zip).
-          - **Linux amd64/arm64** and **macOS amd64/arm64** — desktop UI, TETRA codec, and a bundled SoapySDR runtime under `DATA/runtime/<os>-<arch>` with RTL-SDR plus best-effort HackRF, Airspy, AirspyHF, and SoapyRemote. A system SoapySDR install is still used as fallback for Lime, Pluto, UHD, BladeRF, and SDRplay (SDRplay also needs the vendor API).
+          - **Linux amd64/arm64** and **macOS amd64/arm64** — desktop UI, TETRA codec, and a bundled SoapySDR runtime under `DATA/runtime/<os>-<arch>` with RTL-SDR plus best-effort HackRF One/Pro (libhackrf 2026.01.3), Airspy, AirspyHF, and SoapyRemote. A system SoapySDR install is still used as fallback for Lime, Pluto, UHD, BladeRF, and SDRplay (SDRplay also needs the vendor API).
 
           The TETRA codec is [blkph0x/libtetradec](https://github.com/blkph0x/libtetradec). It decodes **clear** TCH/ACELP only. Encrypted TETRA is not decrypted.
 

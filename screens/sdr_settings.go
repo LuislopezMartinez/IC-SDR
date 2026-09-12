@@ -202,7 +202,7 @@ func (modal *SDRSettings) refresh() {
 		modal.dabNotch.SetEnabled(false)
 		modal.iqCorrection.SetEnabled(false)
 	case generic:
-		modal.rfGain.SetRange(0, 80)
+		modal.rfGain.SetRange(0, 116)
 		modal.ifGain.SetEnabled(false)
 		modal.setpoint.SetEnabled(false)
 		modal.rfNotch.SetEnabled(false)

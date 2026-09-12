@@ -98,8 +98,10 @@ func main() {
 		RuntimeRoot: sdrRuntimeRoot(),
 		Driver:      "sdrplay",
 		// Empty serial accepts any connected RSP. If none is available the
-		// receiver enumerates every loaded Soapy driver (RTL-SDR, HackRF,
-		// Airspy, Lime, Pluto, and others) and opens the first that works.
+		// receiver enumerates every loaded Soapy driver (RTL-SDR, HackRF One,
+		// HackRF Pro, Airspy, Lime, Pluto, and others) and opens the first
+		// radio that is actually present. HackRF requires a serial from that
+		// enumeration, so a missing RSP is not probed ahead of a connected Pro.
 		Serial:                    "",
 		FrequencyHz:               14_261_000,
 		SampleRate:                2_048_000,
@@ -123,12 +125,6 @@ func main() {
 		StartupLog:                startupStep,
 	})
 	startupStep("Receiver built")
-	startupStep("Opening SDR device")
-	if err := receiver.Start(); err != nil {
-		startupStep("Receiver could not start; the interface will remain available: %v", err)
-	} else {
-		startupStep("SDR device started successfully")
-	}
 	defer receiver.Close()
 
 	startupStep("Creating MainScreen")
@@ -138,6 +134,17 @@ func main() {
 	startupStep("Creating controls")
 	mainScreen.CreateControls()
 	startupStep("Controls created")
+	// Open the window before USB/Soapy probing. A HackRF Pro (or missing
+	// SDRplay API) can block in libusb for a long time; users otherwise see
+	// a silent process with no interface.
+	go func() {
+		startupStep("Opening SDR device")
+		if err := receiver.Start(); err != nil {
+			startupStep("Receiver could not start; the interface will remain available: %v", err)
+			return
+		}
+		startupStep("SDR device started successfully")
+	}()
 	var firstFrame sync.Once
 	simpleui.Run(func() {
 		firstFrame.Do(func() {

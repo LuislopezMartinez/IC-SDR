@@ -7,7 +7,7 @@
 IC-SDR brings together reception, demodulation, spectrum analysis and digital signal decoding in a desktop interface designed for daily use.
 
 > [!IMPORTANT]
-IC-SDR is designed for **Windows** portable SDR use, and also compiles for **Linux** and **macOS**. TETRA voice uses `libtetradec` on every OS, including Windows ARM64. Hardware SDR uses a bundled SoapySDR runtime on Windows, Linux, and macOS (`DATA/runtime/<os>-<arch>`). The loader enumerates every available Soapy driver so RTL-SDR, HackRF, Airspy, AirspyHF, Lime, Pluto, and other connected radios can open. SDRplay uses the vendor API when that API is installed.
+IC-SDR is designed for **Windows** portable SDR use, and also compiles for **Linux** and **macOS**. TETRA voice uses `libtetradec` on every OS, including Windows ARM64. Hardware SDR uses a bundled SoapySDR runtime on Windows, Linux, and macOS (`DATA/runtime/<os>-<arch>`). The loader enumerates every available Soapy driver so RTL-SDR, HackRF One, HackRF Pro, Airspy, AirspyHF, Lime, Pluto, and other connected radios can open. SDRplay uses the vendor API when that API is installed.
 
 ![IC-SDR main interface](docs/images/ic-sdr-main.png)
 
@@ -92,24 +92,30 @@ IC-SDR integrates tools to receive and display:
 
 ## Windows and portable distribution
 
-IC-SDR is intended to run on Windows. The local `dist/IC-SDR-Go` folder contains the distributable binary `IC-SDR-Go.exe`, its runtimes and the necessary auxiliary tools. The `DATA` directory must remain next to the executable.
+Download a **portable release zip** (for example `IC-SDR-v0.5.0-english.3-Windows-x64.zip`) from [GitHub Releases](https://github.com/blkph0x/IC-SDR/releases). Extract the whole folder and run `IC-SDR-Go.exe` with `DATA` next to the executable. Do not download the GitHub source zip (`IC-SDR-main`) and expect it to run — that tree has no Soapy runtime.
 
-The `dist/` folder is generated locally and is not part of the versioned source code. To rebuild it, use `build-release.ps1`.
+If the window never appears, open `DATA\logs\startup.log`. Windows 10 IoT / LTSC needs a GPU driver that provides OpenGL. HackRF One and HackRF Pro need [Zadig](https://zadig.akeo.ie/) WinUSB (or libusbK) on the HackRF USB device.
+
+`build-release.ps1` rebuilds the full portable folder and requires the local `ORIGEN\IC_SDR` runtime. It is not how end users compile the app.
 
 ## Requirements
 
-- **Windows** for the portable SoapySDR runtime (RTL-SDR and SDRplay modules, plus any other modules shipped in `DATA/runtime/windows-x64`).
-- Linux and macOS archives include a bundled SoapySDR runtime under `DATA/runtime/<os>-<arch>` with RTL-SDR, and best-effort HackRF, Airspy, AirspyHF, and SoapyRemote modules. A system SoapySDR install is still used as fallback (Lime, Pluto, UHD, BladeRF, SDRplay, and others).
-- Go 1.22 or later to compile from source (see `go.mod`).
-- A USB SDR that a loaded Soapy module can open. SDRplay also needs the vendor API from SDRplay.
+- **Windows** for the portable SoapySDR runtime (RTL-SDR, HackRF, SDRplay, and any other modules shipped in `DATA/runtime/windows-x64`).
+- Linux and macOS archives include a bundled SoapySDR runtime under `DATA/runtime/<os>-<arch>` with RTL-SDR, and best-effort HackRF (One and Pro via libhackrf 2026.01.3), Airspy, AirspyHF, and SoapyRemote modules. A system SoapySDR install is still used as fallback (Lime, Pluto, UHD, BladeRF, SDRplay, and others).
+- Go 1.22 or later to compile from source (see `go.mod`). Use `CGO_ENABLED=0`.
+- A USB SDR that a loaded Soapy module can open. SDRplay also needs the vendor API from SDRplay. HackRF Pro uses the same Soapy `hackrf` driver as HackRF One.
 
 ## Compilation
 
 From the repository root:
 
 ```powershell
-go build .
+$env:CGO_ENABLED = "0"
+go test ./...
+go build -trimpath -ldflags "-s -w -H=windowsgui" -o IC-SDR-Go.exe .
 ```
+
+That produces only the executable. The portable `DATA\runtime` tree still has to come from a release zip.
 
 GitHub Actions tests and compiles on Windows, Linux, and macOS. To cross-compile all desktop targets locally:
 
@@ -119,7 +125,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-all.ps1
 
 That produces `dist/multi/IC-SDR-{windows,linux,darwin}-{amd64,arm64}` with `CGO_ENABLED=0` (embedded raylib). Build the TETRA codec with `scripts/build-libtetradec.sh` and the Linux/macOS SDR runtime with `scripts/build-soapy-runtime.sh`.
 
-To generate the portable Windows distribution:
+To generate the portable Windows distribution (maintainers with `ORIGEN`):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build-release.ps1

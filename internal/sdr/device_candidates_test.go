@@ -20,24 +20,46 @@ func TestDeviceCandidatesFallBackFromSpecificRSPToRTLSDR(t *testing.T) {
 	if candidates[2].Driver != "rtlsdr" || candidates[2].Serial != "" {
 		t.Fatalf("RTL-SDR fallback missing: %+v", candidates)
 	}
-	if !containsDriver(candidates, "hackrf") || !containsDriver(candidates, "airspy") {
-		t.Fatalf("probe list missing HackRF/Airspy: %+v", driversOf(candidates))
+	if containsDriver(candidates, "hackrf") {
+		t.Fatalf("HackRF must not be probed without a serial: %+v", driversOf(candidates))
+	}
+	if !containsDriver(candidates, "airspy") {
+		t.Fatalf("probe list missing Airspy: %+v", driversOf(candidates))
 	}
 }
 
 func TestDeviceCandidatesPreferEnumeratedHardware(t *testing.T) {
 	candidates := deviceCandidates(
 		Config{Driver: "sdrplay"},
-		[]soapyIdentity{{Driver: "hackrf", Serial: "ABC", Label: "HackRF One"}},
+		[]soapyIdentity{
+			{Driver: "sdrplay", Serial: "RSP1", Label: "RSPdx"},
+			{Driver: "hackrf", Serial: "ABC", Label: "HackRF One"},
+		},
 	)
 	if candidates[0].Driver != "sdrplay" {
-		t.Fatalf("requested driver must stay first: %+v", candidates)
+		t.Fatalf("requested driver must stay first when it was enumerated: %+v", candidates)
 	}
 	if !containsDriverSerial(candidates, "hackrf", "ABC") {
 		t.Fatalf("enumerated HackRF missing: %+v", candidates)
 	}
 	if containsDriver(candidates, "lime") {
 		t.Fatalf("unused probe drivers should not run when hardware was enumerated: %+v", driversOf(candidates))
+	}
+}
+
+func TestDeviceCandidatesOpenEnumeratedHackRFProWithoutProbingRSP(t *testing.T) {
+	candidates := deviceCandidates(
+		Config{Driver: "sdrplay"},
+		[]soapyIdentity{{Driver: "hackrf", Serial: "0000000000000000abcdef", Label: "HackRF Pro #0 abcdef"}},
+	)
+	if len(candidates) == 0 || candidates[0].Driver != "hackrf" || candidates[0].Serial == "" {
+		t.Fatalf("HackRF Pro must be opened by serial first: %+v", candidates)
+	}
+	if containsDriver(candidates, "sdrplay") {
+		t.Fatalf("absent RSP must not be probed ahead of HackRF Pro: %+v", driversOf(candidates))
+	}
+	if containsDriverSerial(candidates, "hackrf", "") {
+		t.Fatalf("HackRF must not be opened without a serial: %+v", candidates)
 	}
 }
 
@@ -67,6 +89,16 @@ func TestSampleRateAttemptsKeepRequestedFirst(t *testing.T) {
 	}
 	if !containsRate(got, 2_500_000) || !containsRate(got, 10_000_000) {
 		t.Fatalf("airspy fallbacks missing: %v", got)
+	}
+}
+
+func TestHackRFSampleRateAttemptsIncludeLegacyTwoMega(t *testing.T) {
+	got := sampleRateAttempts("hackrf", 2_048_000)
+	if got[0] != 2_048_000 {
+		t.Fatalf("first rate %v, want requested 2048000", got[0])
+	}
+	if !containsRate(got, 2_000_000) || !containsRate(got, 20_000_000) {
+		t.Fatalf("HackRF One/Pro rates missing: %v", got)
 	}
 }
 

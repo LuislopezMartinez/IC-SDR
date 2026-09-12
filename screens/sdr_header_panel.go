@@ -156,7 +156,7 @@ func (p *SDRHeaderPanel) refresh() {
 		p.iqCorrection.SetLabel(T("IQ"))
 		p.rfNotch.SetLabel(T("RF NOTCH"))
 		p.dabNotch.SetLabel(T("DAB NOTCH"))
-		p.rfGain.SetRange(0, 80)
+		p.rfGain.SetRange(0, 116)
 		p.rfGain.SetStep(.5)
 		p.ifGain.SetRange(0, 80)
 		p.ifGain.SetStep(.5)

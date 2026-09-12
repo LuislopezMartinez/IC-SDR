@@ -4,10 +4,17 @@ IC-SDR Go - portable distribution
 Copy the complete IC-SDR-Go folder and run IC-SDR-Go.exe while keeping DATA
 next to the executable. The package includes the Visual C++ runtime required
 by SoapySDR and RTL-SDR, so you do not need to install it separately.
-DATA contains the SoapySDR runtime (RTL-SDR, SDRplay, and any extra Soapy
+DATA contains the SoapySDR runtime (RTL-SDR, HackRF One/Pro, SDRplay, and any extra Soapy
 modules shipped with the package), DMR, Digital Auto (DSD-neo 2.9.0), RTL_433 and APRS runtimes, as well as
 their auxiliary data and licenses. It is not necessary to start the program from a
 specific folder.
+
+If you downloaded the GitHub source zip (`IC-SDR-main`), that is not a runnable
+build. Use the portable Windows zip from GitHub Releases instead.
+
+HackRF One and HackRF Pro use the Soapy `hackrf` driver. On Windows, bind the
+radio to WinUSB with Zadig. The interface opens even if USB probing is still
+running; details are in DATA\logs\startup.log.
 
 RADIOSONDES includes RS41, DFM and M10/M20 from rs1729/RS. Select family,
 tune and press START. Their sources, GPL-3.0 license and compilation instructions

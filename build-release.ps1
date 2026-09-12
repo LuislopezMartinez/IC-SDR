@@ -63,8 +63,11 @@ if (Test-Path -LiteralPath $distRoot) {
 New-Item -ItemType Directory -Path $distRoot -Force | Out-Null
 
 if (-not $SkipTests) {
+    $env:CGO_ENABLED = '0'
     & go test ./...
-    if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Tests failed. Download the portable zip from GitHub Releases instead of compiling the source tree. build-release.ps1 also needs ORIGEN\IC_SDR. To compile only the exe: $env:CGO_ENABLED=0; go build -trimpath -ldflags "-s -w -H=windowsgui" -o IC-SDR-Go.exe .'
+    }
 }
 
 $exePath = Join-Path $distRoot 'IC-SDR-Go.exe'

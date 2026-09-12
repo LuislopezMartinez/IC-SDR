@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // WritablePath returns a location inside DATA beside the executable. Keeping
@@ -19,12 +20,12 @@ func WritablePath(parts ...string) string {
 // dataRoot uses the portable DATA directory in release builds and the
 // checkout's DATA directory during development (including `go run` and tests).
 func dataRoot() string {
-	base := executableDir()
-	release := filepath.Join(base, "DATA")
-	if exists(release) {
+	exe := executableDir()
+	release := filepath.Join(exe, "DATA")
+	if exists(release) && !isEphemeralExecutableDir(exe) {
 		return release
 	}
-	for _, start := range []string{workingDir(), base} {
+	for _, start := range searchStarts() {
 		if root := checkoutRoot(start); root != "" {
 			dev := filepath.Join(root, "DATA")
 			if exists(dev) || exists(filepath.Join(root, "ORIGEN", "IC_SDR")) {
@@ -38,13 +39,13 @@ func dataRoot() string {
 // Path returns an absolute path for a resource relative to IC_SDR's data root.
 // The returned release path is useful in error messages even when it is absent.
 func Path(parts ...string) string {
-	base := executableDir()
-	release := filepath.Join(append([]string{base, "DATA"}, parts...)...)
-	if exists(release) {
+	exe := executableDir()
+	release := filepath.Join(append([]string{exe, "DATA"}, parts...)...)
+	if exists(release) && !isEphemeralExecutableDir(exe) {
 		return release
 	}
 
-	for _, start := range []string{workingDir(), base} {
+	for _, start := range searchStarts() {
 		root := checkoutRoot(start)
 		if root == "" {
 			continue
@@ -59,6 +60,38 @@ func Path(parts ...string) string {
 		}
 	}
 	return release
+}
+
+func searchStarts() []string {
+	starts := []string{workingDir(), executableDir()}
+	if _, file, _, ok := runtime.Caller(1); ok {
+		starts = append(starts, filepath.Dir(file))
+	}
+	if _, file, _, ok := runtime.Caller(0); ok {
+		starts = append(starts, filepath.Dir(file))
+	}
+	return uniqueStrings(starts)
+}
+
+func isEphemeralExecutableDir(dir string) bool {
+	cleaned := strings.ToLower(filepath.ToSlash(filepath.Clean(dir)))
+	return strings.Contains(cleaned, "/go-build")
+}
+
+func uniqueStrings(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, value := range in {
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
 func checkoutRoot(start string) string {

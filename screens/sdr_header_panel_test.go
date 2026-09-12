@@ -33,7 +33,7 @@ func TestRTLSDRHeaderUsesDriverSpecificControls(t *testing.T) {
 func TestGenericHeaderUsesOverallGain(t *testing.T) {
 	p := NewSDRHeaderPanel(nil, nil)
 	p.current = sdr.HardwareSettings{
-		Available: true, Driver: "hackrf", Device: "HackRF One",
+		Available: true, Driver: "hackrf", Device: "HackRF Pro",
 		RFGain: 14, AGC: false,
 	}
 	p.refresh()

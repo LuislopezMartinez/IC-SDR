@@ -1,6 +1,10 @@
 package simpleui
 
-import rl "github.com/gen2brain/raylib-go/raylib"
+import (
+	"strings"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
+)
 
 type runtimeConfig struct {
 	width, height               int32
@@ -116,6 +120,10 @@ func Run(draw func()) {
 	runtime.started = true
 
 	traceLifecycle("Raylib: configuring window flags")
+	rl.SetTraceLogLevel(rl.LogWarning)
+	rl.SetTraceLogCallback(func(logType int, text string) {
+		traceLifecycle("Raylib[%d]: %s", logType, strings.TrimSpace(text))
+	})
 	rl.SetConfigFlags(runtime.windowFlags)
 	traceLifecycle("Raylib: calling InitWindow (%dx%d)", runtime.width, runtime.height)
 	windowWidth, windowHeight := runtime.width, runtime.height
@@ -123,6 +131,9 @@ func Run(draw func()) {
 		windowWidth, windowHeight = runtime.initialWidth, runtime.initialHeight
 	}
 	rl.InitWindow(windowWidth, windowHeight, runtime.title)
+	if !rl.IsWindowReady() {
+		panic("OpenGL window could not be created. Install a GPU driver with OpenGL (Windows IoT/LTSC often needs this) and run the portable zip so DATA stays next to IC-SDR-Go.exe.")
+	}
 	traceLifecycle("Raylib: InitWindow finished · monitor=%d · screen=%dx%d", rl.GetCurrentMonitor(), rl.GetScreenWidth(), rl.GetScreenHeight())
 	placeWindowOnPrimaryMonitor(windowWidth, windowHeight)
 	rl.SetWindowMinSize(int(runtime.minWidth), int(runtime.minHeight))

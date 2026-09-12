@@ -108,11 +108,24 @@ type soapyDevice struct {
 	buffers    [1]uintptr
 }
 
+func soapyDriverNeedsSerial(driver string) bool {
+	switch strings.ToLower(strings.TrimSpace(driver)) {
+	case "hackrf":
+		// SoapyHackRF refuses make() without a serial, including HackRF Pro.
+		return true
+	default:
+		return false
+	}
+}
+
 func deviceCandidates(config Config, discovered []soapyIdentity) []Config {
 	var out []Config
 	seen := make(map[string]struct{})
 	add := func(driver, serial string) {
 		if driver == "" {
+			return
+		}
+		if soapyDriverNeedsSerial(driver) && serial == "" {
 			return
 		}
 		key := driver + "\x00" + serial
@@ -125,20 +138,34 @@ func deviceCandidates(config Config, discovered []soapyIdentity) []Config {
 		out = append(out, candidate)
 	}
 
+	enumerated := make(map[string]struct{}, len(discovered))
+	for _, ident := range discovered {
+		enumerated[strings.ToLower(ident.Driver)] = struct{}{}
+	}
+
+	if len(discovered) > 0 {
+		requested := strings.ToLower(strings.TrimSpace(config.Driver))
+		if _, ok := enumerated[requested]; ok {
+			add(config.Driver, config.Serial)
+			if config.Serial != "" {
+				add(config.Driver, "")
+			}
+		}
+		for _, ident := range discovered {
+			add(ident.Driver, ident.Serial)
+			if ident.Serial != "" {
+				add(ident.Driver, "")
+			}
+		}
+		return out
+	}
+
 	add(config.Driver, config.Serial)
 	if config.Serial != "" {
 		add(config.Driver, "")
 	}
-	for _, ident := range discovered {
-		add(ident.Driver, ident.Serial)
-		if ident.Serial != "" {
-			add(ident.Driver, "")
-		}
-	}
-	if len(discovered) == 0 {
-		for _, driver := range soapyProbeDrivers {
-			add(driver, "")
-		}
+	for _, driver := range soapyProbeDrivers {
+		add(driver, "")
 	}
 	return out
 }
@@ -151,7 +178,8 @@ func sampleRateAttempts(driver string, requested float64) []float64 {
 	case "airspyhf":
 		extras = []float64{768_000, 912_000, 456_000, 192_000, 2_048_000}
 	case "hackrf":
-		extras = []float64{2_048_000, 2_000_000, 4_000_000, 8_000_000, 10_000_000, 16_000_000, 20_000_000}
+		// HackRF One and Pro accept 2–20 MS/s in the legacy radio mode.
+		extras = []float64{2_000_000, 2_048_000, 4_000_000, 8_000_000, 10_000_000, 16_000_000, 20_000_000}
 	case "lime", "plutosdr", "uhd", "bladerf":
 		extras = []float64{2_048_000, 2_000_000, 4_000_000, 5_000_000, 8_000_000, 10_000_000}
 	}

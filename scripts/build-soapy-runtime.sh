@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build a portable SoapySDR runtime into DATA/runtime/$GOOS-$GOARCH.
 # Used on Linux and macOS so IC-SDR does not need distro/Homebrew SDR packages.
-# RTL-SDR is required. HackRF, Airspy, AirspyHF, and SoapyRemote are best-effort
+# RTL-SDR is required. HackRF (One and Pro), Airspy, AirspyHF, and SoapyRemote are best-effort
 # extras — a failure there must not block the RTL bundle.
 set -euo pipefail
 
@@ -38,7 +38,7 @@ LIBUSB_VER="1.0.27"
 RTLSDR_VER="v2.0.2"
 SOAPY_VER="soapy-sdr-0.8.1"
 SOAPYRTL_VER="soapy-rtlsdr-0.3.0"
-HACKRF_VER="v2024.02.1"
+HACKRF_VER="v2026.01.3"
 AIRSPY_VER="v1.0.10"
 AIRSPYHF_VER="1.8.1"
 SOAPYHACKRF_VER="soapy-hackrf-0.3.4"
