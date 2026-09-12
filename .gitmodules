@@ -1,0 +1,3 @@
+[submodule "third_party/libtetradec"]
+	path = third_party/libtetradec
+	url = https://github.com/blkph0x/libtetradec.git

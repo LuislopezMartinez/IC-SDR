@@ -21,9 +21,17 @@ func sdrRuntimeRoot() string {
 	return resources.Path("runtime", runtime.GOOS+"-"+runtime.GOARCH)
 }
 
-func tetraCodecPath() string {
-	if runtime.GOOS == "windows" {
-		return resources.Path("tools", "tetra", "runtime", "bin", "libtetradec.dll")
+func tetraCodecName() string {
+	switch runtime.GOOS {
+	case "windows":
+		return "libtetradec.dll"
+	case "darwin":
+		return "libtetradec.dylib"
+	default:
+		return "libtetradec.so"
 	}
-	return resources.Path("tools", "tetra", "runtime", "bin", "libtetradec.so")
+}
+
+func tetraCodecPath() string {
+	return resources.Path("tools", "tetra", "runtime", "bin", tetraCodecName())
 }

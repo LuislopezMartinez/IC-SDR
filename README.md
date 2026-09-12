@@ -7,7 +7,7 @@
 IC-SDR brings together reception, demodulation, spectrum analysis and digital signal decoding in a desktop interface designed for daily use.
 
 > [!IMPORTANT]
-IC-SDR is designed for **Windows** portable SDR use, and also compiles for **Linux** and **macOS** (UI; SoapySDR hardware is currently Windows-only).
+IC-SDR is designed for **Windows** portable SDR use, and also compiles for **Linux** and **macOS**. TETRA voice uses `libtetradec` on every OS. Hardware SDR uses the bundled SoapySDR runtime on Windows; Linux and macOS use a system SoapySDR install when present (`soapysdr-module-rtlsdr` or Homebrew `soapyrtlsdr`).
 
 ![IC-SDR main interface](docs/images/ic-sdr-main.png)
 
@@ -66,9 +66,9 @@ The `dist/` folder is generated locally and is not part of the versioned source 
 ## Requirements
 
 - **Windows** for the portable SoapySDR / RTL-SDR runtime (RSP and RTL dongles).
-- Linux and macOS builds compile and run the desktop UI; hardware SDR via SoapySDR is still Windows-only.
+- Linux and macOS builds compile the desktop UI and TETRA ACELP codec. Hardware SDR uses system SoapySDR when installed.
 - Go 1.22 or later to compile from source (see `go.mod`).
-- A receiver compatible with RTL-SDR or SoapySDR/SDRplay on Windows.
+- A receiver compatible with RTL-SDR or SoapySDR/SDRplay.
 
 ## Compilation
 
@@ -84,7 +84,7 @@ GitHub Actions tests and compiles on Windows, Linux, and macOS. To cross-compile
 powershell -ExecutionPolicy Bypass -File .\scripts\build-all.ps1
 ```
 
-That produces `dist/multi/IC-SDR-{windows,linux,darwin}-{amd64,arm64}` with `CGO_ENABLED=0` (embedded raylib). Hardware SDR via SoapySDR is currently Windows x64; Linux and macOS still start the UI without a receiver.
+That produces `dist/multi/IC-SDR-{windows,linux,darwin}-{amd64,arm64}` with `CGO_ENABLED=0` (embedded raylib). Build the TETRA codec with `scripts/build-libtetradec.ps1` or `scripts/build-libtetradec.sh` (requires the `third_party/libtetradec` submodule). Linux and macOS open RTL-SDR/SDRplay devices through a system SoapySDR install when it is present.
 
 To generate the portable Windows distribution:
 
