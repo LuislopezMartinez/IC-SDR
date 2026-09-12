@@ -74,7 +74,8 @@ func searchStarts() []string {
 }
 
 func isEphemeralExecutableDir(dir string) bool {
-	cleaned := strings.ToLower(filepath.ToSlash(filepath.Clean(dir)))
+	cleaned := strings.ToLower(filepath.ToSlash(dir))
+	cleaned = strings.ReplaceAll(cleaned, `\`, "/")
 	return strings.Contains(cleaned, "/go-build")
 }
 
