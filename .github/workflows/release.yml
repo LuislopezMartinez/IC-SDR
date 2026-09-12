@@ -51,6 +51,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CGO_ENABLED: "0"
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
     strategy:
       fail-fast: false
       matrix:
@@ -60,37 +62,31 @@ jobs:
             goarch: amd64
             extra: -H=windowsgui
             ext: .exe
-            cmake_extra: ""
-          - os: windows-latest
+          - os: windows-11-arm
             goos: windows
             goarch: arm64
             extra: -H=windowsgui
             ext: .exe
-            cmake_extra: ""
           - os: ubuntu-latest
             goos: linux
             goarch: amd64
             extra: ""
             ext: ""
-            cmake_extra: ""
-          - os: ubuntu-latest
+          - os: ubuntu-24.04-arm
             goos: linux
             goarch: arm64
             extra: ""
             ext: ""
-            cmake_extra: "-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc"
           - os: macos-latest
             goos: darwin
             goarch: arm64
             extra: ""
             ext: ""
-            cmake_extra: ""
           - os: macos-latest
             goos: darwin
             goarch: amd64
             extra: ""
             ext: ""
-            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=x86_64"
 
     steps:
       - name: Checkout
@@ -104,34 +100,32 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Install aarch64 cross compiler
-        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
-        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Install Linux SDR build tools
+        if: matrix.goos == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ make autoconf automake libtool pkg-config python3 patchelf
+
+      - name: Install macOS SDR build tools
+        if: matrix.goos == 'darwin'
+        run: brew install autoconf automake libtool pkg-config cmake
 
       - name: Build TETRA ACELP codec
         shell: bash
-        run: |
-          set -euo pipefail
-          extra=( )
-          if [ -n "${{ matrix.cmake_extra }}" ]; then
-            # shellcheck disable=SC2206
-            extra=( ${{ matrix.cmake_extra }} )
-          fi
-          cmake -S third_party/libtetradec -B build/libtetradec -DCMAKE_BUILD_TYPE=Release "${extra[@]}"
-          cmake --build build/libtetradec --config Release
+        run: bash scripts/build-libtetradec.sh
+
+      - name: Build portable SoapySDR + RTL-SDR runtime
+        if: matrix.goos != 'windows'
+        shell: bash
+        run: bash scripts/build-soapy-runtime.sh
 
       - name: Build application
         shell: bash
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
         run: |
           set -euo pipefail
           mkdir -p dist/pkg
           go build -trimpath -ldflags "-s -w ${{ matrix.extra }}" \
             -o "dist/pkg/IC-SDR-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}" .
 
-      - name: Stage codec copies
+      - name: Stage data files
         shell: bash
         run: |
           set -euo pipefail
@@ -139,11 +133,13 @@ jobs:
           mkdir -p "$dest"
           lib=""
           for cand in \
+            DATA/tools/tetra/runtime/bin/libtetradec.dll \
+            DATA/tools/tetra/runtime/bin/libtetradec.so \
+            DATA/tools/tetra/runtime/bin/libtetradec.dylib \
             build/libtetradec/libtetradec.so \
             build/libtetradec/libtetradec.dylib \
             build/libtetradec/libtetradec.dll \
-            build/libtetradec/Release/libtetradec.dll \
-            build/libtetradec/Debug/libtetradec.dll
+            build/libtetradec/Release/libtetradec.dll
           do
             if [ -f "$cand" ]; then
               lib="$cand"
@@ -154,13 +150,6 @@ jobs:
             echo "libtetradec was not built" >&2
             exit 1
           fi
-          # Host cmake on windows-latest always produces an amd64 DLL. Skip attaching
-          # that file to the arm64 Windows zip so we do not ship the wrong architecture.
-          if [ "${{ matrix.goos }}" = "windows" ] && [ "${{ matrix.goarch }}" = "arm64" ]; then
-            echo "Skipping host-arch libtetradec for windows/arm64"
-            rm -rf dist/pkg/DATA
-            exit 0
-          fi
           base="$(basename "$lib")"
           ext="${base##*.}"
           stem="${base%.*}"
@@ -168,6 +157,11 @@ jobs:
           for slot in 2 3 4; do
             cp -f "$lib" "$dest/${stem}-ts${slot}.${ext}"
           done
+          runtime="DATA/runtime/${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ -d "$runtime" ]; then
+            mkdir -p "dist/pkg/DATA/runtime"
+            cp -a "$runtime" "dist/pkg/DATA/runtime/"
+          fi
 
       - name: Archive
         shell: bash
@@ -175,7 +169,7 @@ jobs:
           set -euo pipefail
           name="IC-SDR-${{ matrix.goos }}-${{ matrix.goarch }}"
           python - <<PY
-          import pathlib, shutil, sys
+          import pathlib, shutil
           src = pathlib.Path("dist/pkg")
           if "${{ matrix.goos }}" == "windows":
               shutil.make_archive("dist/" + "$name", "zip", root_dir=src)
@@ -222,13 +216,12 @@ jobs:
           NOTES="$(cat <<'EOF'
           Multi-OS build of the English IC-SDR branch (UI, languages, region band plans, and TETRA voice).
 
-          Binaries are compiled with `CGO_ENABLED=0` (embedded raylib). Each archive includes `DATA/tools/tetra/runtime/bin/libtetradec.*` (four timeslot copies of the ACELP decoder).
+          Binaries are compiled with `CGO_ENABLED=0` (embedded raylib). Each archive includes four timeslot copies of `libtetradec`.
 
-          - **Windows amd64** — GUI executable plus TETRA codec. The portable SoapySDR/RTL-SDR runtime remains the Windows x64 bundle from previous English releases.
-          - **Linux amd64/arm64** and **macOS amd64/arm64** — desktop UI plus TETRA codec. Hardware SDR uses a system SoapySDR install when present (`soapysdr-module-rtlsdr` / Homebrew `soapyrtlsdr`).
-          - **Windows arm64** — GUI executable. The TETRA codec is not bundled for this slice yet.
+          - **Windows amd64 / arm64** — GUI executable plus a native TETRA codec. The portable SoapySDR/RTL-SDR runtime for x64 is still the Windows bundle from previous English releases; ARM64 Windows includes the codec.
+          - **Linux amd64/arm64** and **macOS amd64/arm64** — desktop UI, TETRA codec, and a bundled SoapySDR + RTL-SDR runtime under `DATA/runtime/<os>-<arch>`. Plug in an RTL-SDR; no distro SDR packages required. A system SoapySDR install is still used as fallback. SDRplay remains vendor/Windows.
 
-          The TETRA codec is [blkph0x/libtetradec](https://github.com/blkph0x/libtetradec) (PR to [curlyboi/libtetradec](https://github.com/curlyboi/libtetradec)). It decodes clear TCH/ACELP only.
+          The TETRA codec is [blkph0x/libtetradec](https://github.com/blkph0x/libtetradec). It decodes **clear** TCH/ACELP only. Encrypted TETRA is not decrypted.
 
           SHA-256 checksums are in `SHA256SUMS.txt`.
           EOF

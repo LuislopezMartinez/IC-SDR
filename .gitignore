@@ -10,6 +10,7 @@ DATA/recordings/
 DATA/exports/
 DATA/captures/
 DATA/tools/tetra/runtime/
+DATA/runtime/
 
 # Editor and operating-system files
 .DS_Store
