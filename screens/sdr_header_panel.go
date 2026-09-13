@@ -15,8 +15,8 @@ type SDRHeaderPanel struct {
 	controls                                    []simpleui.Element
 	current                                     sdr.HardwareSettings
 	devices                                     []sdr.DeviceOption
-	nextSync                                    float64
-	listing, listOpen                           bool
+	nextSync, nextList                          float64
+	listing                                     bool
 	onChanged                                   func()
 	deviceSelect                                *simpleui.Dropdown
 	rfLabel, ifLabel, ppmLabel, setpointLabel   *simpleui.Label
@@ -134,21 +134,21 @@ func NewSDRHeaderPanel(receiver *sdr.Receiver, onChanged func()) *SDRHeaderPanel
 }
 
 func (p *SDRHeaderPanel) Tick() {
-	if p.receiver != nil && p.deviceSelect != nil && p.deviceSelect.Open() {
-		if !p.listOpen && !p.listing {
+	now := rl.GetTime()
+	if p.receiver != nil && p.deviceSelect != nil && !p.listing {
+		needScan := now >= p.nextList && (p.deviceSelect.Open() || !p.current.Available || len(p.devices) == 0)
+		if needScan {
 			p.listing = true
-			p.listOpen = true
+			p.nextList = now + 8
 			go func() {
 				_ = p.receiver.ListDevices()
 				p.listing = false
 			}()
 		}
-	} else {
-		p.listOpen = false
 	}
-	if p.receiver != nil && !rl.IsMouseButtonDown(rl.MouseButtonLeft) && rl.GetTime() >= p.nextSync {
+	if p.receiver != nil && !rl.IsMouseButtonDown(rl.MouseButtonLeft) && now >= p.nextSync {
 		p.sync()
-		p.nextSync = rl.GetTime() + .25
+		p.nextSync = now + .25
 	}
 }
 func (p *SDRHeaderPanel) DrawBackground() { drawPanel(1264, 4, 312, 206) }
@@ -218,6 +218,9 @@ func (p *SDRHeaderPanel) refresh() {
 	p.ppm.SetValue(s.PPM)
 	p.setpoint.SetValue(float32(s.AGCSetpoint))
 	for _, c := range p.controls {
+		if c == p.deviceSelect {
+			continue
+		}
 		c.SetEnabled(s.Available)
 	}
 	p.deviceSelect.SetEnabled(true)
@@ -252,10 +255,6 @@ func (p *SDRHeaderPanel) refreshDeviceList() {
 	if len(list) == 0 && p.current.Available && p.current.Driver != "" {
 		list = []sdr.DeviceOption{{Driver: p.current.Driver, Serial: p.current.Serial, Label: p.current.Device}}
 	}
-	if p.deviceSelect.Open() && len(p.deviceSelect.Items()) > 0 && len(list) == len(p.devices) {
-		return
-	}
-	p.devices = list
 	items := make([]string, len(list))
 	selected := -1
 	for i, opt := range list {
@@ -264,6 +263,17 @@ func (p *SDRHeaderPanel) refreshDeviceList() {
 			selected = i
 		}
 	}
+	if len(items) == 0 {
+		if p.listing {
+			items = []string{T("Scanning radios…")}
+		} else {
+			items = []string{T("No radios found")}
+		}
+	}
+	if sameStrings(p.deviceSelect.Items(), items) {
+		return
+	}
+	p.devices = list
 	p.deviceSelect.SetItems(items)
 	if selected >= 0 {
 		p.deviceSelect.SetSelected(selected)
@@ -271,7 +281,22 @@ func (p *SDRHeaderPanel) refreshDeviceList() {
 		p.deviceSelect.SetDisabledText(fmt.Sprintf("SDR %s · %s", p.current.Device, p.current.Driver))
 	} else {
 		p.deviceSelect.SetDisabledText("")
+		if len(list) == 0 && len(items) > 0 {
+			p.deviceSelect.SetSelected(0)
+		}
 	}
+}
+
+func sameStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *SDRHeaderPanel) OverlayOpen() bool {

@@ -37,6 +37,8 @@ type SatellitePanel struct {
 	feedback                      string
 	updating                      bool
 	updateDone                    chan error
+	txUpdating                    bool
+	txDone                        chan error
 	lastSnapshot                  string
 	nextSnapshot                  time.Time
 	lastMapSelection              int
@@ -100,6 +102,7 @@ func NewSatellitePanel(screen *MainScreen) *SatellitePanel {
 	p.populate()
 	p.SetVisible(false)
 	p.writeSnapshot(true)
+	p.startTransmitterRefresh()
 	return p
 }
 
@@ -314,6 +317,7 @@ func (p *SatellitePanel) Enter() {
 	if len(p.tracker.Satellites()) <= 2 {
 		p.update()
 	}
+	p.startTransmitterRefresh()
 }
 func (p *SatellitePanel) Leave() {}
 func (p *SatellitePanel) Tick() {
@@ -329,6 +333,18 @@ func (p *SatellitePanel) Tick() {
 				p.feedback = "ERROR: " + err.Error()
 			} else {
 				p.feedback = "CATALOG UPDATED"
+				p.populate()
+				p.writeSnapshot(true)
+			}
+		default:
+		}
+	}
+	if p.txDone != nil {
+		select {
+		case err := <-p.txDone:
+			p.txDone = nil
+			p.txUpdating = false
+			if err == nil {
 				p.populate()
 				p.writeSnapshot(true)
 			}
@@ -363,6 +379,20 @@ func (p *SatellitePanel) update() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
 		done <- p.tracker.Refresh(ctx)
+	}()
+}
+
+func (p *SatellitePanel) startTransmitterRefresh() {
+	if p.txUpdating || p.updating {
+		return
+	}
+	p.txUpdating = true
+	p.txDone = make(chan error, 1)
+	done := p.txDone
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		done <- p.tracker.RefreshTransmitters(ctx)
 	}()
 }
 func (p *SatellitePanel) tune() {

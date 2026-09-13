@@ -96,7 +96,7 @@ func NewTracker(cachePath string) *Tracker {
 	t := &Tracker{
 		cachePath:       cachePath,
 		transmitterPath: filepath.Join(filepath.Dir(cachePath), "satellites-transmitters.json"),
-		transmitters:    builtinTransmitters(),
+		transmitters:    defaultTransmitters(),
 		station:         DefaultStation(""),
 		selected:        25544,
 		source:          "built-in catalog",
@@ -152,7 +152,7 @@ func (t *Tracker) Refresh(ctx context.Context) error {
 		return fmt.Errorf("could not update orbital catalog (%d groups failed)", failures)
 	}
 	var remoteTransmitters map[int][]Signal
-	if table, err := fetchSatnogsTransmitters(client); err == nil {
+	if table, err := fetchSatnogsTransmitters(ctx, nil); err == nil {
 		remoteTransmitters = table
 	}
 	list := make([]Satellite, 0, len(seen))
@@ -167,7 +167,7 @@ func (t *Tracker) Refresh(ctx context.Context) error {
 	})
 	t.mu.Lock()
 	if remoteTransmitters != nil {
-		t.transmitters = mergeTransmitterTables(builtinTransmitters(), remoteTransmitters)
+		t.transmitters = mergeTransmitterTables(defaultTransmitters(), remoteTransmitters)
 	}
 	t.satellites = list
 	t.attachSignalsLocked()
@@ -177,6 +177,21 @@ func (t *Tracker) Refresh(ctx context.Context) error {
 		_ = t.saveTransmitters()
 	}
 	return t.saveCache()
+}
+
+func (t *Tracker) RefreshTransmitters(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	table, err := fetchSatnogsTransmitters(ctx, nil)
+	if err != nil {
+		return err
+	}
+	t.mu.Lock()
+	t.transmitters = mergeTransmitterTables(defaultTransmitters(), table)
+	t.attachSignalsLocked()
+	t.mu.Unlock()
+	return t.saveTransmitters()
 }
 
 func priority(group string) int {

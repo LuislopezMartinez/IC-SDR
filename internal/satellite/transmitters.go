@@ -1,6 +1,8 @@
 package satellite
 
 import (
+	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,10 +11,19 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
+//go:embed transmitters_catalog.json
+var embeddedTransmitterFile embed.FS
+
 const satnogsTransmittersURL = "https://db.satnogs.org/api/transmitters/?format=json"
+
+var (
+	embeddedTransmittersOnce sync.Once
+	embeddedTransmitterTable map[int][]Signal
+)
 
 type satnogsPage struct {
 	Next    string               `json:"next"`
@@ -85,16 +96,61 @@ func mergeSignals(groups ...[]Signal) []Signal {
 			out = append(out, sig)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].DownlinkHz < out[j].DownlinkHz })
+	sort.SliceStable(out, func(i, j int) bool {
+		ri, rj := amateurRank(out[i].DownlinkHz), amateurRank(out[j].DownlinkHz)
+		if ri != rj {
+			return ri < rj
+		}
+		return out[i].DownlinkHz < out[j].DownlinkHz
+	})
 	if len(out) > 24 {
 		out = out[:24]
 	}
 	return out
 }
 
+func amateurRank(hz int64) int {
+	switch {
+	case hz >= 144_000_000 && hz <= 148_000_000:
+		return 0
+	case hz >= 430_000_000 && hz <= 440_000_000:
+		return 1
+	case hz >= 1_260_000_000 && hz <= 1_300_000_000:
+		return 2
+	case hz >= 137_000_000 && hz <= 138_000_000:
+		return 3
+	case hz >= 10_489_000_000 && hz <= 10_500_000_000:
+		return 4
+	default:
+		return 8
+	}
+}
+
+func defaultTransmitters() map[int][]Signal {
+	return mergeTransmitterTables(builtinTransmitters(), embeddedTransmitters())
+}
+
+func embeddedTransmitters() map[int][]Signal {
+	embeddedTransmittersOnce.Do(func() {
+		data, err := embeddedTransmitterFile.ReadFile("transmitters_catalog.json")
+		if err != nil {
+			embeddedTransmitterTable = map[int][]Signal{}
+			return
+		}
+		table, err := parseTransmitterTable(data)
+		if err != nil || len(table) == 0 {
+			embeddedTransmitterTable = map[int][]Signal{}
+			return
+		}
+		embeddedTransmitterTable = table
+	})
+	return embeddedTransmitterTable
+}
+
 func (t *Tracker) attachSignalsLocked() {
 	for i := range t.satellites {
-		t.satellites[i].Signals = mergeSignals(knownSignals(t.satellites[i].NORAD), t.transmitters[t.satellites[i].NORAD])
+		norad := t.satellites[i].NORAD
+		t.satellites[i].Signals = mergeSignals(knownSignals(norad), t.transmitters[norad], t.satellites[i].Signals)
 	}
 }
 
@@ -107,7 +163,7 @@ func (t *Tracker) loadTransmitters() error {
 	if err != nil || len(table) == 0 {
 		return fmt.Errorf("invalid transmitter cache")
 	}
-	t.transmitters = mergeTransmitterTables(builtinTransmitters(), table)
+	t.transmitters = mergeTransmitterTables(defaultTransmitters(), table)
 	return nil
 }
 
@@ -216,14 +272,17 @@ func satnogsDownlink(item satnogsTransmitter) int64 {
 	}
 }
 
-func fetchSatnogsTransmitters(client *http.Client) (map[int][]Signal, error) {
+func fetchSatnogsTransmitters(ctx context.Context, client *http.Client) (map[int][]Signal, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if client == nil {
-		client = &http.Client{Timeout: 25 * time.Second}
+		client = &http.Client{Timeout: 90 * time.Second}
 	}
 	url := satnogsTransmittersURL
 	var all []satnogsTransmitter
 	for page := 0; page < 20 && url != ""; page++ {
-		req, err := http.NewRequest(http.MethodGet, url, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -232,7 +291,7 @@ func fetchSatnogsTransmitters(client *http.Client) (map[int][]Signal, error) {
 		if err != nil {
 			return nil, err
 		}
-		data, readErr := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 		_ = resp.Body.Close()
 		if readErr != nil {
 			return nil, readErr
@@ -243,7 +302,7 @@ func fetchSatnogsTransmitters(client *http.Client) (map[int][]Signal, error) {
 		var p satnogsPage
 		if json.Unmarshal(data, &p) == nil && len(p.Results) > 0 {
 			all = append(all, p.Results...)
-			url = p.Next
+			url = strings.TrimSpace(p.Next)
 			continue
 		}
 		list, err := decodeSatnogsList(data)

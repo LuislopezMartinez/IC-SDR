@@ -106,6 +106,21 @@ func TestHeaderDeviceDropdownStaysEnabled(t *testing.T) {
 	if p.deviceSelect == nil || !p.deviceSelect.Enabled() {
 		t.Fatal("SDR picker must stay usable with no radio open")
 	}
+	if len(p.deviceSelect.Items()) == 0 {
+		t.Fatal("empty SDR picker cannot be opened")
+	}
+}
+
+func TestHeaderDeviceDropdownRefreshDoesNotDisablePicker(t *testing.T) {
+	p := NewSDRHeaderPanel(nil, nil)
+	p.current = sdr.HardwareSettings{Available: false}
+	p.deviceSelect.SetItems([]string{"RTL-SDR · 00000001"})
+	p.deviceSelect.SetSelected(0)
+	p.deviceSelect.SetFocused(true)
+	p.refresh()
+	if !p.deviceSelect.Enabled() || !p.deviceSelect.Focused() {
+		t.Fatal("refresh closed or disabled the SDR picker")
+	}
 }
 
 func TestRTLHeaderHidesAntennaSwitch(t *testing.T) {

@@ -248,13 +248,12 @@ func (receiver *Receiver) SelectDevice(driver, serial string) error {
 
 func (receiver *Receiver) ListDevices() []DeviceOption {
 	list, err := listSoapyDevices(receiver.config)
-	if err != nil {
-		return nil
-	}
 	receiver.mu.Lock()
-	receiver.devices = list
-	receiver.mu.Unlock()
-	return list
+	defer receiver.mu.Unlock()
+	if err == nil && len(list) > 0 {
+		receiver.devices = mergeDeviceOptions(list, receiver.devices)
+	}
+	return append([]DeviceOption(nil), receiver.devices...)
 }
 
 func (receiver *Receiver) CachedDevices() []DeviceOption {
