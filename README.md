@@ -37,7 +37,13 @@ IC-SDR integra herramientas para recibir y visualizar:
 - **Digital Auto** — detección y decodificación de DMR, P25 I/II, NXDN,
   D-STAR, YSF, dPMR, ProVoice, M17 y X2-TDMA mediante DSD-neo.
 
-![Decodificación RTL_433 en IC-SDR](docs/images/ic-sdr-rtl433.png)
+## Capturas actuales
+
+![Servidor web de IC-SDR en Windows](docs/images/ic-sdr-servidor-web.png)
+
+| Visor web en el móvil | Grabador y audio en directo |
+| --- | --- |
+| <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
 
 ## Novedades de v0.6.0
 
