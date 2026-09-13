@@ -21,6 +21,7 @@ type TextField struct {
 	dragging      bool
 	scrollX       float32
 	maxLength     int
+	password      bool
 	filter        func(rune) bool
 	originalText  string
 	lastBlinkTime float64
@@ -42,6 +43,7 @@ func (field *TextField) Placeholder() string              { return field.placeho
 func (field *TextField) SetPlaceholder(value string)      { field.placeholder = value }
 func (field *TextField) SetFont(style FontStyle)          { field.font = style }
 func (field *TextField) SetMaxLength(length int)          { field.maxLength = max(0, length) }
+func (field *TextField) SetPassword(password bool)        { field.password = password }
 func (field *TextField) SetFilter(filter func(rune) bool) { field.filter = filter }
 func (field *TextField) OnChange(handler func(string))    { field.onChange = handler }
 func (field *TextField) OnSubmit(handler func(string))    { field.onSubmit = handler }
@@ -144,7 +146,7 @@ func (field *TextField) Draw() {
 	if !field.Enabled() {
 		textColor = theme.TextMuted
 	}
-	DrawTextStyled(field.Text(), textX, textY, field.fontSize, field.font, textColor)
+	DrawTextStyled(field.displayText(), textX, textY, field.fontSize, field.font, textColor)
 	field.drawCaret(textX, textY)
 }
 
@@ -158,12 +160,19 @@ func (field *TextField) handleKeyboard() {
 		return
 	}
 	if control && rl.IsKeyPressed(rl.KeyC) {
+		if field.password {
+			return
+		}
 		if selected := field.selectedText(); selected != "" {
 			rl.SetClipboardText(selected)
 		}
 		return
 	}
 	if control && rl.IsKeyPressed(rl.KeyX) {
+		if field.password {
+			field.deleteSelection(true)
+			return
+		}
 		if selected := field.selectedText(); selected != "" {
 			rl.SetClipboardText(selected)
 			field.deleteSelection(true)
@@ -305,6 +314,20 @@ func (field *TextField) selectedText() string {
 	return string(field.text[start:end])
 }
 
+func (field *TextField) displayText() string {
+	if field.password {
+		return strings.Repeat("•", len(field.text))
+	}
+	return field.Text()
+}
+
+func (field *TextField) displayPrefix(length int) string {
+	if field.password {
+		return strings.Repeat("•", length)
+	}
+	return string(field.text[:length])
+}
+
 func (field *TextField) acceptedRunes(value string) []rune {
 	result := make([]rune, 0, len(value))
 	for _, character := range []rune(strings.ReplaceAll(value, "\n", "")) {
@@ -333,8 +356,8 @@ func (field *TextField) indexAt(pointerX float32) int {
 		return 0
 	}
 	for index := 1; index <= len(field.text); index++ {
-		previous := MeasureTextStyled(string(field.text[:index-1]), field.fontSize, field.font).X
-		current := MeasureTextStyled(string(field.text[:index]), field.fontSize, field.font).X
+		previous := MeasureTextStyled(field.displayPrefix(index-1), field.fontSize, field.font).X
+		current := MeasureTextStyled(field.displayPrefix(index), field.fontSize, field.font).X
 		if localX < (previous+current)*0.5 {
 			return index - 1
 		}
@@ -347,14 +370,14 @@ func (field *TextField) ensureCursorVisible() {
 		return
 	}
 	visibleWidth := max(1, field.Bounds().Width-field.padding()*2)
-	cursorX := MeasureTextStyled(string(field.text[:field.cursor]), field.fontSize, field.font).X
+	cursorX := MeasureTextStyled(field.displayPrefix(field.cursor), field.fontSize, field.font).X
 	if cursorX-field.scrollX > visibleWidth {
 		field.scrollX = cursorX - visibleWidth
 	}
 	if cursorX-field.scrollX < 0 {
 		field.scrollX = cursorX
 	}
-	textWidth := MeasureTextStyled(field.Text(), field.fontSize, field.font).X
+	textWidth := MeasureTextStyled(field.displayText(), field.fontSize, field.font).X
 	field.scrollX = max(0, min(field.scrollX, max(0, textWidth-visibleWidth)))
 }
 
@@ -363,8 +386,8 @@ func (field *TextField) drawSelection(textX, textY float32) {
 		return
 	}
 	start, end := field.selection()
-	left := MeasureTextStyled(string(field.text[:start]), field.fontSize, field.font).X
-	right := MeasureTextStyled(string(field.text[:end]), field.fontSize, field.font).X
+	left := MeasureTextStyled(field.displayPrefix(start), field.fontSize, field.font).X
+	right := MeasureTextStyled(field.displayPrefix(end), field.fontSize, field.font).X
 	height := MeasureTextStyled("Ag", field.fontSize, field.font).Y
 	rl.DrawRectangleRec(rl.Rectangle{X: textX + left, Y: textY, Width: right - left, Height: height}, currentTheme.InputSelection)
 }
@@ -373,7 +396,7 @@ func (field *TextField) drawCaret(textX, textY float32) {
 	if !field.focused || field.hasSelection() || int((rl.GetTime()-field.lastBlinkTime)*2)%2 != 0 {
 		return
 	}
-	x := textX + MeasureTextStyled(string(field.text[:field.cursor]), field.fontSize, field.font).X
+	x := textX + MeasureTextStyled(field.displayPrefix(field.cursor), field.fontSize, field.font).X
 	height := MeasureTextStyled("Ag", field.fontSize, field.font).Y
 	rl.DrawLineEx(rl.Vector2{X: x, Y: textY}, rl.Vector2{X: x, Y: textY + height}, 2, currentTheme.InputCaret)
 }

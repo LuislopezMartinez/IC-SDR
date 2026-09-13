@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.5.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.5.0)**
+**Versión actual: [v0.6.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.6.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -38,6 +38,22 @@ IC-SDR integra herramientas para recibir y visualizar:
   D-STAR, YSF, dPMR, ProVoice, M17 y X2-TDMA mediante DSD-neo.
 
 ![Decodificación RTL_433 en IC-SDR](docs/images/ic-sdr-rtl433.png)
+
+## Novedades de v0.6.0
+
+- Nuevo visor web para móviles con espectro, cascada, S-meter, memorias,
+  escáner y estado de los decodificadores DMR/TETRA.
+- Audio en directo por la red local: PCM de baja latencia u Ogg/Opus para
+  ahorrar datos. Grabación opcional en el propio navegador móvil.
+- Control remoto opcional, protegido con una segunda contraseña y limitado a
+  una sesión: sintonía, filtros, squelch, escáner, memorias y DMR/TETRA.
+- Configuración del servidor desde la aplicación y código QR para conectarse
+  desde el móvil. Correcciones de interfaz y pruebas de los controles web.
+
+> [!WARNING]
+> El servidor web utiliza **HTTP sin cifrar**. Úsalo solo en una red local de
+> confianza; no abras el puerto a Internet ni reutilices contraseñas de otros
+> servicios. Consulta [la guía del visor web](docs/web-lan.md) antes de activarlo.
 
 ## Novedades de v0.5.0
 

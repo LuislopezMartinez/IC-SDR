@@ -139,6 +139,10 @@ type MainScreen struct {
 	sdrSettings            *SDRSettings
 	sdrHeader              *SDRHeaderPanel
 	audioPlayer            *AudioPlayer
+	webServer              *WebServer
+	webPanel               *WebPanel
+	webConfig              webConfig
+	webConfigPath          string
 	uiSounds               *UISounds
 	audioMeterDB           float32
 	recorder               *AudioRecorder
@@ -246,6 +250,8 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		sMeter:                 &SMeter{},
 	}
 	loadAppSettings(screen.settingsPath, screen)
+	screen.webConfigPath = defaultWebConfigPath()
+	screen.webConfig = loadWebConfig(screen.webConfigPath)
 	screen.waterfall = NewWaterfall(&screen.waterfallSettings, len(screen.spectrum))
 	screen.audioPlayer = NewAudioPlayer(receiver, nil)
 	screen.uiSounds = &UISounds{}
@@ -257,7 +263,7 @@ func (screen *MainScreen) CreateControls() {
 		screen.activeTool = "WATERFALL_ADJUST"
 	}
 	screen.filterSelector = NewFilterSelector(screen.selectFilter)
-	screen.mode = simpleui.NewDropdown("mode", 24, 16, 180, 48, "MODE",
+	screen.mode = simpleui.NewDropdown("mode", 134, 16, 110, 48, "MODE",
 		[]string{"AM", "NFM", "WFM", "USB", "LSB", "CW", "DMR BETA", "ADS-B", "UAT", "TETRA"}, 16)
 	for index, item := range screen.mode.Items() {
 		if item == screen.savedMode {
@@ -279,10 +285,10 @@ func (screen *MainScreen) CreateControls() {
 
 	initialFilter := screen.filterSelector.Current(screen.mode.SelectedText())
 	screen.demodBandwidthHz = initialFilter.BandwidthHz
-	screen.filter = simpleui.NewButton("filter", 216, 16, 130, 48, filterButtonLabel(initialFilter), 14)
+	screen.filter = simpleui.NewButton("filter", 252, 16, 108, 48, filterButtonLabel(initialFilter), 12)
 	screen.filter.OnClick(func() { screen.filterSelector.Open(screen.mode.SelectedText()) })
 
-	screen.band = simpleui.NewButton("band", 358, 16, 150, 48, "BAND  "+screen.bandName, 14)
+	screen.band = simpleui.NewButton("band", 368, 16, 140, 48, "BAND  "+screen.bandName, 12)
 	screen.bandSelector = NewBandSelector(screen.bandCategory, screen.bandName, screen.selectBand)
 	screen.band.OnClick(screen.bandSelector.Open)
 
@@ -371,12 +377,14 @@ func (screen *MainScreen) CreateControls() {
 	screen.memViewSwitch.OnChange(screen.setMemoryView)
 	spanDown := simpleui.NewButton("spanDown", frequencyPanelX+16, frequencyPanelY+36, 36, 32, "-", 16)
 	spanUp := simpleui.NewButton("spanUp", frequencyPanelX+58, frequencyPanelY+36, 36, 32, "+", 16)
-	screen.menuButton = simpleui.NewButton("menu", frequencyDialX+9, frequencyPanelY+7, 78, 24, "MENU", 10)
-	screen.viewButton = simpleui.NewButton("view", frequencyDialX+93, frequencyPanelY+7, 84, 24, "VIEW 1", 10)
+	screen.menuButton = simpleui.NewButton("menu", 24, 16, 102, 48, "MENÚ", 13)
+	screen.menuButton.SetColors(rl.Color{R: 13, G: 92, B: 164, A: 255}, rl.Color{R: 17, G: 185, B: 240, A: 255}, rl.White)
+	screen.menuButton.SetMenuIcon(true)
+	screen.viewButton = simpleui.NewButton("view", frequencyDialX+9, frequencyPanelY+7, 140, 24, "VIEW 1", 12)
 	screen.step = simpleui.NewButton("step", frequencyDialX+9, frequencyPanelY+frequencyPanelH-23, 43, 19, "STEP", 10)
 	screen.stepDown = simpleui.NewButton("stepDown", frequencyDialX+57, frequencyPanelY+frequencyPanelH-23, 27, 19, "-", 13)
 	screen.stepUp = simpleui.NewButton("stepUp", frequencyDialX+197, frequencyPanelY+frequencyPanelH-23, 27, 19, "+", 13)
-	screen.themeButton = simpleui.NewButton("theme", frequencyDialX+183, frequencyPanelY+7, 119, 24, "ESTILO", 10)
+	screen.themeButton = simpleui.NewButton("theme", frequencyDialX+155, frequencyPanelY+7, 147, 24, "ESTILO", 12)
 	spanDown.OnClick(func() { screen.changeSpan(-1) })
 	spanUp.OnClick(func() { screen.changeSpan(1) })
 	screen.toolMenu = NewToolMenu(screen.activeTool, screen.selectTool)
@@ -412,6 +420,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.satellitePanel = NewSatellitePanel(screen)
 	screen.sstvPanel = NewSSTVPanel(screen)
 	screen.tetraPanel = NewTETRAPanel(screen)
+	screen.webPanel = NewWebPanel(screen)
 	if screen.rtl433FrequencyHz >= 1_000 {
 		screen.rtl433Panel.targetHz = screen.rtl433FrequencyHz
 	}
@@ -500,6 +509,9 @@ func (screen *MainScreen) CreateControls() {
 	for _, element := range screen.tetraPanel.controls {
 		simpleui.Add(element)
 	}
+	for _, element := range screen.webPanel.controls {
+		simpleui.Add(element)
+	}
 	for _, element := range screen.utilitiesSidebar.controls {
 		simpleui.Add(element)
 	}
@@ -514,6 +526,7 @@ func (screen *MainScreen) CreateControls() {
 	simpleui.Add(screen.stepSelector)
 	simpleui.Add(screen.filterSelector)
 	simpleui.Add(screen.recorderPanel)
+	simpleui.Add(NewRemoteLockOverlay(screen))
 	screen.applyTheme(screen.themeName)
 	// Apply the restored workspace only after every tool control exists.
 	screen.setViewMode(screen.viewMode)
@@ -554,6 +567,9 @@ func (screen *MainScreen) CreateControls() {
 }
 
 func (screen *MainScreen) Draw() {
+	if screen.webServer != nil {
+		screen.webServer.DrainControl(screen)
+	}
 	if screen.vfoModeSwitch != nil {
 		if screen.centerMode {
 			screen.vfoModeSwitch.SetLabel("CENTER")
@@ -572,12 +588,15 @@ func (screen *MainScreen) Draw() {
 	screen.uiSounds.EnsureLoaded()
 	screen.updateAudioMeter()
 	screen.audioPanel.UpdateSpectrum()
-	screen.memoryPanel.Tick()
-	if screen.scanPanel != nil {
-		screen.scanPanel.UpdateInput()
-	}
-	if screen.utilitiesSidebar != nil {
-		screen.utilitiesSidebar.UpdateInput()
+	remoteLocked := screen.webServer != nil && screen.webServer.RemoteActive()
+	if !remoteLocked {
+		screen.memoryPanel.Tick()
+		if screen.scanPanel != nil {
+			screen.scanPanel.UpdateInput()
+		}
+		if screen.utilitiesSidebar != nil {
+			screen.utilitiesSidebar.UpdateInput()
+		}
 	}
 	if screen.rtl433Panel != nil {
 		screen.rtl433Panel.Tick()
@@ -619,6 +638,9 @@ func (screen *MainScreen) Draw() {
 			screen.scanPanel.Update(screen.spectrum)
 		}
 	}
+	if screen.webServer != nil {
+		screen.webServer.PublishScreen(screen)
+	}
 	rl.DrawRectangle(0, 0, int32(designWidth), int32(designHeight), colors.background)
 	screen.drawHeader()
 	screen.drawSpectrum()
@@ -635,6 +657,12 @@ func (screen *MainScreen) Draw() {
 }
 
 func (screen *MainScreen) Close() {
+	if screen.webServer != nil {
+		_ = screen.webServer.Close()
+	}
+	if screen.webPanel != nil {
+		screen.webPanel.Close()
+	}
 	screen.flushSettings(true)
 	simpleui.SetActivationFeedback(nil)
 	if screen.uiSounds != nil {
@@ -1069,6 +1097,10 @@ func (screen *MainScreen) drawLowerWorkspace() {
 		screen.tetraPanel.DrawPanel()
 		return
 	}
+	if screen.activeTool == "WEB_SERVER" {
+		screen.webPanel.DrawPanel()
+		return
+	}
 	drawCompactedTool(func() {
 		if screen.waterfallVisible {
 			drawSmallText("WATERFALL ADJUST", 40, toolY+12, colors.cyan)
@@ -1426,6 +1458,9 @@ func (screen *MainScreen) setViewMode(mode int) {
 	}
 	if screen.satellitePanel != nil {
 		screen.satellitePanel.SetVisible(showTool && screen.activeTool == "SATELLITES")
+	}
+	if screen.webPanel != nil {
+		screen.webPanel.SetVisible(showTool && screen.activeTool == "WEB_SERVER")
 	}
 	screen.markSettingsDirty()
 }

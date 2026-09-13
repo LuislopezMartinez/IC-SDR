@@ -29,7 +29,11 @@ func TestSquelchAndHeaderSwitchLayout(t *testing.T) {
 			t.Fatalf("%s control is outside frequency panel: %+v", name, bounds)
 		}
 	}
-	for name, control := range map[string]*simpleui.Button{"MENU": screen.menuButton, "VIEW": screen.viewButton, "ESTILO": screen.themeButton} {
+	menu := screen.menuButton.Bounds()
+	if menu.X != 24 || menu.Y != 16 || menu.X+menu.Width > screen.mode.Bounds().X || menu.Y+menu.Height > frequencyPanelY {
+		t.Fatalf("menu is not prominent and separate from the dial: %+v", menu)
+	}
+	for name, control := range map[string]*simpleui.Button{"VIEW": screen.viewButton, "ESTILO": screen.themeButton} {
 		bounds := control.Bounds()
 		if bounds.Y < frequencyPanelY || bounds.Y+bounds.Height > frequencyPanelY+frequencyPanelH ||
 			bounds.X < frequencyPanelX || bounds.X+bounds.Width > frequencyPanelX+frequencyPanelW {
@@ -38,5 +42,13 @@ func TestSquelchAndHeaderSwitchLayout(t *testing.T) {
 		if bounds.Y >= 205 {
 			t.Fatalf("%s control remains in the window footer: %+v", name, bounds)
 		}
+	}
+	if screen.viewButton.Bounds().X+screen.viewButton.Bounds().Width > screen.themeButton.Bounds().X {
+		t.Fatal("view and style controls overlap")
+	}
+	if screen.mode.Bounds().X+screen.mode.Bounds().Width > screen.filter.Bounds().X ||
+		screen.filter.Bounds().X+screen.filter.Bounds().Width > screen.band.Bounds().X ||
+		screen.band.Bounds().X+screen.band.Bounds().Width > frequencyPanelX {
+		t.Fatal("top-row controls overlap")
 	}
 }

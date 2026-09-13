@@ -184,6 +184,10 @@ func (p *RTL433Panel) stylePresets() {
 }
 
 func (p *RTL433Panel) Tick() {
+	remoteLocked := p.screen.webServer != nil && p.screen.webServer.RemoteActive()
+	if remoteLocked {
+		p.pending = false
+	}
 	if p.viewerDone != nil {
 		select {
 		case <-p.viewerDone:
@@ -204,7 +208,7 @@ func (p *RTL433Panel) Tick() {
 	}
 	// Frequency digits and the header wheel are shared controls. Convert any
 	// change they make into the same delayed preview used by the FFT gestures.
-	if p.screen.activeTool == "RTL_433" && !p.pending && p.screen.frequencyHz != p.targetHz {
+	if p.screen.activeTool == "RTL_433" && !remoteLocked && !p.pending && p.screen.frequencyHz != p.targetHz {
 		candidate := p.screen.frequencyHz
 		p.screen.frequencyHz, p.screen.centerFrequencyHz, p.screen.centerMode = p.targetHz, p.targetHz, true
 		if p.screen.vfoModeSwitch != nil {

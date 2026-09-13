@@ -67,7 +67,12 @@ func (p *ScanPanel) Update(spectrum []float32) {
 	p.updateWatch(spectrum)
 }
 
-func (p *ScanPanel) UpdateInput() { p.updateInput() }
+func (p *ScanPanel) UpdateInput() {
+	if p.screen.webServer != nil && p.screen.webServer.RemoteActive() {
+		return
+	}
+	p.updateInput()
+}
 
 func (p *ScanPanel) updateWatch(spectrum []float32) {
 	if p.listening {
@@ -574,7 +579,7 @@ func (p *ScanPanel) drawCompact(x, y float32) {
 	rl.DrawCircle(int32(x+15), int32(y+14), 5, colors.green)
 	textColor := simpleui.EnsureTextContrast(colors.text, background)
 	simpleui.DrawTextStyled("SCAN  ·  "+p.status, x+29, y+6, 12, simpleui.FontSemiBold, textColor)
-	if rl.IsMouseButtonPressed(rl.MouseButtonLeft) && rl.CheckCollisionPointRec(simpleui.MousePosition(), bounds) {
+	if !p.screen.overlayOpen() && rl.IsMouseButtonPressed(rl.MouseButtonLeft) && rl.CheckCollisionPointRec(simpleui.MousePosition(), bounds) {
 		p.screen.uiSounds.PlayToolSelect()
 		p.screen.selectTool("SCAN")
 	}

@@ -1139,6 +1139,9 @@ func (p *MemoryPanel) DrawPanel() {
 }
 
 func (p *MemoryPanel) Tick() {
+	if p.screen.webServer != nil && p.screen.webServer.RemoteActive() {
+		return
+	}
 	if p.modal != "" || p.screen.activeTool != "MEMORIES" || p.screen.viewMode != 1 {
 		return
 	}

@@ -24,7 +24,7 @@ if ($digitalVoiceManifest.version -ne '2.9.0') {
     throw "Versión de DSD-neo no admitida: $($digitalVoiceManifest.version). Se esperaba 2.9.0."
 }
 $digitalVoiceExe = Join-Path $digitalVoiceRuntime 'bin\dsd-neo.exe'
-foreach ($required in @($digitalVoiceExe, (Join-Path $digitalVoiceRuntime 'bin\mbe-neo.dll'), (Join-Path $digitalVoiceRuntime 'bin\codec2.dll'), (Join-Path $digitalVoiceRuntime 'bin\libexpat.dll'))) {
+foreach ($required in @($digitalVoiceExe, (Join-Path $digitalVoiceRuntime 'bin\mbe-neo.dll'), (Join-Path $digitalVoiceRuntime 'bin\codec2.dll'), (Join-Path $digitalVoiceRuntime 'bin\libexpat.dll'), (Join-Path $digitalVoiceRuntime 'bin\opus.dll'))) {
     if (-not (Test-Path -LiteralPath $required)) { throw "Falta un componente requerido de DSD-neo 2.9.0: $required" }
 }
 $digitalVoiceExeHash = (Get-FileHash -LiteralPath $digitalVoiceExe -Algorithm SHA256).Hash.ToLowerInvariant()

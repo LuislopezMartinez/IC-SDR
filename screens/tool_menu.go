@@ -31,17 +31,22 @@ var toolMenuItems = []toolMenuItem{
 	{id: "AIRCRAFT", label: "ADS-B", icon: "menu-aircraft.png", row: 1},
 	{id: "TETRA", label: "TETRA", icon: "menu-tetra.png", row: 1},
 	{id: "SATELLITES", label: "SATÉLITES", row: 2},
+	{id: "WEB_SERVER", label: "SERVIDOR WEB", row: 2},
+	{id: "CONTACT_AUTHOR", label: "CONTACTAR AL AUTOR", row: 2},
 }
 
 type ToolMenu struct {
 	simpleui.BaseElement
-	open          bool
-	selected      string
-	pressedItem   int
-	pressedBack   bool
-	icons         map[string]rl.Texture2D
-	onSelect      func(string)
-	onSelectSound func()
+	open           bool
+	selected       string
+	pressedItem    int
+	pressedBack    bool
+	contactOpen    bool
+	contactPressed int
+	contactCopied  bool
+	icons          map[string]rl.Texture2D
+	onSelect       func(string)
+	onSelectSound  func()
 }
 
 func NewToolMenu(selected string, onSelect func(string)) *ToolMenu {
@@ -56,6 +61,8 @@ func (menu *ToolMenu) Close() {
 	menu.open = false
 	menu.pressedItem = -1
 	menu.pressedBack = false
+	menu.contactOpen = false
+	menu.contactCopied = false
 }
 func (menu *ToolMenu) OverlayOpen() bool          { return menu.open }
 func (menu *ToolMenu) Update(simpleui.Input) bool { return false }
@@ -66,19 +73,50 @@ func (menu *ToolMenu) UpdateOverlay(input simpleui.Input) bool {
 		return false
 	}
 	if rl.IsKeyPressed(rl.KeyEscape) {
+		if menu.contactOpen {
+			menu.contactOpen = false
+			return true
+		}
 		menu.Close()
 		return true
 	}
 	if input.Pressed {
+		if menu.contactOpen {
+			menu.contactPressed = 0
+			if rl.CheckCollisionPointRec(input.Pointer, rl.Rectangle{X: 380, Y: 482, Width: 245, Height: 48}) {
+				menu.contactPressed = 1
+			}
+			if rl.CheckCollisionPointRec(input.Pointer, rl.Rectangle{X: 655, Y: 482, Width: 245, Height: 48}) {
+				menu.contactPressed = 2
+			}
+			return true
+		}
 		menu.pressedItem = menu.itemAt(input.Pointer)
 		menu.pressedBack = rl.CheckCollisionPointRec(input.Pointer, menu.backBounds())
 	}
 	if input.Released {
+		if menu.contactOpen {
+			if menu.contactPressed == 1 && rl.CheckCollisionPointRec(input.Pointer, rl.Rectangle{X: 380, Y: 482, Width: 245, Height: 48}) {
+				rl.SetClipboardText("luislopezmartinez1979@gmail.com")
+				menu.contactCopied = rl.GetClipboardText() == "luislopezmartinez1979@gmail.com"
+			}
+			if menu.contactPressed == 2 && rl.CheckCollisionPointRec(input.Pointer, rl.Rectangle{X: 655, Y: 482, Width: 245, Height: 48}) {
+				menu.contactOpen = false
+			}
+			menu.contactPressed = 0
+			return true
+		}
 		item := menu.itemAt(input.Pointer)
 		if menu.pressedBack && rl.CheckCollisionPointRec(input.Pointer, menu.backBounds()) {
 			simpleui.PlayActivationFeedback()
 			menu.Close()
 		} else if item >= 0 && item == menu.pressedItem {
+			if toolMenuItems[item].id == "CONTACT_AUTHOR" {
+				menu.contactOpen = true
+				menu.contactCopied = false
+				menu.pressedItem = -1
+				return true
+			}
 			menu.selected = toolMenuItems[item].id
 			menu.Close()
 			if menu.onSelectSound != nil {
@@ -114,6 +152,27 @@ func (menu *ToolMenu) DrawOverlay() {
 	menu.drawCategory(2, "UTILES", rl.Color{R: 235, G: 165, B: 45, A: 255})
 	for index := range toolMenuItems {
 		menu.drawItem(index)
+	}
+	if menu.contactOpen {
+		rl.DrawRectangle(0, 0, int32(designWidth), int32(designHeight), rl.Color{A: 170})
+		box := rl.Rectangle{X: 345, Y: 315, Width: 590, Height: 235}
+		rl.DrawRectangleRounded(box, .04, 8, colors.panel)
+		rl.DrawRectangleRoundedLinesEx(box, .04, 8, 2, colors.border)
+		simpleui.DrawTextStyled("CONTACTAR AL AUTOR", 380, 342, 24, simpleui.FontSemiBold, colors.cyan)
+		simpleui.DrawTextStyled("Sugerencias y reportes de errores:", 380, 390, 18, simpleui.FontRegular, colors.text)
+		simpleui.DrawTextStyled("luislopezmartinez1979@gmail.com", 380, 424, 19, simpleui.FontSemiBold, colors.text)
+		if menu.contactCopied {
+			simpleui.DrawTextStyled("Dirección copiada al portapapeles", 380, 454, 14, simpleui.FontRegular, colors.green)
+		}
+		for _, action := range []struct {
+			x     float32
+			label string
+		}{{380, "COPIAR DIRECCIÓN"}, {655, "CERRAR"}} {
+			rect := rl.Rectangle{X: action.x, Y: 482, Width: 245, Height: 48}
+			rl.DrawRectangleRounded(rect, .15, 6, colors.panelAlt)
+			drawCenteredStyled(action.label, rect, 17, simpleui.FontSemiBold, colors.text)
+		}
+		return
 	}
 	back := menu.backBounds()
 	backColor := colors.panelAlt
@@ -164,8 +223,8 @@ func (menu *ToolMenu) drawItem(index int) {
 		textColor = accent
 	}
 	labelSize := int32(17)
-	if bounds.Width < 130 {
-		labelSize = 15
+	for labelSize > 12 && simpleui.MeasureTextStyled(item.label, labelSize, simpleui.FontSemiBold).X > bounds.Width-14 {
+		labelSize--
 	}
 	drawCenteredStyled(item.label, rl.Rectangle{X: bounds.X, Y: bounds.Y + 75, Width: bounds.Width, Height: 27}, labelSize, simpleui.FontSemiBold, textColor)
 	if active {
@@ -219,6 +278,22 @@ func (menu *ToolMenu) drawCustomIcon(id string, center rl.Vector2, active bool, 
 		rl.DrawRectangle(int32(center.X-25), int32(center.Y-5), 12, 10, colors.blue)
 		rl.DrawRectangle(int32(center.X+13), int32(center.Y-5), 12, 10, colors.blue)
 		rl.DrawCircle(int32(center.X+31), int32(center.Y-17), 4, colors.orange)
+	case "WEB_SERVER":
+		body := rl.Rectangle{X: center.X - 30, Y: center.Y - 28, Width: 60, Height: 56}
+		rl.DrawRectangleRounded(body, .12, 6, accent)
+		for _, offset := range []float32{-18, -1, 16} {
+			row := rl.Rectangle{X: center.X - 22, Y: center.Y + offset, Width: 44, Height: 11}
+			rl.DrawRectangleRounded(row, .2, 4, colors.panelAlt)
+			rl.DrawCircle(int32(center.X-14), int32(center.Y+offset+5), 3, colors.green)
+			rl.DrawLineEx(rl.Vector2{X: center.X - 4, Y: center.Y + offset + 5}, rl.Vector2{X: center.X + 14, Y: center.Y + offset + 5}, 2, colors.muted)
+		}
+	case "CONTACT_AUTHOR":
+		envelope := rl.Rectangle{X: center.X - 34, Y: center.Y - 22, Width: 68, Height: 47}
+		rl.DrawRectangleRounded(envelope, .12, 6, colors.panelAlt)
+		rl.DrawRectangleRoundedLinesEx(envelope, .12, 6, 3, accent)
+		rl.DrawLineEx(rl.Vector2{X: center.X - 30, Y: center.Y - 17}, rl.Vector2{X: center.X, Y: center.Y + 3}, 3, accent)
+		rl.DrawLineEx(rl.Vector2{X: center.X, Y: center.Y + 3}, rl.Vector2{X: center.X + 30, Y: center.Y - 17}, 3, accent)
+		rl.DrawCircle(int32(center.X+34), int32(center.Y-23), 7, colors.green)
 	default:
 		drawCentered("?", rl.Rectangle{X: center.X - 30, Y: center.Y - 25, Width: 60, Height: 50}, 24, accent)
 	}
@@ -281,6 +356,7 @@ func (menu *ToolMenu) itemBounds(index int) rl.Rectangle {
 	}
 	if item.row == 2 {
 		y = 551
+		step, width = 220, 210
 	}
 	rowX := float32(640) - float32(count)*step/2
 	return rl.Rectangle{X: rowX + float32(column)*step, Y: y, Width: width, Height: 108}

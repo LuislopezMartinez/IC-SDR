@@ -27,6 +27,9 @@ func TestRadiosondeToolPreservesBandAndFrequency(t *testing.T) {
 		s.bandSelector = NewBandSelector("HAM", "20 m", nil)
 		s.radiosondePanel = NewRadiosondePanel(s)
 		s.selectTool("RADIOSONDE")
+		if s.mode.SelectedText() != "NFM" || s.savedMode != "NFM" {
+			t.Fatalf("selecting radiosonde did not select NFM: mode=%q saved=%q", s.mode.SelectedText(), s.savedMode)
+		}
 		if s.frequencyHz != 14_261_000 || s.centerFrequencyHz != 14_261_000 || r.CenterFrequency() != 14_261_000 {
 			t.Fatalf("selecting radiosonde changed tuning: dial=%d center=%d receiver=%d", s.frequencyHz, s.centerFrequencyHz, r.CenterFrequency())
 		}
@@ -37,6 +40,23 @@ func TestRadiosondeToolPreservesBandAndFrequency(t *testing.T) {
 		if s.frequencyHz != 14_261_000 || r.CenterFrequency() != 14_261_000 || s.bandName != "20 m" || s.bandSelector.selectedName != "20 m" {
 			t.Fatal("previous tuning not restored")
 		}
+	}
+}
+
+func TestRadiosondeEnterSelectsNFMFilterWithoutRetuning(t *testing.T) {
+	s := NewMainScreen(nil)
+	s.frequencyHz = 402_900_000
+	s.centerFrequencyHz = 402_950_000
+	s.mode = simpleui.NewDropdown("mode", 0, 0, 100, 40, "MODE", []string{"USB", "NFM"}, 12)
+	s.filterSelector = NewFilterSelector(s.selectFilter)
+	s.demodBandwidthHz = 2_400
+	p := NewRadiosondePanel(s)
+	p.Enter()
+	if s.mode.SelectedText() != "NFM" || s.demodBandwidthHz != s.filterSelector.Current("NFM").BandwidthHz {
+		t.Fatalf("radiosonde mode/filter = %q/%d", s.mode.SelectedText(), s.demodBandwidthHz)
+	}
+	if s.frequencyHz != 402_900_000 || s.centerFrequencyHz != 402_950_000 {
+		t.Fatalf("radiosonde entry retuned dial: %d/%d", s.frequencyHz, s.centerFrequencyHz)
 	}
 }
 
@@ -69,6 +89,27 @@ func TestRadiosondeSettings(t *testing.T) {
 	p := NewRadiosondePanel(s)
 	if p.family != "M10/M20" || p.targetHz != 402900000 || p.enabled || s.activeTool != "RADIOSONDE" {
 		t.Fatalf("bad restored radiosonde state: %+v", p)
+	}
+}
+
+func TestRadiosondeTuneButtonUsesSavedFrequency(t *testing.T) {
+	r := sdr.NewReceiver(sdr.Config{SampleRate: 2_048_000, FrequencyHz: 14_261_000, FFTSize: 4096})
+	s := NewMainScreen(r)
+	s.frequencyHz = 14_261_000
+	s.centerFrequencyHz = 14_261_000
+	s.radiosondeFrequencyHz = 402_900_000
+	s.mode = simpleui.NewDropdown("mode", 0, 0, 100, 40, "MODE", []string{"NFM"}, 12)
+	p := NewRadiosondePanel(s)
+	if p.tuneButton.Label() != "SINTONIZAR 402.900 MHz" {
+		t.Fatalf("tune button label = %q", p.tuneButton.Label())
+	}
+	p.Enter()
+	if s.frequencyHz != 14_261_000 {
+		t.Fatal("entering radiosonde tool tuned without clicking")
+	}
+	p.tuneRecommended()
+	if s.frequencyHz != 402_900_000 || s.centerFrequencyHz != 402_900_000 || r.CenterFrequency() != 402_900_000 || p.targetHz != 402_900_000 {
+		t.Fatalf("button did not tune receiver and decoder target: dial=%d center=%d receiver=%d target=%d", s.frequencyHz, s.centerFrequencyHz, r.CenterFrequency(), p.targetHz)
 	}
 }
 

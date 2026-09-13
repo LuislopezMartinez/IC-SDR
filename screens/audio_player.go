@@ -33,6 +33,7 @@ type AudioPlayer struct {
 	paused         bool
 	volume         float32
 	muted          bool
+	webMuted       atomic.Bool
 	starved        atomic.Bool
 	callback       rl.AudioCallback
 	source         []float32
@@ -47,7 +48,10 @@ type AudioPlayer struct {
 	digitalActive  atomic.Bool
 	digitalStarved int
 	playbackMode   string
+	webAudioSink   atomic.Pointer[webAudioSink]
 }
+
+type webAudioSink struct{ publish func([]float32) }
 
 func NewAudioPlayer(receiver *sdr.Receiver, recorder *AudioRecorder) *AudioPlayer {
 	return &AudioPlayer{receiver: receiver, recorder: recorder, volume: .62, source: make([]float32, 8192), processor: NewAudioProcessor()}
@@ -185,9 +189,26 @@ func (player *AudioPlayer) fillAudio(destination []float32) {
 	}
 	player.processor.Process(destination[:availableOutput])
 	player.publishAudioPeak(destination[:availableOutput])
+	if sink := player.webAudioSink.Load(); sink != nil {
+		if player.webMuted.Load() {
+			sink.publish(make([]float32, len(destination)))
+		} else {
+			sink.publish(destination)
+		}
+	}
 	if player.recorder != nil {
 		player.recorder.Submit(destination[:availableOutput], player.squelchEnabled.Load(), player.squelchOpen.Load())
 	}
+}
+
+// SetWebAudioSink publishes the post-processed, pre-local-volume audio.
+// Remote listeners therefore use their device volume independently of the PC.
+func (player *AudioPlayer) SetWebAudioSink(sink func([]float32)) {
+	if sink == nil {
+		player.webAudioSink.Store(nil)
+		return
+	}
+	player.webAudioSink.Store(&webAudioSink{publish: sink})
 }
 
 func playbackPrebufferSamples(digital bool) int {
@@ -235,7 +256,11 @@ func (player *AudioPlayer) SetVolume(volume float32) {
 	player.volume = min(max(volume, 0), 1)
 	player.applyVolume()
 }
-func (player *AudioPlayer) SetMuted(muted bool) { player.muted = muted; player.applyVolume() }
+func (player *AudioPlayer) SetMuted(muted bool) {
+	player.muted = muted
+	player.webMuted.Store(muted)
+	player.applyVolume()
+}
 func (player *AudioPlayer) ConfigureProcessing(lowCut, highCut int, enabled bool, gains [5]float32, profile string) {
 	player.processor.Configure(lowCut, highCut, enabled, gains, profile)
 }

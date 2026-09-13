@@ -137,6 +137,9 @@ func main() {
 	startupStep("Creando controles")
 	mainScreen.CreateControls()
 	startupStep("Controles creados")
+	if err := mainScreen.StartConfiguredWebServer(); err != nil {
+		startupStep("Servidor web no disponible: %v", err)
+	}
 	var firstFrame sync.Once
 	simpleui.Run(func() {
 		firstFrame.Do(func() {

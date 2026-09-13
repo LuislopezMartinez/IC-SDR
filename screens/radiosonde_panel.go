@@ -19,12 +19,16 @@ type RadiosondePanel struct {
 	controls           []simpleui.Element
 	models             []*simpleui.Button
 	start              *simpleui.Button
+	tuneButton         *simpleui.Button
 	family             string
 	targetHz, centerHz int64
+	quickTuneHz        int64
 	enabled            bool
 	pendingAt          time.Time
 	feedback           string
 }
+
+const radiosondeQuickTuneHz int64 = 403_000_000
 
 func NewRadiosondePanel(screen *MainScreen) *RadiosondePanel {
 	p := &RadiosondePanel{screen: screen, family: screen.radiosondeFamily, targetHz: screen.radiosondeFrequencyHz}
@@ -32,8 +36,9 @@ func NewRadiosondePanel(screen *MainScreen) *RadiosondePanel {
 		p.family = "AUTO"
 	}
 	if !validRadiosondeFrequency(p.targetHz) {
-		p.targetHz = 403_000_000
+		p.targetHz = radiosondeQuickTuneHz
 	}
+	p.quickTuneHz = p.targetHz
 	button := func(id, label string, x, w float32, action func()) *simpleui.Button {
 		b := simpleui.NewButton(id, x, toolY+28, w, 34, label, uiControlFontSize)
 		b.SetColors(colors.panelAlt, colors.border, colors.text)
@@ -58,9 +63,37 @@ func NewRadiosondePanel(screen *MainScreen) *RadiosondePanel {
 		p.feedback = "Historial limpiado"
 	})
 	clearButton.SetColors(actionClearFill, colors.red, colors.text)
+	p.tuneButton = button("sondeTune", fmt.Sprintf("SINTONIZAR %.3f MHz", float64(p.quickTuneHz)/1e6), 1010, 300, p.tuneRecommended)
+	p.tuneButton.SetColors(colors.blue, colors.border, colors.text)
 	p.SetVisible(false)
 	p.style()
 	return p
+}
+
+func (p *RadiosondePanel) tuneRecommended() {
+	s := p.screen
+	s.draggingSpectrum = false
+	s.setFrequencyDigitExponent(-1)
+	s.frequencyHz = p.quickTuneHz
+	s.centerFrequencyHz = p.quickTuneHz
+	s.centerMode = true
+	s.updateBandForFrequency(p.quickTuneHz)
+	if s.vfoModeSwitch != nil {
+		s.vfoModeSwitch.SetActive(false)
+	}
+	if s.receiver != nil {
+		s.receiver.SetCenterFrequency(p.quickTuneHz)
+		s.receiver.SetDemodulator(s.receiverDemodMode(), p.quickTuneHz, s.demodBandwidthHz)
+	}
+	if s.waterfall != nil {
+		s.waterfall.Reset()
+	}
+	p.targetHz = p.quickTuneHz
+	p.centerHz = p.quickTuneHz
+	p.pendingAt = time.Time{}
+	p.apply()
+	p.save()
+	p.feedback = fmt.Sprintf("Sintonizado en %.3f MHz · busca la portadora de una sonda cercana", float64(p.quickTuneHz)/1e6)
 }
 func (p *RadiosondePanel) SetVisible(v bool) {
 	for _, c := range p.controls {
@@ -70,6 +103,20 @@ func (p *RadiosondePanel) SetVisible(v bool) {
 func (p *RadiosondePanel) Enter() {
 	// Model selection and panel entry do not own the receiver tuning. The dial
 	// remains exactly where the user left it.
+	if p.screen.mode != nil && p.screen.mode.SelectedText() != "NFM" {
+		for i, mode := range p.screen.mode.Items() {
+			if mode == "NFM" {
+				p.screen.mode.SetSelected(i)
+				p.screen.savedMode = mode
+				if p.screen.filterSelector != nil {
+					p.screen.selectFilter(p.screen.filterSelector.Current(mode))
+				} else if p.screen.receiver != nil {
+					p.screen.receiver.SetDemodulator(mode, p.screen.frequencyHz, p.screen.demodBandwidthHz)
+				}
+				break
+			}
+		}
+	}
 	p.targetHz = p.screen.frequencyHz
 	p.centerHz = p.screen.centerFrequencyHz
 	p.pendingAt = time.Time{}
@@ -86,7 +133,7 @@ func (p *RadiosondePanel) Leave() {
 func (p *RadiosondePanel) Close() { p.enabled = false; p.apply() }
 func (p *RadiosondePanel) save() {
 	p.screen.radiosondeFamily = p.family
-	p.screen.radiosondeFrequencyHz = p.targetHz
+	p.screen.radiosondeFrequencyHz = p.quickTuneHz
 	p.screen.markSettingsDirty()
 }
 func (p *RadiosondePanel) apply() {

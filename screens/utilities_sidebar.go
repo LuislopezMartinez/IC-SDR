@@ -188,6 +188,9 @@ func (p *UtilitiesSidebar) drawMemoryTable(memory *MemoryPanel) {
 }
 
 func (p *UtilitiesSidebar) UpdateInput() {
+	if p.screen.webServer != nil && p.screen.webServer.RemoteActive() {
+		return
+	}
 	m := p.screen.memoryPanel
 	mouse := simpleui.MousePosition()
 	indices := m.filteredIndices()

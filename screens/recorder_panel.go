@@ -135,6 +135,9 @@ func (p *RecorderPanel) SetToolVisible(visible bool) {
 func (p *RecorderPanel) Tick() {
 	p.recorder.Configure(p.screen.frequencyHz, p.screen.bandName, p.screen.mode.SelectedText())
 	p.refresh()
+	if p.screen.webServer != nil && p.screen.webServer.RemoteActive() {
+		return
+	}
 	if p.screen.activeTool != "RECORDER" || p.screen.viewMode != 1 || !rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
 		return
 	}
