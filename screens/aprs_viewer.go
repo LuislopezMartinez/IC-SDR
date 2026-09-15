@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,17 +18,17 @@ func RunAPRSViewer(path string) {
 	simpleui.SetMode(1450, 760, simpleui.Fit)
 	simpleui.SetCanvasFilter(rl.FilterPoint)
 	simpleui.SetTextScale(1.35)
-	simpleui.SetTitle("IC-SDR · Capturas APRS")
+	simpleui.SetTitle(i18n.Source("text.99d5c061c07d"))
 	simpleui.SetMinimumSize(920, 520)
 	v := &aprsViewer{path: path, selected: -1}
-	export := simpleui.NewButton("aprsViewerExport", 1210, 18, 210, 44, "EXPORTAR CSV", 15)
+	export := simpleui.NewButton("aprsViewerExport", 1210, 18, 210, 44, i18n.Source("text.a15e7868d6b8"), 15)
 	export.SetColors(colors.green, colors.border, colors.text)
 	export.OnClick(func() {
 		saved, err := exportAPRSCSV(v.packets)
 		if err != nil {
-			v.feedback = "ERROR AL EXPORTAR"
+			v.feedback = i18n.Source("text.f020b3a6a762")
 		} else {
-			v.feedback = "GUARDADO: " + filepath.Base(saved)
+			v.feedback = i18n.Source("text.886058f9cc30") + filepath.Base(saved)
 		}
 		v.until = time.Now().Add(3 * time.Second)
 	})
@@ -62,15 +64,15 @@ func (v *aprsViewer) read() {
 func (v *aprsViewer) draw() {
 	v.read()
 	rl.DrawRectangle(0, 0, 1450, 760, colors.background)
-	simpleui.DrawTextStyled("CAPTURAS APRS", 28, 24, 22, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawText(fmt.Sprintf("%d paquetes · tabla actualizada en tiempo real", len(v.packets)), 28, 54, 13, colors.muted)
+	simpleui.DrawTextStyled(i18n.Source("text.7388844a9aee"), 28, 24, 22, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.fc47264a065a"), len(v.packets)), 28, 54, 13, colors.muted)
 	if time.Now().Before(v.until) {
 		simpleui.DrawTextStyled(v.feedback, 910, 35, 13, simpleui.FontSemiBold, colors.green)
 	}
 	headers := []struct {
 		x float32
 		s string
-	}{{28, "FECHA / HORA"}, {195, "INDICATIVO"}, {315, "TIPO"}, {420, "DESTINO"}, {530, "RUTA"}, {750, "POSICIÓN"}, {950, "NIVEL"}, {1020, "INFORMACIÓN"}}
+	}{{28, i18n.Source("text.f7c6c10fbcc4")}, {195, i18n.Source("text.16d535b5d63f")}, {315, i18n.Source("text.cd4c8ecf7e4b")}, {420, i18n.Source("text.2adab83f1039")}, {530, i18n.Source("text.963552275d93")}, {750, i18n.Source("text.a4c39f15e2ae")}, {950, i18n.Source("text.ad2e66181fd9")}, {1020, i18n.Source("text.cb279ab0b63f")}}
 	rl.DrawRectangle(20, 82, 1410, 34, colors.panelAlt)
 	for _, h := range headers {
 		simpleui.DrawTextStyled(h.s, h.x, 91, 13, simpleui.FontSemiBold, colors.cyan)
@@ -110,7 +112,7 @@ func (v *aprsViewer) draw() {
 		simpleui.DrawText(short(p.Destination, 12), 420, y, 12, colors.text)
 		route := p.Path
 		if route == "" {
-			route = "DIRECTO"
+			route = i18n.Source("text.3d46b2eae4e5")
 		}
 		simpleui.DrawText(short(route, 24), 530, y, 12, colors.text)
 		simpleui.DrawText(short(p.Coordinates, 22), 750, y, 12, colors.text)
@@ -118,12 +120,12 @@ func (v *aprsViewer) draw() {
 		simpleui.DrawText(short(p.Summary, 49), 1020, y, 12, colors.text)
 	}
 	drawPanel(20, 610, 1410, 125)
-	simpleui.DrawTextStyled("TRAMA AX.25 / APRS", 32, 620, 13, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(i18n.Source("text.60c1c25a0adb"), 32, 620, 13, simpleui.FontSemiBold, colors.cyan)
 	if v.selected >= 0 && v.selected < len(v.packets) {
 		p := v.packets[v.selected]
 		drawWrapped(p.Raw, 32, 646, 1375, 13, colors.text)
-		simpleui.DrawText(fmt.Sprintf("Símbolo %s · Locator %s · Rumbo %s · Velocidad %s · Altitud %s", p.Symbol, p.Locator, p.Course, p.Speed, p.Altitude), 32, 700, 12, colors.muted)
+		simpleui.DrawText(fmt.Sprintf(i18n.Source("text.3d93293b63ad"), p.Symbol, p.Locator, p.Course, p.Speed, p.Altitude), 32, 700, 12, colors.muted)
 	} else {
-		simpleui.DrawText("Selecciona un paquete para consultar la trama completa.", 32, 650, 13, colors.muted)
+		simpleui.DrawText(i18n.Source("text.d8700b7af7b8"), 32, 650, 13, colors.muted)
 	}
 }

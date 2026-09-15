@@ -1,6 +1,8 @@
 package sstv
 
 import (
+	"go-zero/internal/i18n"
+
 	"bufio"
 	"encoding/binary"
 	"fmt"
@@ -21,7 +23,7 @@ import (
 
 const candidateCount = 4
 
-var ValidModes = []string{"M1", "M2", "S1", "S2", "SDX", "R36", "R72", "PD50", "PD90", "PD120", "PD160", "PD180", "PD240", "PD290"}
+var ValidModes = []string{"M1", "M2", "S1", "S2", i18n.Source("text.542213f49bef"), "R36", "R72", "PD50", "PD90", "PD120", "PD160", "PD180", "PD240", "PD290"}
 
 type Frame struct {
 	Sequence, Width, Height, Lines int
@@ -62,7 +64,7 @@ type Decoder struct {
 func New(executable, outputFolder string) *Decoder {
 	d := &Decoder{executable: executable, outputFolder: outputFolder, queue: make(chan []float32, 16), automatic: true, selectedMode: "R36", candidateModes: [4]string{"R36", "R72", "M1", "S1"}}
 	d.pool.New = func() any { return make([]float32, 0, 4096) }
-	d.status.State, d.status.Mode, d.status.ToneLevel = "OFF", "AUTO VIS", -120
+	d.status.State, d.status.Mode, d.status.ToneLevel = i18n.Source("text.38cca6bea010"), i18n.Source("text.80e4cf374a8a"), -120
 	d.syncStatusLocked()
 	return d
 }
@@ -75,7 +77,7 @@ func (d *Decoder) Configure(enabled bool) {
 	if enabled && !running {
 		_ = d.start(false)
 	} else if !enabled && running {
-		d.stopProcess("OFF")
+		d.stopProcess(i18n.Source("text.38cca6bea010"))
 	}
 }
 
@@ -155,7 +157,7 @@ func (d *Decoder) Restart(forceCandidates bool) bool {
 	d.restarting = true
 	d.mu.Unlock()
 	go func() {
-		d.stopProcess("SEARCH")
+		d.stopProcess(i18n.Source("text.56f21695a650"))
 		d.clearFrames()
 		_ = d.start(forceCandidates)
 		d.mu.Lock()
@@ -206,7 +208,7 @@ func (d *Decoder) SavePartial() (string, error) {
 	frame.RGB = append([]byte(nil), frame.RGB...)
 	d.mu.RUnlock()
 	if frame.Width <= 0 || frame.Height <= 0 || len(frame.RGB) != frame.Width*frame.Height*3 {
-		return "", fmt.Errorf("todavía no hay una imagen SSTV")
+		return "", fmt.Errorf("%s", i18n.Source("text.24ffe7ce2262"))
 	}
 	if err := os.MkdirAll(d.outputFolder, 0o755); err != nil {
 		return "", err
@@ -291,7 +293,7 @@ func (d *Decoder) start(forceCandidates bool) error {
 	d.generation++
 	generation, stop := d.generation, d.stop
 	d.running.Store(true)
-	d.status.State, d.status.Detail = "SEARCH", "Esperando cabecera VIS"
+	d.status.State, d.status.Detail = i18n.Source("text.56f21695a650"), i18n.Source("text.100814c34a99")
 	d.syncStatusLocked()
 	d.mu.Unlock()
 	go d.writer(generation, stop)
@@ -303,8 +305,8 @@ func (d *Decoder) start(forceCandidates bool) error {
 		if d.generation == generation {
 			d.running.Store(false)
 			if d.enabled && !d.restarting {
-				d.status.State = "ERROR"
-				d.status.Detail = "El decoder SSTV terminó"
+				d.status.State = i18n.Source("text.d98ee0e5f939")
+				d.status.Detail = i18n.Source("text.ce8993627228")
 				if err != nil {
 					d.status.Detail += ": " + err.Error()
 				}
@@ -357,15 +359,15 @@ func (d *Decoder) readFrames(reader io.Reader, generation uint64) {
 		if _, err := io.ReadFull(input, header); err != nil {
 			return
 		}
-		if string(header[:4]) != "SSTV" || header[4] != 1 {
-			d.fail(generation, fmt.Errorf("protocolo de imagen inválido"))
+		if string(header[:4]) != i18n.Source("text.820d4685bc9d") || header[4] != 1 {
+			d.fail(generation, fmt.Errorf("%s", i18n.Source("text.a2a740851591")))
 			return
 		}
 		typeID, channel := header[5], int(binary.LittleEndian.Uint16(header[6:8]))
 		payloadSize := int(binary.LittleEndian.Uint32(header[8:12]))
 		sequence := int(binary.LittleEndian.Uint32(header[12:16]))
 		if channel < 0 || channel > candidateCount || payloadSize < 0 || payloadSize > 2_000_000 {
-			d.fail(generation, fmt.Errorf("paquete SSTV fuera de rango"))
+			d.fail(generation, fmt.Errorf("%s", i18n.Source("text.fe04e15ce616")))
 			return
 		}
 		payload := make([]byte, payloadSize)
@@ -435,10 +437,10 @@ func (d *Decoder) readStatus(reader io.Reader, generation uint64) {
 }
 
 func (d *Decoder) parseStatus(generation uint64, line string) {
-	if !strings.HasPrefix(line, "SSTV ") {
+	if !strings.HasPrefix(line, i18n.Source("text.4c476f9afd36")) {
 		return
 	}
-	value := strings.TrimPrefix(line, "SSTV ")
+	value := strings.TrimPrefix(line, i18n.Source("text.4c476f9afd36"))
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.generation != generation {
@@ -446,7 +448,7 @@ func (d *Decoder) parseStatus(generation uint64, line string) {
 	}
 	switch {
 	case strings.HasPrefix(value, "STATE "):
-		d.status.State = normalizeState(strings.TrimPrefix(value, "STATE "))
+		d.status.State = normalizeState(strings.TrimPrefix(value, i18n.Source("text.495cafe389de")))
 	case strings.HasPrefix(value, "MODE "):
 		parts := strings.Fields(value)
 		if len(parts) >= 4 {
@@ -469,17 +471,17 @@ func (d *Decoder) parseStatus(generation uint64, line string) {
 			}
 		}
 	case strings.HasPrefix(value, "CANDIDATES ACTIVE"):
-		d.status.Candidates, d.status.State = true, "MULTI RX"
+		d.status.Candidates, d.status.State = true, i18n.Source("text.483d04905f7c")
 	case strings.HasPrefix(value, "CANDIDATES INACTIVE"):
 		d.status.Candidates = false
 	case strings.HasPrefix(value, "WATCHDOG SAVE_PARTIAL"):
-		d.status.State = "SIGNAL LOST"
+		d.status.State = i18n.Source("text.764a55c35afa")
 	case strings.HasPrefix(value, "RESYNC "):
-		d.status.State = "RECEIVING"
+		d.status.State = i18n.Source("text.fb0fb383ce84")
 	case strings.HasPrefix(value, "COMPLETE "):
-		d.status.State, d.status.LastSaved = "COMPLETE", strings.TrimPrefix(value, "COMPLETE ")
+		d.status.State, d.status.LastSaved = i18n.Source("text.894981ff0205"), strings.TrimPrefix(value, i18n.Source("text.e5e55040c5e2"))
 	case strings.HasPrefix(value, "ERROR "):
-		d.status.State, d.status.Detail = "ERROR", strings.TrimPrefix(value, "ERROR ")
+		d.status.State, d.status.Detail = i18n.Source("text.d98ee0e5f939"), strings.TrimPrefix(value, i18n.Source("text.db7f988cb492"))
 	}
 }
 
@@ -506,7 +508,7 @@ func (d *Decoder) stopProcess(state string) {
 func (d *Decoder) fail(generation uint64, err error) {
 	d.mu.Lock()
 	if d.generation == generation {
-		d.status.State, d.status.Detail = "ERROR", err.Error()
+		d.status.State, d.status.Detail = i18n.Source("text.d98ee0e5f939"), err.Error()
 		if d.cmd != nil && d.cmd.Process != nil {
 			_ = d.cmd.Process.Kill()
 		}
@@ -532,7 +534,9 @@ func (d *Decoder) drainQueue() {
 		}
 	}
 }
-func (d *Decoder) setErrorLocked(err error) { d.status.State, d.status.Detail = "ERROR", err.Error() }
+func (d *Decoder) setErrorLocked(err error) {
+	d.status.State, d.status.Detail = i18n.Source("text.d98ee0e5f939"), err.Error()
+}
 func (d *Decoder) syncStatusLocked() {
 	d.status.Automatic, d.status.SelectedMode, d.status.CandidateModes = d.automatic, d.selectedMode, d.candidateModes
 }
@@ -547,13 +551,13 @@ func validMode(value string) bool {
 func normalizeState(value string) string {
 	switch strings.ToUpper(strings.TrimSpace(value)) {
 	case "HUNTING":
-		return "SEARCH"
+		return i18n.Source("text.56f21695a650")
 	case "LEADER LOCK":
-		return "SYNC"
+		return i18n.Source("text.7dcad6823810")
 	case "IMAGE RX":
-		return "RECEIVING"
+		return i18n.Source("text.fb0fb383ce84")
 	case "DONE":
-		return "COMPLETE"
+		return i18n.Source("text.894981ff0205")
 	}
 	return strings.ToUpper(strings.TrimSpace(value))
 }

@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"strings"
 	"time"
@@ -21,14 +23,14 @@ type DigitalVoicePanel struct {
 	lastError                 string
 }
 
-var digitalDetectionModes = []string{"DMR", "P25 I", "P25 II", "NXDN 48", "NXDN 96", "D-STAR", "YSF", "dPMR", "PROVOICE", "M17", "X2-TDMA"}
+var digitalDetectionModes = []string{i18n.Source("text.ade0cbd42252"), "P25 I", i18n.Source("text.9e7aa85fb23c"), i18n.Source("text.09558c27a7a1"), i18n.Source("text.8ffa43c306ee"), i18n.Source("text.4fcb50bfd35b"), i18n.Source("text.ef1fb8875c5e"), "dPMR", i18n.Source("text.996308552c50"), "M17", i18n.Source("text.63c78e1bf13c")}
 
 func NewDigitalVoicePanel(screen *MainScreen) *DigitalVoicePanel {
 	p := &DigitalVoicePanel{screen: screen, modeButtons: make(map[string]*simpleui.Button), enabledModes: make(map[string]bool)}
-	p.start = simpleui.NewButton("digitalVoiceStart", 378, 530, 148, 38, "INICIAR", 14)
+	p.start = simpleui.NewButton("digitalVoiceStart", 378, 530, 148, 38, i18n.Source("text.7f23d98fbc9a"), 14)
 	p.start.SetColors(actionStartFill, colors.green, colors.text)
 	p.start.OnClick(p.toggle)
-	p.allModes = simpleui.NewButton("digitalDetectAll", 538, 530, 112, 38, "TODOS", 13)
+	p.allModes = simpleui.NewButton("digitalDetectAll", 538, 530, 112, 38, i18n.Source("text.1facd1ff1ab7"), 13)
 	p.allModes.SetColors(colors.blue, colors.cyan, colors.text)
 	p.allModes.OnClick(func() {
 		for _, mode := range digitalDetectionModes {
@@ -39,14 +41,14 @@ func NewDigitalVoicePanel(screen *MainScreen) *DigitalVoicePanel {
 		}
 		p.styleModeButtons("")
 	})
-	p.skipEncrypted = simpleui.NewSwitch("digitalVoiceEncrypted", 1070, 535, 200, 28, "OMITIR CIFRADAS", true, 12)
+	p.skipEncrypted = simpleui.NewSwitch("digitalVoiceEncrypted", 1070, 535, 200, 28, i18n.Source("text.42d506b4220f"), true, 12)
 	p.skipEncrypted.SetTrackColors(colors.panelAlt, colors.green)
-	p.followCall = simpleui.NewSwitch("digitalVoiceFollow", 1280, 535, 190, 28, "SEGUIR LLAMADA", false, 12)
+	p.followCall = simpleui.NewSwitch("digitalVoiceFollow", 1280, 535, 190, 28, i18n.Source("text.10f775fe15af"), false, 12)
 	p.followCall.SetTrackColors(colors.panelAlt, colors.blue)
 	p.controls = []simpleui.Element{p.start, p.allModes, p.skipEncrypted, p.followCall}
 	x := float32(538)
 	for _, mode := range digitalDetectionModes {
-		label := strings.ReplaceAll(strings.ReplaceAll(mode, "NXDN ", "N"), "-TDMA", "")
+		label := strings.ReplaceAll(strings.ReplaceAll(mode, i18n.Source("text.f8f49fde8af0"), "N"), i18n.Source("text.1a2f630a99ac"), "")
 		width := max(float32(len([]rune(label))*7+18), 48)
 		button := simpleui.NewButton("digitalDetect"+strings.ReplaceAll(mode, " ", ""), x, 578, width, 27, label, 11)
 		selectedMode := mode
@@ -104,7 +106,7 @@ func (p *DigitalVoicePanel) backendMode() string {
 		return selected[0]
 	}
 	if len(selected) == len(digitalDetectionModes) {
-		return "AUTO · TODOS"
+		return i18n.Source("text.5f08cf2bcce3")
 	}
 	return strings.Join(selected, "|")
 }
@@ -142,25 +144,25 @@ func (p *DigitalVoicePanel) selectedModeCount() int {
 
 func modeMatchesDetection(mode, detected string) bool {
 	mode, detected = strings.ToUpper(mode), strings.ToUpper(detected)
-	if strings.HasPrefix(mode, "NXDN") {
-		return strings.HasPrefix(detected, "NXDN")
+	if strings.HasPrefix(mode, i18n.Source("text.da9d217abd2b")) {
+		return strings.HasPrefix(detected, i18n.Source("text.da9d217abd2b"))
 	}
-	return mode == detected || (mode == "X2-TDMA" && detected == "X2")
+	return mode == detected || (mode == i18n.Source("text.63c78e1bf13c") && detected == "X2")
 }
 
 func (p *DigitalVoicePanel) Enter() {
 	if p.screen.mode != nil {
 		for i, value := range p.screen.mode.Items() {
-			if value == "NFM" {
+			if value == i18n.Source("text.0896d612d497") {
 				p.screen.mode.SetSelected(i)
 				break
 			}
 		}
 	}
-	p.screen.savedMode = "NFM"
+	p.screen.savedMode = i18n.Source("text.0896d612d497")
 	p.screen.demodBandwidthHz = max(p.screen.demodBandwidthHz, 12_500)
 	if p.screen.receiver != nil {
-		p.screen.receiver.SetDemodulator("DIGITAL AUTO", p.screen.frequencyHz, p.screen.demodBandwidthHz)
+		p.screen.receiver.SetDemodulator(i18n.Source("text.3ae4feb8250d"), p.screen.frequencyHz, p.screen.demodBandwidthHz)
 	}
 }
 
@@ -184,48 +186,48 @@ func (p *DigitalVoicePanel) Tick() {
 	}
 	status := p.screen.receiver.DigitalVoiceStatus()
 	if status.Running {
-		p.start.SetLabel("DETENER")
+		p.start.SetLabel(i18n.Source("text.42a572b1399e"))
 		p.start.SetColors(actionStopFill, colors.red, colors.text)
 	} else {
-		p.start.SetLabel("INICIAR")
+		p.start.SetLabel(i18n.Source("text.7f23d98fbc9a"))
 		p.start.SetColors(actionStartFill, colors.green, colors.text)
 	}
 	p.styleModeButtons(status.Protocol)
 }
 
 func (p *DigitalVoicePanel) DrawPanel() {
-	status := digitalvoice.Status{State: "NO DISPONIBLE", InputDBFS: -60}
+	status := digitalvoice.Status{State: i18n.Source("text.67b9e10a1cbd"), InputDBFS: -60}
 	if p.screen.receiver != nil {
 		status = p.screen.receiver.DigitalVoiceStatus()
 	}
 	x, y, w := float32(360), float32(488), float32(1232)
 	drawPanel(x, y, w, 338)
-	simpleui.DrawTextStyled("DECODIFICADOR DIGITAL AUTO", x+18, y+13, 16, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(i18n.Source("text.0efd19a09068"), x+18, y+13, 16, simpleui.FontSemiBold, colors.cyan)
 	stateColor := colors.orange
-	if status.State == "DECODIFICANDO" {
+	if status.State == i18n.Source("text.c6d93a7e3862") {
 		stateColor = colors.green
-	} else if status.State == "ERROR" || !status.Available {
+	} else if status.State == i18n.Source("text.d98ee0e5f939") || !status.Available {
 		stateColor = colors.red
 	}
 	rl.DrawCircle(int32(x+275), int32(y+23), 6, stateColor)
 	simpleui.DrawTextStyled(status.State, x+288, y+14, 13, simpleui.FontSemiBold, stateColor)
-	simpleui.DrawTextStyled(fmt.Sprintf("%d MODOS ACTIVOS", p.selectedModeCount()), x+306, y+52, 12, simpleui.FontSemiBold, colors.muted)
+	simpleui.DrawTextStyled(fmt.Sprintf(i18n.Source("text.94576db15561"), p.selectedModeCount()), x+306, y+52, 12, simpleui.FontSemiBold, colors.muted)
 
-	simpleui.DrawTextStyled("MODOS DE DETECCIÓN", x+178, y+67, 12, simpleui.FontSemiBold, colors.muted)
+	simpleui.DrawTextStyled(i18n.Source("text.d8f75115c06d"), x+178, y+67, 12, simpleui.FontSemiBold, colors.muted)
 
 	call := rl.Rectangle{X: x + 18, Y: y + 124, Width: 490, Height: 112}
 	drawPanel(call.X, call.Y, call.Width, call.Height)
 	protocol := status.Protocol
 	if protocol == "" {
-		protocol = "ESPERANDO SEÑAL"
+		protocol = i18n.Source("text.d274cad88fc7")
 	}
 	simpleui.DrawTextStyled(protocol+slotSuffix(status.Slot), call.X+15, call.Y+10, 19, simpleui.FontSemiBold, stateColor)
-	voice := "SIN VOZ"
+	voice := i18n.Source("text.4d2e8ca34469")
 	if status.VoiceActive {
-		voice = "VOZ CLARA"
+		voice = i18n.Source("text.c418d63f8b13")
 	}
 	if status.Encrypted {
-		voice = "VOZ CIFRADA"
+		voice = i18n.Source("text.8d3f66fe97d2")
 	}
 	simpleui.DrawTextStyled(voice, call.X+310, call.Y+12, 13, simpleui.FontSemiBold, func() rl.Color {
 		if status.Encrypted {
@@ -233,8 +235,8 @@ func (p *DigitalVoicePanel) DrawPanel() {
 		}
 		return colors.green
 	}())
-	simpleui.DrawText(fmt.Sprintf("TG / DESTINO   %s", fallback(status.Target)), call.X+15, call.Y+43, 13, colors.text)
-	simpleui.DrawText(fmt.Sprintf("RADIO / ORIGEN %s", fallback(status.Source)), call.X+15, call.Y+66, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.d40f44d16794"), fallback(status.Target)), call.X+15, call.Y+43, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.8ee436ff807a"), fallback(status.Source)), call.X+15, call.Y+66, 13, colors.text)
 	detail := status.Detail
 	if p.lastError != "" {
 		detail = p.lastError
@@ -243,35 +245,35 @@ func (p *DigitalVoicePanel) DrawPanel() {
 
 	metrics := rl.Rectangle{X: x + 522, Y: y + 124, Width: 252, Height: 112}
 	drawPanel(metrics.X, metrics.Y, metrics.Width, metrics.Height)
-	simpleui.DrawTextStyled("CALIDAD DE SEÑAL", metrics.X+14, metrics.Y+10, 13, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawText(fmt.Sprintf("NIVEL     %.1f dBFS", status.InputDBFS), metrics.X+14, metrics.Y+38, 13, colors.text)
-	simpleui.DrawText(fmt.Sprintf("SNR       %.1f dB", status.SNR), metrics.X+14, metrics.Y+61, 13, colors.text)
-	simpleui.DrawText(fmt.Sprintf("BER       %.2f %%", status.BER), metrics.X+14, metrics.Y+84, 13, colors.text)
+	simpleui.DrawTextStyled(i18n.Source("text.7ce16744f4e7"), metrics.X+14, metrics.Y+10, 13, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.6bc6699e4c5c"), status.InputDBFS), metrics.X+14, metrics.Y+38, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.38137d08a579"), status.SNR), metrics.X+14, metrics.Y+61, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.eda21833bc6e"), status.BER), metrics.X+14, metrics.Y+84, 13, colors.text)
 
 	context := rl.Rectangle{X: x + 788, Y: y + 124, Width: 426, Height: 112}
 	drawPanel(context.X, context.Y, context.Width, context.Height)
-	simpleui.DrawTextStyled("DATOS DEL PROTOCOLO", context.X+14, context.Y+10, 13, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawText("SLOT  "+fallback(status.Slot)+"    CC  "+fallback(status.ColorCode)+"    NAC  "+fallback(status.NAC), context.X+14, context.Y+38, 12, colors.text)
-	simpleui.DrawText("RAN   "+fallback(status.RAN)+"    SISTEMA  "+fallback(status.System)+"    SITIO  "+fallback(status.Site), context.X+14, context.Y+61, 12, colors.text)
+	simpleui.DrawTextStyled(i18n.Source("text.4a444df712c4"), context.X+14, context.Y+10, 13, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawText(i18n.Source("text.8aa75e7708c6")+fallback(status.Slot)+"    CC  "+fallback(status.ColorCode)+i18n.Source("text.cbd17bc64986")+fallback(status.NAC), context.X+14, context.Y+38, 12, colors.text)
+	simpleui.DrawText(i18n.Source("text.3d2b56dc4923")+fallback(status.RAN)+i18n.Source("text.cd3eee1922c5")+fallback(status.System)+i18n.Source("text.1d226d27511e")+fallback(status.Site), context.X+14, context.Y+61, 12, colors.text)
 	duration := "--:--"
 	if status.VoiceActive && !status.StartedAt.IsZero() {
 		duration = time.Since(status.StartedAt).Truncate(time.Second).String()
 	}
-	simpleui.DrawText("DURACIÓN  "+duration+"    AUDIO  "+voice, context.X+14, context.Y+84, 12, colors.text)
+	simpleui.DrawText(i18n.Source("text.1d833b90d9c3")+duration+i18n.Source("text.f9b479570a6b")+voice, context.X+14, context.Y+84, 12, colors.text)
 
 	p.drawActivity(x+18, y+247, w-36, 76, status.Events)
 }
 
 func (p *DigitalVoicePanel) drawActivity(x, y, w, h float32, events []digitalvoice.Event) {
 	drawPanel(x, y, w, h)
-	simpleui.DrawTextStyled("ACTIVIDAD RECIENTE", x+12, y+6, 13, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawText("HORA", x+12, y+28, 11, colors.muted)
-	simpleui.DrawText("MODO", x+82, y+28, 11, colors.muted)
-	simpleui.DrawText("SLOT", x+172, y+28, 11, colors.muted)
-	simpleui.DrawText("ORIGEN", x+242, y+28, 11, colors.muted)
-	simpleui.DrawText("DESTINO / DETALLE", x+350, y+28, 11, colors.muted)
+	simpleui.DrawTextStyled(i18n.Source("text.414e69ec8567"), x+12, y+6, 13, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawText(i18n.Source("text.e7563517a678"), x+12, y+28, 11, colors.muted)
+	simpleui.DrawText(i18n.Source("text.ab06b3638fb5"), x+82, y+28, 11, colors.muted)
+	simpleui.DrawText(i18n.Source("text.12dd6f102b80"), x+172, y+28, 11, colors.muted)
+	simpleui.DrawText(i18n.Source("text.9a965b631371"), x+242, y+28, 11, colors.muted)
+	simpleui.DrawText(i18n.Source("text.4d33cd7f8416"), x+350, y+28, 11, colors.muted)
 	if len(events) == 0 {
-		simpleui.DrawText("A la espera de una transmisión digital", x+12, y+50, 12, colors.muted)
+		simpleui.DrawText(i18n.Source("text.19706ce22b79"), x+12, y+50, 12, colors.muted)
 		return
 	}
 	e := events[len(events)-1]

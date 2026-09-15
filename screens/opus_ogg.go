@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"encoding/binary"
 	"errors"
 )
@@ -36,7 +38,7 @@ func (stream *oggOpusStream) audio(packet []byte) []byte {
 func (stream *oggOpusStream) page(packet []byte, flags byte, granule uint64) []byte {
 	segments := len(packet)/255 + 1
 	if segments > 255 {
-		panic(errors.New("Ogg packet too large"))
+		panic(errors.New(i18n.Source("text.fe8f21c0e620")))
 	}
 	page := make([]byte, 27+segments+len(packet))
 	copy(page, "OggS")

@@ -1,5 +1,7 @@
 package simpleui
 
+import "go-zero/internal/i18n"
+
 import rl "github.com/gen2brain/raylib-go/raylib"
 
 // Element is the common contract implemented by every SimpleUI control.
@@ -40,7 +42,7 @@ type BaseElement struct {
 
 func NewBaseElement(id string, x, y, width, height float32) BaseElement {
 	if id == "" {
-		panic("simpleui: an element ID cannot be empty")
+		panic(i18n.Source("text.5d6b03c55595"))
 	}
 	return BaseElement{
 		id:      id,

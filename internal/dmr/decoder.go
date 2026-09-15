@@ -1,6 +1,8 @@
 package dmr
 
 import (
+	"go-zero/internal/i18n"
+
 	"bufio"
 	"encoding/binary"
 	"fmt"
@@ -66,9 +68,9 @@ type Decoder struct {
 }
 
 func New(inputRate float64, executable string, onAudio func([]float32)) *Decoder {
-	d := &Decoder{inputRate: inputRate, exe: executable, onAudio: onAudio, queue: make(chan []float32, 32), audioSlot: "AUTO", bandwidth: 12_500}
+	d := &Decoder{inputRate: inputRate, exe: executable, onAudio: onAudio, queue: make(chan []float32, 32), audioSlot: i18n.Source("text.6ea56fae9eac"), bandwidth: 12_500}
 	d.pool.New = func() any { return make([]float32, 0, 16_384) }
-	d.status = Status{State: "OFF", AFCState: "OFF", Slot1: "--", Slot2: "--", AudioSlot: "AUTO", ColorCode: -1, Capacity: cap(d.queue)}
+	d.status = Status{State: i18n.Source("text.38cca6bea010"), AFCState: i18n.Source("text.38cca6bea010"), Slot1: "--", Slot2: "--", AudioSlot: i18n.Source("text.6ea56fae9eac"), ColorCode: -1, Capacity: cap(d.queue)}
 	return d
 }
 
@@ -100,8 +102,8 @@ func (d *Decoder) SetAutoCenter(enabled bool) {
 	d.autoCenter = enabled
 	if !enabled {
 		d.resetAFCLocked()
-	} else if d.status.AFCState == "OFF" {
-		d.status.AFCState = "IDLE"
+	} else if d.status.AFCState == i18n.Source("text.38cca6bea010") {
+		d.status.AFCState = i18n.Source("text.01a3981a1797")
 	}
 	front := d.front
 	d.mu.Unlock()
@@ -112,7 +114,7 @@ func (d *Decoder) SetAutoCenter(enabled bool) {
 
 func (d *Decoder) SetAudioSlot(slot string) {
 	if slot != "TS1" && slot != "TS2" {
-		slot = "AUTO"
+		slot = i18n.Source("text.6ea56fae9eac")
 	}
 	d.mu.Lock()
 	changed := slot != d.audioSlot
@@ -183,14 +185,14 @@ func (d *Decoder) start() error {
 		return err
 	}
 	if _, err = os.Stat(exePath); err != nil {
-		d.status.State, d.status.Detail = "ERROR", "No se encuentra el decoder DMR"
+		d.status.State, d.status.Detail = i18n.Source("text.d98ee0e5f939"), i18n.Source("text.3580796643aa")
 		d.mu.Unlock()
 		return err
 	}
 	slot := strings.ToLower(d.audioSlot)
 	cmd := exec.Command(exePath, "--stream", "--slot", slot)
 	cmd.Dir = filepath.Dir(exePath)
-	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(exePath)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	cmd.Env = append(os.Environ(), i18n.Source("text.c243c1091a83")+filepath.Dir(exePath)+string(os.PathListSeparator)+os.Getenv(i18n.Source("text.d4db71eecc1a")))
 	cmd.SysProcAttr = hiddenProcessAttributes()
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -208,7 +210,7 @@ func (d *Decoder) start() error {
 		return err
 	}
 	if err = cmd.Start(); err != nil {
-		d.status.State, d.status.Detail = "ERROR", err.Error()
+		d.status.State, d.status.Detail = i18n.Source("text.d98ee0e5f939"), err.Error()
 		d.mu.Unlock()
 		return err
 	}
@@ -237,11 +239,11 @@ func (d *Decoder) start() error {
 			d.stop = nil
 		}
 		d.process, d.stdin, d.front = nil, nil, nil
-		d.status.State = "ERROR"
+		d.status.State = i18n.Source("text.d98ee0e5f939")
 		if err != nil {
-			d.status.Detail = "El decoder DMR terminó: " + err.Error()
+			d.status.Detail = i18n.Source("text.364f5bde1bb1") + err.Error()
 		} else {
-			d.status.Detail = "El decoder DMR terminó"
+			d.status.Detail = i18n.Source("text.8b07a1a9373f")
 		}
 		shouldRestart := d.desiredEnabled && d.restartAttempts < 3 && !d.resyncing
 		restartAttempt := 0
@@ -283,7 +285,7 @@ func (d *Decoder) stopLocked(showOff bool) {
 	d.process, d.stdin, d.front = nil, nil, nil
 	d.confirmed, d.rawState = false, ""
 	if showOff {
-		d.status.State, d.status.Detail = "OFF", ""
+		d.status.State, d.status.Detail = i18n.Source("text.38cca6bea010"), ""
 	}
 }
 
@@ -348,7 +350,7 @@ func (d *Decoder) failGeneration(generation uint64, err error) {
 	if d.generation != generation || !d.enabled.Load() {
 		return
 	}
-	d.status.State, d.status.Detail = "ERROR", "Fallo en el flujo DMR: "+err.Error()
+	d.status.State, d.status.Detail = i18n.Source("text.d98ee0e5f939"), i18n.Source("text.35f9b0b1a599")+err.Error()
 	if d.stdin != nil {
 		_ = d.stdin.Close()
 	}
@@ -437,11 +439,11 @@ func (d *Decoder) statusLoop(reader io.Reader, generation uint64) {
 				d.handleRawStateLocked(fields[1], time.Now())
 			}
 		case strings.HasPrefix(line, "STATUS "):
-			d.status.Detail = strings.TrimSpace(strings.TrimPrefix(line, "STATUS "))
+			d.status.Detail = strings.TrimSpace(strings.TrimPrefix(line, i18n.Source("text.d553aebdff7d")))
 		case strings.HasPrefix(line, "TELEMETRY "):
 			now := time.Now()
 			d.lastTelemetry = now
-			for _, field := range strings.Fields(strings.TrimPrefix(line, "TELEMETRY ")) {
+			for _, field := range strings.Fields(strings.TrimPrefix(line, i18n.Source("text.f10ca5baa704"))) {
 				parts := strings.SplitN(field, "=", 2)
 				if len(parts) != 2 {
 					continue
@@ -473,23 +475,23 @@ func (d *Decoder) statusLoop(reader io.Reader, generation uint64) {
 
 func (d *Decoder) handleRawStateLocked(next string, now time.Time) {
 	d.rawState = next
-	if next == "VOICE" || next == "DATA" {
+	if next == i18n.Source("text.a430e6d293d0") || next == i18n.Source("text.c97c29c7a71b") {
 		if d.confirmed {
 			d.status.State = next
 		} else {
 			if d.candidateSince.IsZero() {
 				d.candidateSince = now
 			}
-			d.status.State = "CANDIDATE"
+			d.status.State = i18n.Source("text.6306148e33dd")
 		}
 		return
 	}
 	d.confirmationStreak = 0
-	if next == "SEARCH" && d.confirmed {
-		d.status.State = "HOLD"
+	if next == i18n.Source("text.56f21695a650") && d.confirmed {
+		d.status.State = i18n.Source("text.aacf94b7be62")
 		return
 	}
-	if next == "SEARCH" && !d.confirmed {
+	if next == i18n.Source("text.56f21695a650") && !d.confirmed {
 		d.pendingAudio = d.pendingAudio[:0]
 	}
 	d.confirmed = false
@@ -498,7 +500,7 @@ func (d *Decoder) handleRawStateLocked(next string, now time.Time) {
 }
 
 func (d *Decoder) updateConfirmationLocked(now time.Time) {
-	rawDMR := d.rawState == "VOICE" || d.rawState == "DATA"
+	rawDMR := d.rawState == i18n.Source("text.a430e6d293d0") || d.rawState == i18n.Source("text.c97c29c7a71b")
 	trustworthy := rawDMR && d.status.PLLLocked && d.status.SyncQuality > 0 && d.status.InputLevel > 0
 	if trustworthy {
 		d.lastTrustedTelemetry = now
@@ -516,14 +518,14 @@ func (d *Decoder) updateConfirmationLocked(now time.Time) {
 		d.confirmed = false
 		if rawDMR {
 			d.candidateSince = now
-			d.status.State = "CANDIDATE"
+			d.status.State = i18n.Source("text.6306148e33dd")
 		} else {
 			d.candidateSince = time.Time{}
-			d.status.State = "SEARCH"
+			d.status.State = i18n.Source("text.56f21695a650")
 		}
-	} else if !d.confirmed && d.rawState == "SEARCH" {
+	} else if !d.confirmed && d.rawState == i18n.Source("text.56f21695a650") {
 		d.candidateSince = time.Time{}
-		d.status.State = "SEARCH"
+		d.status.State = i18n.Source("text.56f21695a650")
 		d.pendingAudio = d.pendingAudio[:0]
 	}
 }
@@ -542,11 +544,11 @@ func (d *Decoder) updateAFC(measured float32, sampleCount int) {
 	windowMeasurement := float32(d.afcErrorSum / float64(d.afcErrorSamples))
 	d.afcErrorSum, d.afcErrorSamples = 0, 0
 	now := time.Now()
-	trusted := d.confirmed && (d.status.State == "VOICE" || d.status.State == "DATA") &&
+	trusted := d.confirmed && (d.status.State == i18n.Source("text.a430e6d293d0") || d.status.State == i18n.Source("text.c97c29c7a71b")) &&
 		d.status.PLLLocked && d.status.SyncQuality > 0 && d.status.InputLevel > 0 &&
 		!d.lastTelemetry.IsZero() && now.Sub(d.lastTelemetry) <= 750*time.Millisecond
 	if !d.autoCenter {
-		d.status.AFCState = "OFF"
+		d.status.AFCState = i18n.Source("text.38cca6bea010")
 		d.validAFCWindows = 0
 		d.mu.Unlock()
 		return
@@ -558,9 +560,9 @@ func (d *Decoder) updateAFC(measured float32, sampleCount int) {
 			d.status.AFCCorrectionHz += min(max(-d.status.AFCCorrectionHz, -10), 10)
 		}
 		if abs32(d.status.AFCCorrectionHz) > .5 {
-			d.status.AFCState = "HOLD"
+			d.status.AFCState = i18n.Source("text.aacf94b7be62")
 		} else {
-			d.status.AFCState = "IDLE"
+			d.status.AFCState = i18n.Source("text.01a3981a1797")
 		}
 		correction, front := d.status.AFCCorrectionHz, d.front
 		d.mu.Unlock()
@@ -573,21 +575,21 @@ func (d *Decoder) updateAFC(measured float32, sampleCount int) {
 	d.status.FrequencyErrorHz = .85*d.status.FrequencyErrorHz + .15*windowMeasurement
 	d.validAFCWindows++
 	if d.validAFCWindows < 3 {
-		d.status.AFCState = "ACQUIRE"
+		d.status.AFCState = i18n.Source("text.848cd7228796")
 		d.mu.Unlock()
 		return
 	}
 	if abs32(d.status.FrequencyErrorHz) <= 90 {
-		d.status.AFCState = "LOCKED"
+		d.status.AFCState = i18n.Source("text.bfc160483cb0")
 		d.mu.Unlock()
 		return
 	}
 	step := min(max(d.status.FrequencyErrorHz*.06, -30), 30)
 	d.status.AFCCorrectionHz = min(max(d.status.AFCCorrectionHz+step, -1500), 1500)
 	if abs32(d.status.AFCCorrectionHz) >= 1499 {
-		d.status.AFCState = "LIMIT"
+		d.status.AFCState = i18n.Source("text.18ba5c477fc5")
 	} else {
-		d.status.AFCState = "LOCKING"
+		d.status.AFCState = i18n.Source("text.e433860031a8")
 	}
 	correction, front := d.status.AFCCorrectionHz, d.front
 	d.mu.Unlock()
@@ -601,18 +603,18 @@ func (d *Decoder) resetAFCLocked() {
 	d.lastValidAFC = time.Time{}
 	d.status.FrequencyErrorHz, d.status.AFCCorrectionHz = 0, 0
 	if d.autoCenter {
-		d.status.AFCState = "IDLE"
+		d.status.AFCState = i18n.Source("text.01a3981a1797")
 	} else {
-		d.status.AFCState = "OFF"
+		d.status.AFCState = i18n.Source("text.38cca6bea010")
 	}
 }
 
 func (d *Decoder) resetSessionLocked() {
 	d.resetAFCLocked()
-	d.rawState, d.confirmed, d.confirmationStreak = "SEARCH", false, 0
+	d.rawState, d.confirmed, d.confirmationStreak = i18n.Source("text.56f21695a650"), false, 0
 	d.pendingAudio = d.pendingAudio[:0]
 	d.candidateSince, d.lastTrustedTelemetry, d.lastTelemetry = time.Time{}, time.Time{}, time.Time{}
-	d.status.State, d.status.Detail = "SEARCH", "Buscando sincronismo"
+	d.status.State, d.status.Detail = i18n.Source("text.56f21695a650"), i18n.Source("text.7330f4b9b4ca")
 	d.status.ColorCode, d.status.InputLevel, d.status.SyncQuality = -1, 0, 0
 	d.status.PLLLocked, d.status.Slot1, d.status.Slot2 = false, "--", "--"
 }
@@ -625,5 +627,5 @@ func abs32(v float32) float32 {
 }
 
 func (s Status) String() string {
-	return fmt.Sprintf("%s CC=%d TS1=%s TS2=%s", s.State, s.ColorCode, s.Slot1, s.Slot2)
+	return fmt.Sprintf(i18n.Source("text.17f6383c65ea"), s.State, s.ColorCode, s.Slot1, s.Slot2)
 }

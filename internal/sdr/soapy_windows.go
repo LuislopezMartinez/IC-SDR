@@ -3,11 +3,14 @@
 package sdr
 
 import (
+	"go-zero/internal/i18n"
+
 	"errors"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"unsafe"
 
@@ -24,6 +27,8 @@ type soapyAPI struct {
 	core, vendor, module   syscall.Handle
 	dependencies           []syscall.Handle
 	loadModule             func(string) uintptr
+	enumerate              func(string, *uintptr) uintptr
+	enumerateClear         func(uintptr, uintptr)
 	free                   func(uintptr)
 	makeDevice             func(string) uintptr
 	unmakeDevice           func(uintptr) int32
@@ -39,6 +44,12 @@ type soapyAPI struct {
 	setGainMode            func(uintptr, int32, uintptr, bool) int32
 	getGainElement         func(uintptr, int32, uintptr, string) float64
 	setGainElement         func(uintptr, int32, uintptr, string, float64) int32
+	getGain                func(uintptr, int32, uintptr) float64
+	setGain                func(uintptr, int32, uintptr, float64) int32
+	listAntennas           func(uintptr, int32, uintptr, *uintptr) uintptr
+	getAntenna             func(uintptr, int32, uintptr) uintptr
+	setAntenna             func(uintptr, int32, uintptr, string) int32
+	stringsClear           func(*uintptr, uintptr)
 	readSetting            func(uintptr, string) uintptr
 	writeSetting           func(uintptr, string, string) int32
 	setupStream            func(uintptr, int32, string, uintptr, uintptr, uintptr) uintptr
@@ -55,6 +66,9 @@ type soapyDevice struct {
 	stream     uintptr
 	hardware   string
 	driver     string
+	serial     string
+	antenna    string
+	antennas   []string
 	sampleRate float64
 	buffer     []float32
 	buffers    [1]uintptr
@@ -64,21 +78,90 @@ func openSoapy(config Config) (*soapyDevice, error) {
 	candidates := deviceCandidates(config)
 	var failures []error
 	for _, candidate := range candidates {
-		config.trace("SoapySDR: probando driver=%s serial=%q", candidate.Driver, candidate.Serial)
+		config.trace(i18n.Source("text.8ac7b4eb296e"), candidate.Driver, candidate.Serial)
 		device, err := openSoapyCandidate(candidate)
 		if err == nil {
-			config.trace("SoapySDR: driver %s abierto", candidate.Driver)
+			config.trace(i18n.Source("text.27ccf6128f91"), candidate.Driver)
 			return device, nil
 		}
-		config.trace("SoapySDR: driver %s rechazado: %v", candidate.Driver, err)
+		config.trace(i18n.Source("text.14909b682516"), candidate.Driver, err)
 		failures = append(failures, fmt.Errorf("%s: %w", candidate.Driver, err))
 	}
-	return nil, fmt.Errorf("no se encontró RSP ni RTL-SDR: %w", errors.Join(failures...))
+	return nil, fmt.Errorf(i18n.Source("text.2221fda17c81"), errors.Join(failures...))
+}
+
+func openSoapyExact(config Config) (*soapyDevice, error) { return openSoapyCandidate(config) }
+
+type soapyKwargs struct{ size, keys, vals uintptr }
+
+var scanner struct {
+	sync.Mutex
+	api    *soapyAPI
+	loaded map[string]bool
+}
+
+func listSoapyDevices(config Config) ([]DeviceOption, error) {
+	scanner.Lock()
+	defer scanner.Unlock()
+	if scanner.loaded == nil {
+		scanner.loaded = make(map[string]bool)
+	}
+	var firstErr error
+	for _, driver := range []string{"sdrplay", "rtlsdr", "hackrf"} {
+		if driver == "hackrf" && !hasHackRFModule(config.RuntimeRoot) {
+			continue
+		}
+		if scanner.loaded[driver] {
+			continue
+		}
+		candidate := config
+		candidate.Driver = driver
+		api, err := loadSoapy(candidate)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		scanner.loaded[driver] = true
+		scanner.api = api // Keep DLLs loaded while the process uses SoapySDR.
+	}
+	if scanner.api == nil {
+		return nil, firstErr
+	}
+	var length uintptr
+	list := scanner.api.enumerate("", &length)
+	if list == 0 || length == 0 {
+		return nil, nil
+	}
+	defer scanner.api.enumerateClear(list, length)
+	result := make([]DeviceOption, 0, int(length))
+	stride, pointerSize := unsafe.Sizeof(soapyKwargs{}), unsafe.Sizeof(uintptr(0))
+	for index := uintptr(0); index < length; index++ {
+		kwargs := (*soapyKwargs)(unsafe.Pointer(list + index*stride))
+		option := DeviceOption{}
+		for pair := uintptr(0); pair < kwargs.size; pair++ {
+			key := *(*uintptr)(unsafe.Pointer(kwargs.keys + pair*pointerSize))
+			value := *(*uintptr)(unsafe.Pointer(kwargs.vals + pair*pointerSize))
+			switch cString(key) {
+			case "driver":
+				option.Driver = cString(value)
+			case "serial":
+				option.Serial = cString(value)
+			case "label":
+				option.Label = cString(value)
+			}
+		}
+		if option.Driver == "sdrplay" || option.Driver == "rtlsdr" || option.Driver == "hackrf" {
+			result = append(result, option)
+		}
+	}
+	return mergeDeviceOptions(result, nil), nil
 }
 
 func deviceCandidates(config Config) []Config {
 	candidates := []Config{config}
-	if config.Serial != "" {
+	if config.Serial != "" && config.Driver != "hackrf" {
 		anyRSP := config
 		anyRSP.Serial = ""
 		candidates = append(candidates, anyRSP)
@@ -87,49 +170,88 @@ func deviceCandidates(config Config) []Config {
 		rtl := config
 		rtl.Driver, rtl.Serial = "rtlsdr", ""
 		candidates = append(candidates, rtl)
+	} else {
+		// A saved RTL-SDR may be unplugged while an RSP is available.
+		rsp := config
+		rsp.Driver, rsp.Serial = "sdrplay", ""
+		candidates = append(candidates, rsp)
 	}
 	return candidates
 }
 
+func hasHackRFModule(root string) bool {
+	_, err := os.Stat(filepath.Join(root, "lib", "SoapySDR", "modules0.8", "HackRFSupport.dll"))
+	return err == nil
+}
+
 func openSoapyCandidate(config Config) (result *soapyDevice, err error) {
-	config.trace("SoapySDR/%s: cargando DLL y módulo", config.Driver)
+	config.trace(i18n.Source("text.4b60d3b38649"), config.Driver)
 	api, err := loadSoapy(config)
 	if err != nil {
 		return nil, err
 	}
-	config.trace("SoapySDR/%s: creando dispositivo", config.Driver)
+	scanner.Lock()
+	if scanner.loaded == nil {
+		scanner.loaded = make(map[string]bool)
+	}
+	scanner.loaded[config.Driver] = true
+	scanner.api = api
+	scanner.Unlock()
+	if config.Serial == "" {
+		var count uintptr
+		list := api.enumerate("driver="+config.Driver, &count)
+		if list != 0 {
+			if count > 0 {
+				info := (*soapyKwargs)(unsafe.Pointer(list))
+				step := unsafe.Sizeof(uintptr(0))
+				for i := uintptr(0); i < info.size; i++ {
+					if cString(*(*uintptr)(unsafe.Pointer(info.keys + i*step))) == "serial" {
+						config.Serial = cString(*(*uintptr)(unsafe.Pointer(info.vals + i*step)))
+						break
+					}
+				}
+			}
+			api.enumerateClear(list, count)
+		}
+	}
+	config.trace(i18n.Source("text.ea33a82d950f"), config.Driver)
 	device := api.makeDevice(config.deviceArguments())
 	if device == 0 {
 		message := api.deviceError()
-		api.close()
-		return nil, fmt.Errorf("SoapySDR make device: %s", message)
+		return nil, fmt.Errorf(i18n.Source("text.243b35027c16"), message)
 	}
-	result = &soapyDevice{api: api, device: device, driver: config.Driver, buffer: make([]float32, config.FFTSize*2)}
+	result = &soapyDevice{api: api, device: device, driver: config.Driver, serial: config.Serial, buffer: make([]float32, config.FFTSize*2)}
 	defer func() {
 		if err != nil {
 			result.close()
 		}
 	}()
 	result.hardware = api.consume(api.hardwareKey(device))
-	config.trace("SoapySDR/%s: configurando sample rate %.0f", config.Driver, config.SampleRate)
-	if err = api.check(api.setSampleRate(device, soapyRX, 0, config.SampleRate), "set sample rate"); err != nil {
+	result.refreshAntennas()
+	config.trace(i18n.Source("text.62c09cdaa0ef"), config.Driver, config.SampleRate)
+	if err = api.check(api.setSampleRate(device, soapyRX, 0, config.SampleRate), i18n.Source("text.27405f9cff8f")); err != nil {
 		return nil, err
 	}
 	result.sampleRate = api.getSampleRate(device, soapyRX, 0)
-	config.trace("SoapySDR/%s: sintonizando %d Hz", config.Driver, config.FrequencyHz)
-	if err = api.check(api.setFrequency(device, soapyRX, 0, float64(config.FrequencyHz), 0), "set frequency"); err != nil {
+	config.trace(i18n.Source("text.d028519ac0c5"), config.Driver, config.FrequencyHz)
+	if err = api.check(api.setFrequency(device, soapyRX, 0, float64(config.FrequencyHz), 0), i18n.Source("text.cf4982d2de5b")); err != nil {
 		return nil, err
 	}
-	config.trace("SoapySDR/%s: creando stream CF32", config.Driver)
+	config.trace(i18n.Source("text.3bf73f2ea947"), config.Driver)
 	result.stream = api.setupStream(device, soapyRX, "CF32", 0, 0, 0)
 	if result.stream == 0 {
-		return nil, fmt.Errorf("setup CF32 stream: %s", api.deviceError())
+		return nil, fmt.Errorf(i18n.Source("text.7bad50125987"), api.deviceError())
 	}
-	config.trace("SoapySDR/%s: activando stream", config.Driver)
-	if err = api.check(api.activateStream(device, result.stream, 0, 0, 0), "activate stream"); err != nil {
+	config.trace(i18n.Source("text.567829dc0738"), config.Driver)
+	if err = api.check(api.activateStream(device, result.stream, 0, 0, 0), i18n.Source("text.66abcbe21a7d")); err != nil {
 		return nil, err
 	}
-	config.trace("SoapySDR/%s: stream activo", config.Driver)
+	if result.antenna != "" && len(result.antennas) > 1 {
+		if antennaErr := result.setAntenna(result.antenna); antennaErr != nil {
+			config.trace(i18n.Source("text.0f11289a3f2a"), config.Driver, antennaErr)
+		}
+	}
+	config.trace(i18n.Source("text.b3924c740b11"), config.Driver)
 	return result, nil
 }
 
@@ -139,42 +261,55 @@ func loadSoapy(config Config) (*soapyAPI, error) {
 		return nil, err
 	}
 	corePath := filepath.Join(root, "bin", "SoapySDR.dll")
-	config.trace("SoapySDR/%s: LoadLibrary %s", config.Driver, corePath)
+	config.trace(i18n.Source("text.bc4e5a652327"), config.Driver, corePath)
 	core, err := syscall.LoadLibrary(corePath)
 	if err != nil {
-		return nil, fmt.Errorf("load %s: %w", corePath, err)
+		return nil, fmt.Errorf(i18n.Source("text.415376b5d3b0"), corePath, err)
 	}
-	config.trace("SoapySDR/%s: SoapySDR.dll cargada", config.Driver)
+	config.trace(i18n.Source("text.f0bba3ff5b10"), config.Driver)
 	api := &soapyAPI{core: core}
 	moduleName := "rtlsdrSupport.dll"
 	if config.Driver == "sdrplay" {
-		vendorPath := filepath.Join(os.Getenv("ProgramFiles"), "SDRplay", "API", "x64", "sdrplay_api.dll")
-		config.trace("SoapySDR/sdrplay: LoadLibrary %s", vendorPath)
+		vendorPath := filepath.Join(os.Getenv("ProgramFiles"), "SDRplay", i18n.Source("text.c8e5998f6a39"), "x64", "sdrplay_api.dll")
+		config.trace(i18n.Source("text.70f3f1e0d5a1"), vendorPath)
 		api.vendor, err = syscall.LoadLibrary(vendorPath)
 		if err != nil {
 			api.close()
-			return nil, fmt.Errorf("load SDRplay API %s: %w", vendorPath, err)
+			return nil, fmt.Errorf(i18n.Source("text.58136254d6d7"), vendorPath, err)
 		}
-		config.trace("SoapySDR/sdrplay: API del fabricante cargada")
+		config.trace(i18n.Source("text.bc9b492c772d"))
 		moduleName = "sdrPlaySupport.dll"
 	} else if config.Driver == "rtlsdr" {
 		// Load transitive DLLs by absolute path. Relying on PATH works in the
 		// source tree but fails in the portable DATA layout beside the exe.
 		for _, name := range []string{"libusb-1.0.dll", "rtlsdr.dll"} {
 			dependencyPath := filepath.Join(root, "bin", name)
-			config.trace("SoapySDR/rtlsdr: LoadLibrary %s", dependencyPath)
+			config.trace(i18n.Source("text.4a6e591a09c9"), dependencyPath)
 			handle, loadErr := syscall.LoadLibrary(dependencyPath)
 			if loadErr != nil {
 				api.close()
-				return nil, fmt.Errorf("load RTL-SDR dependency %s: %w", name, loadErr)
+				return nil, fmt.Errorf(i18n.Source("text.5422deaa347c"), name, loadErr)
 			}
-			config.trace("SoapySDR/rtlsdr: %s cargada", name)
+			config.trace(i18n.Source("text.6867dd214f65"), name)
+			api.dependencies = append(api.dependencies, handle)
+		}
+	} else if config.Driver == "hackrf" {
+		moduleName = "HackRFSupport.dll"
+		for _, name := range []string{"libusb-1.0.dll", "pthreadVC3.dll", "hackrf.dll"} {
+			dependencyPath := filepath.Join(root, "bin", name)
+			handle, loadErr := syscall.LoadLibrary(dependencyPath)
+			if loadErr != nil {
+				api.close()
+				return nil, fmt.Errorf(i18n.Source("text.ddeb9d145739"), name, loadErr)
+			}
 			api.dependencies = append(api.dependencies, handle)
 		}
 	}
 	modulePath := filepath.Join(root, "lib", "SoapySDR", "modules0.8", moduleName)
-	config.trace("SoapySDR/%s: registrando símbolos de la API", config.Driver)
+	config.trace(i18n.Source("text.e8fe4854f48e"), config.Driver)
 	purego.RegisterLibFunc(&api.loadModule, uintptr(core), "SoapySDR_loadModule")
+	purego.RegisterLibFunc(&api.enumerate, uintptr(core), "SoapySDRDevice_enumerateStrArgs")
+	purego.RegisterLibFunc(&api.enumerateClear, uintptr(core), "SoapySDRKwargsList_clear")
 	purego.RegisterLibFunc(&api.free, uintptr(core), "SoapySDR_free")
 	purego.RegisterLibFunc(&api.makeDevice, uintptr(core), "SoapySDRDevice_makeStrArgs")
 	purego.RegisterLibFunc(&api.unmakeDevice, uintptr(core), "SoapySDRDevice_unmake")
@@ -190,6 +325,12 @@ func loadSoapy(config Config) (*soapyAPI, error) {
 	purego.RegisterLibFunc(&api.setGainMode, uintptr(core), "SoapySDRDevice_setGainMode")
 	purego.RegisterLibFunc(&api.getGainElement, uintptr(core), "SoapySDRDevice_getGainElement")
 	purego.RegisterLibFunc(&api.setGainElement, uintptr(core), "SoapySDRDevice_setGainElement")
+	purego.RegisterLibFunc(&api.getGain, uintptr(core), "SoapySDRDevice_getGain")
+	purego.RegisterLibFunc(&api.setGain, uintptr(core), "SoapySDRDevice_setGain")
+	purego.RegisterLibFunc(&api.listAntennas, uintptr(core), "SoapySDRDevice_listAntennas")
+	purego.RegisterLibFunc(&api.getAntenna, uintptr(core), "SoapySDRDevice_getAntenna")
+	purego.RegisterLibFunc(&api.setAntenna, uintptr(core), "SoapySDRDevice_setAntenna")
+	purego.RegisterLibFunc(&api.stringsClear, uintptr(core), "SoapySDRStrings_clear")
 	purego.RegisterLibFunc(&api.readSetting, uintptr(core), "SoapySDRDevice_readSetting")
 	purego.RegisterLibFunc(&api.writeSetting, uintptr(core), "SoapySDRDevice_writeSetting")
 	purego.RegisterLibFunc(&api.setupStream, uintptr(core), "SoapySDRDevice_setupStream")
@@ -199,13 +340,13 @@ func loadSoapy(config Config) (*soapyAPI, error) {
 	purego.RegisterLibFunc(&api.readStream, uintptr(core), "SoapySDRDevice_readStream")
 	purego.RegisterLibFunc(&api.errToString, uintptr(core), "SoapySDR_errToStr")
 
-	config.trace("SoapySDR/%s: cargando módulo %s", config.Driver, modulePath)
+	config.trace(i18n.Source("text.e8b27774cadc"), config.Driver, modulePath)
 	message := api.consume(api.loadModule(modulePath))
-	if message != "" {
+	if !moduleLoadSucceeded(message, modulePath) {
 		api.close()
-		return nil, fmt.Errorf("load Soapy module %s: %s", moduleName, message)
+		return nil, fmt.Errorf(i18n.Source("text.492af6d66f82"), moduleName, message)
 	}
-	config.trace("SoapySDR/%s: módulo cargado", config.Driver)
+	config.trace(i18n.Source("text.29ef816f4a0f"), config.Driver)
 	return api, nil
 }
 
@@ -219,29 +360,81 @@ func (device *soapyDevice) read(destination []float32) (int, int32, error) {
 		return 0, read, nil
 	}
 	if read < 0 {
-		return 0, read, fmt.Errorf("read stream: %s", device.api.errorText(read))
+		return 0, read, fmt.Errorf(i18n.Source("text.d6b1d17ba435"), device.api.errorText(read))
 	}
 	copy(destination, device.buffer[:int(read)*2])
 	return int(read), read, nil
 }
 
 func (device *soapyDevice) setCenterFrequency(frequencyHz int64) error {
-	return device.api.check(
+	if err := device.api.check(
 		device.api.setFrequency(device.device, soapyRX, 0, float64(frequencyHz), 0),
-		"set center frequency",
-	)
+		i18n.Source("text.9144d33a1202"),
+	); err != nil {
+		return err
+	}
+	if device.antenna != "" && len(device.antennas) > 1 {
+		return device.setAntenna(device.antenna)
+	}
+	return nil
 }
 
 func (device *soapyDevice) centerFrequency() int64 {
 	return int64(math.Round(device.api.getFrequency(device.device, soapyRX, 0)))
 }
 
+func (device *soapyDevice) refreshAntennas() {
+	if !IsRSPDx(device.hardware) {
+		return
+	}
+	var count uintptr
+	list := device.api.listAntennas(device.device, soapyRX, 0, &count)
+	if list == 0 || count == 0 || count > 16 {
+		return
+	}
+	defer device.api.stringsClear(&list, count)
+	step := unsafe.Sizeof(uintptr(0))
+	for i := uintptr(0); i < count; i++ {
+		name := cString(*(*uintptr)(unsafe.Pointer(list + i*step)))
+		if name != "" {
+			device.antennas = append(device.antennas, name)
+		}
+	}
+	if len(device.antennas) > 0 {
+		device.antenna = MatchAntenna(device.api.consume(device.api.getAntenna(device.device, soapyRX, 0)), device.antennas)
+	}
+}
+
+func (device *soapyDevice) antennaState() (string, []string) {
+	if len(device.antennas) <= 1 {
+		return "", nil
+	}
+	current := MatchAntenna(device.api.consume(device.api.getAntenna(device.device, soapyRX, 0)), device.antennas)
+	if current != "" {
+		device.antenna = current
+	}
+	return device.antenna, append([]string(nil), device.antennas...)
+}
+
+func (device *soapyDevice) setAntenna(name string) error {
+	name = MatchAntenna(name, device.antennas)
+	if name == "" {
+		return fmt.Errorf("%s", i18n.Source("text.0fcfcf3eb4a5"))
+	}
+	if err := device.api.check(device.api.setAntenna(device.device, soapyRX, 0, name), i18n.Source("text.b6e4f64a15cc")); err != nil {
+		return err
+	}
+	device.antenna = name
+	return nil
+}
+
 func (device *soapyDevice) hardwareSettings() HardwareSettings {
+	antenna, antennas := device.antennaState()
 	if device.driver == "rtlsdr" {
 		return HardwareSettings{
-			Available: true, Device: device.hardware, Driver: device.driver,
+			Available: true, Device: device.hardware, Driver: device.driver, Serial: device.serial,
 			AGC:            device.api.getGainMode(device.device, soapyRX, 0),
-			RFGain:         float32(device.api.getGainElement(device.device, soapyRX, 0, "TUNER")),
+			RFGain:         float32(device.api.getGainElement(device.device, soapyRX, 0, i18n.Source("text.91c1fd825c5a"))),
 			PPM:            float32(device.api.getFrequencyCorrection(device.device, soapyRX, 0)),
 			BiasT:          device.readBoolSetting("biastee"),
 			DigitalAGC:     device.readBoolSetting("digital_agc"),
@@ -250,11 +443,18 @@ func (device *soapyDevice) hardwareSettings() HardwareSettings {
 			DirectSampling: device.readIntSetting("direct_samp", 0),
 		}
 	}
+	if device.driver == "hackrf" {
+		return HardwareSettings{
+			Available: true, Device: device.hardware, Driver: device.driver, Serial: device.serial,
+			RFGain: float32(device.api.getGain(device.device, soapyRX, 0)),
+		}
+	}
 	return HardwareSettings{
-		Available: true, Device: device.hardware, Driver: device.driver,
+		Available: true, Device: device.hardware, Driver: device.driver, Serial: device.serial,
+		Antenna: antenna, Antennas: antennas,
 		AGC:          device.api.getGainMode(device.device, soapyRX, 0),
-		RFGain:       float32(device.api.getGainElement(device.device, soapyRX, 0, "RFGR")),
-		IFGain:       float32(device.api.getGainElement(device.device, soapyRX, 0, "IFGR")),
+		RFGain:       float32(device.api.getGainElement(device.device, soapyRX, 0, i18n.Source("text.a5a6f8a6d9f7"))),
+		IFGain:       float32(device.api.getGainElement(device.device, soapyRX, 0, i18n.Source("text.beb717ff2ec6"))),
 		PPM:          float32(device.api.getFrequencyCorrection(device.device, soapyRX, 0)),
 		BiasT:        device.readBoolSetting("biasT_ctrl"),
 		RFNotch:      device.readBoolSetting("rfnotch_ctrl"),
@@ -274,62 +474,73 @@ func (device *soapyDevice) applyHardwareSettings(settings HardwareSettings) erro
 	}
 	if device.driver == "rtlsdr" {
 		if current.AGC != settings.AGC {
-			apply(device.api.setGainMode(device.device, soapyRX, 0, settings.AGC), "RTL-SDR AGC")
+			apply(device.api.setGainMode(device.device, soapyRX, 0, settings.AGC), i18n.Source("text.55a69b8d806b"))
 		}
 		if !settings.AGC && current.RFGain != settings.RFGain {
-			apply(device.api.setGainElement(device.device, soapyRX, 0, "TUNER", float64(settings.RFGain)), "RTL-SDR tuner gain")
+			apply(device.api.setGainElement(device.device, soapyRX, 0, i18n.Source("text.91c1fd825c5a"), float64(settings.RFGain)), i18n.Source("text.1a4cbbb95852"))
 		}
 		if current.PPM != settings.PPM {
-			apply(device.api.setFrequencyCorrection(device.device, soapyRX, 0, float64(settings.PPM)), "RTL-SDR frequency correction")
+			apply(device.api.setFrequencyCorrection(device.device, soapyRX, 0, float64(settings.PPM)), i18n.Source("text.4e40828c2907"))
 		}
 		if current.BiasT != settings.BiasT {
-			apply(device.api.writeSetting(device.device, "biastee", boolString(settings.BiasT)), "RTL-SDR Bias-T")
+			apply(device.api.writeSetting(device.device, "biastee", boolString(settings.BiasT)), i18n.Source("text.a3faa3c8bc3f"))
 		}
 		if current.DigitalAGC != settings.DigitalAGC {
-			apply(device.api.writeSetting(device.device, "digital_agc", boolString(settings.DigitalAGC)), "RTL-SDR digital AGC")
+			apply(device.api.writeSetting(device.device, "digital_agc", boolString(settings.DigitalAGC)), i18n.Source("text.b1d91b77232c"))
 		}
 		if current.OffsetTuning != settings.OffsetTuning {
-			apply(device.api.writeSetting(device.device, "offset_tune", boolString(settings.OffsetTuning)), "RTL-SDR offset tuning")
+			apply(device.api.writeSetting(device.device, "offset_tune", boolString(settings.OffsetTuning)), i18n.Source("text.aa586adc01d7"))
 		}
 		if current.IQSwap != settings.IQSwap {
-			apply(device.api.writeSetting(device.device, "iq_swap", boolString(settings.IQSwap)), "RTL-SDR IQ swap")
+			apply(device.api.writeSetting(device.device, "iq_swap", boolString(settings.IQSwap)), i18n.Source("text.c700b2ff4e9e"))
 		}
 		if current.DirectSampling != settings.DirectSampling {
-			apply(device.api.writeSetting(device.device, "direct_samp", fmt.Sprintf("%d", settings.DirectSampling)), "RTL-SDR direct sampling")
+			apply(device.api.writeSetting(device.device, "direct_samp", fmt.Sprintf("%d", settings.DirectSampling)), i18n.Source("text.8b4630cd6d1e"))
+		}
+		return errors.Join(failures...)
+	}
+	if device.driver == "hackrf" {
+		if current.RFGain != settings.RFGain {
+			apply(device.api.setGain(device.device, soapyRX, 0, float64(settings.RFGain)), i18n.Source("text.1398091f5afd"))
 		}
 		return errors.Join(failures...)
 	}
 
 	gainChanged := current.RFGain != settings.RFGain || current.IFGain != settings.IFGain
 	if (current.AGC && gainChanged) || (current.AGC && !settings.AGC) {
-		apply(device.api.setGainMode(device.device, soapyRX, 0, false), "disable AGC")
+		apply(device.api.setGainMode(device.device, soapyRX, 0, false), i18n.Source("text.62e9fda52b66"))
 	}
 	if current.RFGain != settings.RFGain {
-		apply(device.api.setGainElement(device.device, soapyRX, 0, "RFGR", float64(settings.RFGain)), "RFGR")
+		apply(device.api.setGainElement(device.device, soapyRX, 0, i18n.Source("text.a5a6f8a6d9f7"), float64(settings.RFGain)), i18n.Source("text.a5a6f8a6d9f7"))
 	}
 	if current.IFGain != settings.IFGain {
-		apply(device.api.setGainElement(device.device, soapyRX, 0, "IFGR", float64(settings.IFGain)), "IFGR")
+		apply(device.api.setGainElement(device.device, soapyRX, 0, i18n.Source("text.beb717ff2ec6"), float64(settings.IFGain)), i18n.Source("text.beb717ff2ec6"))
 	}
 	if current.PPM != settings.PPM {
-		apply(device.api.setFrequencyCorrection(device.device, soapyRX, 0, float64(settings.PPM)), "frequency correction")
+		apply(device.api.setFrequencyCorrection(device.device, soapyRX, 0, float64(settings.PPM)), i18n.Source("text.93fda1bda2d8"))
 	}
 	if current.BiasT != settings.BiasT {
 		apply(device.api.writeSetting(device.device, "biasT_ctrl", boolString(settings.BiasT)), "Bias-T")
 	}
 	if current.RFNotch != settings.RFNotch {
-		apply(device.api.writeSetting(device.device, "rfnotch_ctrl", boolString(settings.RFNotch)), "RF notch")
+		apply(device.api.writeSetting(device.device, "rfnotch_ctrl", boolString(settings.RFNotch)), i18n.Source("text.8096b7d67b23"))
 	}
 	if current.DABNotch != settings.DABNotch {
-		apply(device.api.writeSetting(device.device, "dabnotch_ctrl", boolString(settings.DABNotch)), "DAB notch")
+		apply(device.api.writeSetting(device.device, "dabnotch_ctrl", boolString(settings.DABNotch)), i18n.Source("text.5e48685f29c5"))
 	}
 	if current.IQCorrection != settings.IQCorrection {
-		apply(device.api.writeSetting(device.device, "iqcorr_ctrl", boolString(settings.IQCorrection)), "IQ correction")
+		apply(device.api.writeSetting(device.device, "iqcorr_ctrl", boolString(settings.IQCorrection)), i18n.Source("text.f515ed0cfa08"))
 	}
 	if current.AGCSetpoint != settings.AGCSetpoint {
-		apply(device.api.writeSetting(device.device, "agc_setpoint", fmt.Sprintf("%d", settings.AGCSetpoint)), "AGC setpoint")
+		apply(device.api.writeSetting(device.device, "agc_setpoint", fmt.Sprintf("%d", settings.AGCSetpoint)), i18n.Source("text.8814c5e8f044"))
 	}
 	if current.AGC != settings.AGC || (settings.AGC && gainChanged) {
-		apply(device.api.setGainMode(device.device, soapyRX, 0, settings.AGC), "AGC")
+		apply(device.api.setGainMode(device.device, soapyRX, 0, settings.AGC), i18n.Source("text.20e0541e8b46"))
+	}
+	if settings.Antenna != "" && settings.Antenna != current.Antenna {
+		if err := device.setAntenna(settings.Antenna); err != nil {
+			failures = append(failures, err)
+		}
 	}
 	return errors.Join(failures...)
 }
@@ -376,7 +587,7 @@ func (api *soapyAPI) check(code int32, operation string) error {
 	if code == 0 {
 		return nil
 	}
-	return fmt.Errorf("%s: %s (%s)", operation, api.errorText(code), api.deviceError())
+	return fmt.Errorf(i18n.Source("text.b6e27aa7ff9c"), operation, api.errorText(code), api.deviceError())
 }
 
 func (api *soapyAPI) errorText(code int32) string { return cString(api.errToString(code)) }

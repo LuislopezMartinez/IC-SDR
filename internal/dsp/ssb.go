@@ -1,5 +1,7 @@
 package dsp
 
+import "go-zero/internal/i18n"
+
 import "math"
 
 // SSBDemodulator isolates and translates either sideband into mono audio.
@@ -26,7 +28,7 @@ func (demod *SSBDemodulator) Process(iq []float32, mode string, frequencyOffsetH
 
 func (demod *SSBDemodulator) ProcessPBT(iq []float32, mode string, frequencyOffsetHz float64, lowCutHz, highCutHz int) []float32 {
 	demod.output = demod.output[:0]
-	if mode != "USB" && mode != "LSB" {
+	if mode != i18n.Source("text.61f0acff1735") && mode != i18n.Source("text.6323db4948ad") {
 		return demod.output
 	}
 	if !demod.configured || mode != demod.configuredMode || math.Abs(frequencyOffsetHz-demod.configuredOffset) >= 1 {
@@ -38,7 +40,7 @@ func (demod *SSBDemodulator) ProcessPBT(iq []float32, mode string, frequencyOffs
 	lowHz := float32(lowCutHz)
 	highHz := float32(highCutHz)
 	sidebandSign := float32(1)
-	if mode == "LSB" {
+	if mode == i18n.Source("text.6323db4948ad") {
 		sidebandSign = -1
 	}
 	audioCenter := (lowHz + highHz) * .5

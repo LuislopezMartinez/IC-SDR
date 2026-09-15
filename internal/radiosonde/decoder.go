@@ -2,6 +2,8 @@
 package radiosonde
 
 import (
+	"go-zero/internal/i18n"
+
 	"bufio"
 	"encoding/binary"
 	"encoding/json"
@@ -17,10 +19,12 @@ import (
 	"time"
 )
 
-var Families = []string{"RS41", "DFM", "M10/M20"}
-var Modes = []string{"AUTO", "RS41", "DFM", "M10/M20"}
+var Families = []string{"RS41", i18n.Source("text.5945e8331ba7"), "M10/M20"}
+var Modes = []string{i18n.Source("text.6ea56fae9eac"), "RS41", i18n.Source("text.5945e8331ba7"), "M10/M20"}
 
-func ValidFamily(f string) bool { return f == "AUTO" || f == "RS41" || f == "DFM" || f == "M10/M20" }
+func ValidFamily(f string) bool {
+	return f == i18n.Source("text.6ea56fae9eac") || f == "RS41" || f == i18n.Source("text.5945e8331ba7") || f == "M10/M20"
+}
 
 type Event struct {
 	Received          time.Time       `json:"received"`
@@ -90,25 +94,25 @@ type Decoder struct {
 }
 
 func New(rate float64, directory string) *Decoder {
-	return &Decoder{rate: rate, directory: directory, status: Status{State: "DETENIDO"}}
+	return &Decoder{rate: rate, directory: directory, status: Status{State: i18n.Source("text.7dc7253c376a")}}
 }
 
 // Arguments lets RS perform channel translation, filtering and decimation itself.
 // The input is interleaved little-endian float32 I,Q, independent of listening audio.
 func Arguments(family string, rate float64, frequency, center int64) (string, []string, error) {
-	names := map[string]string{"RS41": "rs41mod", "DFM": "dfm09mod", "M10/M20": "m10m20mod"}
+	names := map[string]string{"RS41": "rs41mod", i18n.Source("text.5945e8331ba7"): "dfm09mod", "M10/M20": "m10m20mod"}
 	name, ok := names[family]
 	if !ok {
-		return "", nil, fmt.Errorf("familia no válida: %s", family)
+		return "", nil, fmt.Errorf(i18n.Source("text.1af366a09eac"), family)
 	}
 	if math.IsNaN(rate) || math.IsInf(rate, 0) || rate < 96000 || rate > 20e6 || frequency <= 0 || math.Abs(float64(frequency-center))+24000 >= rate/2 {
-		return "", nil, fmt.Errorf("canal fuera de la captura IQ o tasa no válida")
+		return "", nil, fmt.Errorf("%s", i18n.Source("text.a47da8c7c95d"))
 	}
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
 	args := []string{"--json", "--ptu"}
-	if family == "DFM" || family == "RS41" {
+	if family == i18n.Source("text.5945e8331ba7") || family == "RS41" {
 		args = append(args, "--auto")
 	}
 	args = append(args, "--IQ", strconv.FormatFloat(float64(frequency-center)/rate, 'f', 9, 64), "--lpIQ", "--jsn_cfq", strconv.FormatInt(center, 10), "-", strconv.Itoa(int(math.Round(rate))), "32")
@@ -121,7 +125,7 @@ func (d *Decoder) Configure(enabled bool, family string, frequency, center int64
 	d.mu.RLock()
 	same := d.status.Running && d.status.Family == family && d.status.FrequencyHz == frequency && d.center == center
 	d.mu.RUnlock()
-	if same && family == "AUTO" {
+	if same && family == i18n.Source("text.6ea56fae9eac") {
 		same = d.Snapshot().Running
 	}
 	if enabled && same {
@@ -131,7 +135,7 @@ func (d *Decoder) Configure(enabled bool, family string, frequency, center int64
 	if !enabled {
 		return
 	}
-	if family == "AUTO" {
+	if family == i18n.Source("text.6ea56fae9eac") {
 		d.startAutomatic(frequency, center)
 		return
 	}
@@ -178,7 +182,7 @@ func (d *Decoder) Configure(enabled bool, family string, frequency, center int64
 	d.mu.Lock()
 	d.current = s
 	d.status.Running = true
-	d.status.State = "ESPERANDO TRAMAS"
+	d.status.State = i18n.Source("text.237eec4f6068")
 	d.mu.Unlock()
 	go func() {
 		defer close(s.writerDone)
@@ -217,7 +221,7 @@ func (d *Decoder) Configure(enabled bool, family string, frequency, center int64
 				d.events = d.events[:2000]
 			}
 			if d.current == s {
-				d.status.State = "RECIBIENDO"
+				d.status.State = i18n.Source("text.3ec713946605")
 			}
 			d.mu.Unlock()
 			if d.eventSink != nil {
@@ -243,10 +247,10 @@ func (d *Decoder) Configure(enabled bool, family string, frequency, center int64
 		d.mu.Lock()
 		if d.current == s {
 			d.status.Running = false
-			d.status.State = "FINALIZADO"
+			d.status.State = i18n.Source("text.97efa5c193f3")
 			if err != nil {
 				d.status.Error = err.Error()
-				d.status.State = "ERROR"
+				d.status.State = i18n.Source("text.d98ee0e5f939")
 			}
 		}
 		d.mu.Unlock()
@@ -257,7 +261,7 @@ func (d *Decoder) Configure(enabled bool, family string, frequency, center int64
 func (d *Decoder) fail(err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.status.State = "ERROR"
+	d.status.State = i18n.Source("text.d98ee0e5f939")
 	d.status.Error = err.Error()
 }
 func (d *Decoder) stop() {
@@ -269,7 +273,7 @@ func (d *Decoder) stop() {
 	d.detections = nil
 	d.current = nil
 	d.status.Running = false
-	d.status.State = "DETENIDO"
+	d.status.State = i18n.Source("text.7dc7253c376a")
 	d.mu.Unlock()
 	for _, child := range children {
 		child.Close()
@@ -325,12 +329,12 @@ func (d *Decoder) Snapshot() Status {
 			}
 		}
 		s.Error = strings.Join(errors, "; ")
-		s.State = "AUTO · BUSCANDO"
+		s.State = i18n.Source("text.f8bd2e05139c")
 		if len(detected) > 0 {
-			s.State = "AUTO · " + strings.Join(detected, " + ")
+			s.State = i18n.Source("text.331556128e97") + strings.Join(detected, " + ")
 		}
 		if !s.Running {
-			s.State = "ERROR"
+			s.State = i18n.Source("text.d98ee0e5f939")
 		}
 	}
 	return s

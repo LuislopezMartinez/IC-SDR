@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"image/color"
 	"math"
 
@@ -30,12 +32,12 @@ func defaultWaterfallSettings() WaterfallSettings {
 		ColorOffsetDB:  -30,
 		MinimumDBm:     -60,
 		MaximumDBm:     0,
-		Palette:        "GRAY",
+		Palette:        i18n.Source("text.2d71cca47c3a"),
 	}
 }
 
 func factoryWaterfallSettings() WaterfallSettings {
-	return WaterfallSettings{LinesPerSecond: 31, Contrast: 100, MinimumDBm: -80, MaximumDBm: -20, Palette: "BLUE"}
+	return WaterfallSettings{LinesPerSecond: 31, Contrast: 100, MinimumDBm: -80, MaximumDBm: -20, Palette: i18n.Source("text.24a866f4940f")}
 }
 
 type Waterfall struct {

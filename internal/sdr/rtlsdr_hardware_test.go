@@ -5,8 +5,9 @@ package sdr
 import (
 	"math"
 	"os"
-	"path/filepath"
 	"testing"
+
+	"go-zero/internal/resources"
 )
 
 // This test is opt-in because it needs exclusive access to a connected dongle.
@@ -14,10 +15,7 @@ func TestRTLSDRHardwareControls(t *testing.T) {
 	if os.Getenv("RTLSDR_HARDWARE_TEST") != "1" {
 		t.Skip("set RTLSDR_HARDWARE_TEST=1 with an RTL-SDR connected")
 	}
-	root, err := filepath.Abs(filepath.Join("..", "..", "ORIGEN", "IC_SDR", "runtime", "windows-x64"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	root := resources.Path("runtime", "windows-x64")
 	device, err := openSoapy(Config{RuntimeRoot: root, Driver: "rtlsdr", FrequencyHz: 100_000_000, SampleRate: 2_048_000, FFTSize: 4096})
 	if err != nil {
 		t.Fatal(err)

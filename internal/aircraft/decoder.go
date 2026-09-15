@@ -1,6 +1,8 @@
 package aircraft
 
 import (
+	"go-zero/internal/i18n"
+
 	"bufio"
 	"encoding/hex"
 	"errors"
@@ -47,11 +49,15 @@ type Status struct {
 type cprFrame struct {
 	lat, lon int
 	odd      bool
+	surface  bool
 	at       time.Time
 }
 type trackState struct {
-	aircraft  Aircraft
-	even, odd *cprFrame
+	aircraft       Aircraft
+	even, odd      *cprFrame
+	refLat, refLon float64
+	hasRef         bool
+	lastPos        time.Time
 }
 
 type Decoder struct {
@@ -67,10 +73,12 @@ type Decoder struct {
 	dropped                        uint64
 	messages                       int
 	tracks                         map[string]*trackState
+	receiverLat, receiverLon       float64
+	hasReceiverRef                 bool
 }
 
 func New(rate float64, exe1090, exe978, exeUATText string) *Decoder {
-	return &Decoder{rate: rate, exe1090: exe1090, exe978: exe978, exeUATText: exeUATText, state: "DETENIDO", tracks: make(map[string]*trackState)}
+	return &Decoder{rate: rate, exe1090: exe1090, exe978: exe978, exeUATText: exeUATText, state: i18n.Source("text.7dc7253c376a"), tracks: make(map[string]*trackState)}
 }
 func (d *Decoder) Configure(enabled bool, mode string) {
 	d.lifecycle.Lock()
@@ -90,7 +98,7 @@ func (d *Decoder) Configure(enabled bool, mode string) {
 	var err error
 	if mode == Mode1090 {
 		if d.exe1090 == "" {
-			d.fail(errors.New("dump1090 no configurado"))
+			d.fail(errors.New(i18n.Source("text.f9bf3c841215")))
 			return
 		}
 		d.cmd = exec.Command(d.exe1090, "--ifile", "-", "--raw")
@@ -104,7 +112,7 @@ func (d *Decoder) Configure(enabled bool, mode string) {
 		}
 	} else {
 		if d.exe978 == "" || d.exeUATText == "" {
-			d.fail(errors.New("dump978 no configurado"))
+			d.fail(errors.New(i18n.Source("text.0556568946e7")))
 			return
 		}
 		d.cmd = exec.Command(d.exe978)
@@ -135,7 +143,7 @@ func (d *Decoder) Configure(enabled bool, mode string) {
 		return
 	}
 	d.running = true
-	d.state = "ESPERANDO AERONAVES"
+	d.state = i18n.Source("text.2aebf9050e32")
 	d.lastError = ""
 	go d.writeIQ()
 	if mode == Mode1090 {
@@ -154,10 +162,10 @@ func (d *Decoder) Configure(enabled bool, mode string) {
 		if d.cmd == cmd {
 			d.running = false
 			if err != nil {
-				d.state = "ERROR"
+				d.state = i18n.Source("text.d98ee0e5f939")
 				d.lastError = err.Error()
 			} else {
-				d.state = "FINALIZADO"
+				d.state = i18n.Source("text.97efa5c193f3")
 			}
 		}
 		d.mu.Unlock()
@@ -168,8 +176,21 @@ func (d *Decoder) fail(err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.running = false
-	d.state = "ERROR"
+	d.state = i18n.Source("text.d98ee0e5f939")
 	d.lastError = err.Error()
+}
+func (d *Decoder) SetReference(lat, lon float64, ok bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.hasReceiverRef = ok && validLatLon(lat, lon)
+	d.receiverLat, d.receiverLon = lat, lon
+	if d.hasReceiverRef {
+		for _, t := range d.tracks {
+			if t.aircraft.Latitude == nil {
+				t.refLat, t.refLon, t.hasRef = lat, lon, true
+			}
+		}
+	}
 }
 func (d *Decoder) stopProcess() {
 	d.mu.Lock()
@@ -182,7 +203,7 @@ func (d *Decoder) stopProcess() {
 	d.mu.Unlock()
 	if !active {
 		d.mu.Lock()
-		d.state = "DETENIDO"
+		d.state = i18n.Source("text.7dc7253c376a")
 		d.mu.Unlock()
 		return
 	}
@@ -196,7 +217,7 @@ func (d *Decoder) stopProcess() {
 	}
 	<-done
 	d.mu.Lock()
-	d.state = "DETENIDO"
+	d.state = i18n.Source("text.7dc7253c376a")
 	d.mu.Unlock()
 }
 func (d *Decoder) Close() { d.lifecycle.Lock(); defer d.lifecycle.Unlock(); d.stopProcess() }
@@ -283,10 +304,13 @@ func (d *Decoder) stateFor(icao, source string) *trackState {
 		t = &trackState{aircraft: Aircraft{ICAO: icao, Source: source}}
 		d.tracks[icao] = t
 	}
+	if !t.hasRef && d.hasReceiverRef {
+		t.refLat, t.refLon, t.hasRef = d.receiverLat, d.receiverLon, true
+	}
 	return t
 }
 func (d *Decoder) decode1090(raw []byte) {
-	if len(raw) != 14 || raw[0]>>3 != 17 {
+	if len(raw) != 14 || (raw[0]>>3 != 17 && raw[0]>>3 != 18) {
 		return
 	}
 	icao := strings.ToUpper(hex.EncodeToString(raw[1:4]))
@@ -294,14 +318,14 @@ func (d *Decoder) decode1090(raw []byte) {
 	now := time.Now().UTC()
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	t := d.stateFor(icao, "1090 ADS-B")
+	t := d.stateFor(icao, i18n.Source("text.edcb1e8e7a35"))
 	a := &t.aircraft
 	a.Messages++
 	a.LastSeen = now
 	d.messages++
 	switch {
 	case tc >= 1 && tc <= 4:
-		chars := "#ABCDEFGHIJKLMNOPQRSTUVWXYZ#####_###############0123456789######"
+		chars := i18n.Source("text.6b260c55f1c6")
 		var b strings.Builder
 		for i := 0; i < 8; i++ {
 			c := int(bit(raw, 40+i*6, 6))
@@ -310,25 +334,20 @@ func (d *Decoder) decode1090(raw []byte) {
 			}
 		}
 		a.Callsign = strings.TrimSpace(strings.ReplaceAll(b.String(), "_", " "))
-		a.Category = fmt.Sprintf("TC %d", tc)
-	case tc >= 9 && tc <= 18:
-		q := bit(raw, 47, 1)
-		altCode := int(bit(raw, 40, 12))
-		if q == 1 {
-			alt := ((altCode & 0xFE0) >> 1) | (altCode & 0xF)
-			alt = alt*25 - 1000
-			a.Altitude = &alt
+		a.Category = fmt.Sprintf(i18n.Source("text.eb47c4ee8a58"), tc)
+	case tc >= 5 && tc <= 8:
+		t.applyCPR(a, int(bit(raw, 54, 17)), int(bit(raw, 71, 17)), bit(raw, 53, 1) == 1, true, now)
+	case (tc >= 9 && tc <= 18) || (tc >= 20 && tc <= 22):
+		if tc <= 18 {
+			q := bit(raw, 47, 1)
+			altCode := int(bit(raw, 40, 12))
+			if q == 1 {
+				alt := ((altCode & 0xFE0) >> 1) | (altCode & 0xF)
+				alt = alt*25 - 1000
+				a.Altitude = &alt
+			}
 		}
-		f := &cprFrame{lat: int(bit(raw, 54, 17)), lon: int(bit(raw, 71, 17)), odd: bit(raw, 53, 1) == 1, at: now}
-		if f.odd {
-			t.odd = f
-		} else {
-			t.even = f
-		}
-		if lat, lon, ok := decodeCPR(t.even, t.odd); ok {
-			a.Latitude = &lat
-			a.Longitude = &lon
-		}
+		t.applyCPR(a, int(bit(raw, 54, 17)), int(bit(raw, 71, 17)), bit(raw, 53, 1) == 1, false, now)
 	case tc == 19:
 		sub := int(bit(raw, 37, 3))
 		if sub == 1 || sub == 2 {
@@ -355,64 +374,69 @@ func (d *Decoder) decode1090(raw []byte) {
 		}
 	}
 }
-func mod(a, b int) int {
-	r := a % b
-	if r < 0 {
-		r += b
+func (t *trackState) applyCPR(a *Aircraft, cprlat, cprlon int, odd, surface bool, now time.Time) {
+	f := &cprFrame{lat: cprlat, lon: cprlon, odd: odd, surface: surface, at: now}
+	if odd {
+		t.odd = f
+	} else {
+		t.even = f
 	}
-	return r
-}
-func cprNL(lat float64) int {
-	lat = math.Abs(lat)
-	if lat >= 87 {
-		return 1
+	maxAge := 10.0
+	if surface {
+		maxAge = 25
+		// Surface CPR spans only 90 degrees; resolve it near the receiver first.
+		if t.hasRef {
+			if lat, lon, ok := decodeCPRRelative(t.refLat, t.refLon, cprlat, cprlon, odd, true); ok {
+				t.setPosition(a, lat, lon, true, now)
+				return
+			}
+		}
 	}
-	nz := 15.
-	a := 1 - math.Cos(math.Pi/(2*nz))
-	b := math.Cos(lat * math.Pi / 180)
-	return int(math.Floor(2 * math.Pi / math.Acos(1-a/(b*b))))
-}
-func decodeCPR(e, o *cprFrame) (float64, float64, bool) {
-	if e == nil || o == nil || math.Abs(e.at.Sub(o.at).Seconds()) > 10 {
-		return 0, 0, false
+	if t.even != nil && t.odd != nil && t.even.surface == t.odd.surface && t.even.surface == surface && math.Abs(t.even.at.Sub(t.odd.at).Seconds()) <= maxAge {
+		if !surface {
+			if lat, lon, ok := decodeCPRAirborne(t.even.lat, t.even.lon, t.odd.lat, t.odd.lon, odd); ok {
+				t.setPosition(a, lat, lon, false, now)
+				return
+			}
+		} else if t.hasRef {
+			if lat, lon, ok := decodeCPRSurface(t.even.lat, t.even.lon, t.odd.lat, t.odd.lon, odd, t.refLon); ok {
+				if math.Abs(lat-t.refLat) < 45 {
+					t.setPosition(a, lat, lon, true, now)
+					return
+				}
+			}
+		}
 	}
-	ye, yo := float64(e.lat)/131072, float64(o.lat)/131072
-	j := int(math.Floor(59*ye - 60*yo + .5))
-	rlatE := 6 * (float64(mod(j, 60)) + ye)
-	rlatO := 360. / 59 * (float64(mod(j, 59)) + yo)
-	if rlatE >= 270 {
-		rlatE -= 360
+	if t.hasRef {
+		if lat, lon, ok := decodeCPRRelative(t.refLat, t.refLon, cprlat, cprlon, odd, surface); ok {
+			t.setPosition(a, lat, lon, surface, now)
+		}
 	}
-	if rlatO >= 270 {
-		rlatO -= 360
-	}
-	if cprNL(rlatE) != cprNL(rlatO) {
-		return 0, 0, false
-	}
-	latest := e
-	if o.at.After(e.at) {
-		latest = o
-	}
-	lat := rlatE
-	if latest.odd {
-		lat = rlatO
-	}
-	nl := cprNL(lat)
-	ni := nl
-	if latest.odd {
-		ni = nl - 1
-	}
-	if ni < 1 {
-		ni = 1
-	}
-	m := int(math.Floor(float64(e.lon)*(float64(nl)-1)/131072 - float64(o.lon)*float64(nl)/131072 + .5))
-	lon := 360. / float64(ni) * (float64(mod(m, ni)) + float64(latest.lon)/131072)
-	if lon > 180 {
-		lon -= 360
-	}
-	return lat, lon, true
 }
 
+func (t *trackState) setPosition(a *Aircraft, lat, lon float64, onGround bool, now time.Time) {
+	if !validLatLon(lat, lon) {
+		return
+	}
+	if a.Latitude != nil && a.Longitude != nil {
+		dist := earthDistanceKm(*a.Latitude, *a.Longitude, lat, lon)
+		dt := now.Sub(t.lastPos).Hours()
+		if t.lastPos.IsZero() || dt < 1.0/3600 {
+			dt = 1.0 / 3600
+		}
+		speed, slop := 2800.0, 8.0
+		if a.OnGround || onGround {
+			speed, slop = 370, 2
+		}
+		if dist > slop+speed*dt {
+			return
+		}
+	}
+	a.Latitude, a.Longitude = &lat, &lon
+	a.OnGround = onGround
+	t.refLat, t.refLon, t.hasRef = lat, lon, true
+	t.lastPos = now
+}
 func (d *Decoder) read978(r io.Reader) {
 	s := bufio.NewScanner(r)
 	fields := map[string]string{}
@@ -423,7 +447,7 @@ func (d *Decoder) read978(r io.Reader) {
 		}
 		d.mu.Lock()
 		defer d.mu.Unlock()
-		t := d.stateFor(icao, "978 UAT")
+		t := d.stateFor(icao, i18n.Source("text.5779a6ff204c"))
 		a := &t.aircraft
 		a.Messages++
 		a.LastSeen = time.Now().UTC()
@@ -444,14 +468,14 @@ func (d *Decoder) read978(r io.Reader) {
 		if v, ok := parseFloatField(fields["Track"]); ok {
 			a.Track = &v
 		}
-		if v, ok := parseFloatField(fields["Vertical rate"]); ok {
+		if v, ok := parseFloatField(fields[i18n.Source("text.d5961702ee0c")]); ok {
 			a.VerticalRate = &v
 		}
 		fields = map[string]string{}
 	}
 	for s.Scan() {
 		line := strings.TrimSpace(s.Text())
-		if line == "HDR:" {
+		if line == i18n.Source("text.fb855b42414e") {
 			flush()
 			continue
 		}

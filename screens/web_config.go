@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
@@ -44,7 +46,7 @@ func loadWebConfig(path string) webConfig {
 
 func saveWebConfig(path string, config webConfig) error {
 	if config.Port < 1024 || config.Port > 65535 {
-		return errors.New("el puerto debe estar entre 1024 y 65535")
+		return errors.New(i18n.Source("text.eabf428e6e93"))
 	}
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
@@ -83,7 +85,7 @@ func saveWebConfig(path string, config webConfig) error {
 
 func (config *webConfig) setPassword(password string) error {
 	if len([]rune(password)) < 12 {
-		return errors.New("la contraseña debe tener al menos 12 caracteres")
+		return errors.New(i18n.Source("text.514ababdf164"))
 	}
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
@@ -100,7 +102,7 @@ func (config *webConfig) setPassword(password string) error {
 
 func (config *webConfig) setControlPassword(password string) error {
 	if len([]rune(password)) < 12 {
-		return errors.New("la contraseña de control debe tener al menos 12 caracteres")
+		return errors.New(i18n.Source("text.e35da3befc73"))
 	}
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
@@ -118,11 +120,11 @@ func (config *webConfig) setControlPassword(password string) error {
 func (config webConfig) controlCredential() ([]byte, []byte, error) {
 	salt, err := hex.DecodeString(config.ControlPasswordSalt)
 	if err != nil {
-		return nil, nil, errors.New("contraseña de control no configurada")
+		return nil, nil, errors.New(i18n.Source("text.ad4630151469"))
 	}
 	hash, err := hex.DecodeString(config.ControlPasswordHash)
 	if err != nil || len(salt) != 16 || len(hash) != 32 {
-		return nil, nil, errors.New("contraseña de control no configurada")
+		return nil, nil, errors.New(i18n.Source("text.ad4630151469"))
 	}
 	return salt, hash, nil
 }
@@ -130,11 +132,11 @@ func (config webConfig) controlCredential() ([]byte, []byte, error) {
 func (config webConfig) credential() ([]byte, []byte, error) {
 	salt, err := hex.DecodeString(config.PasswordSalt)
 	if err != nil {
-		return nil, nil, errors.New("contraseña web no configurada")
+		return nil, nil, errors.New(i18n.Source("text.69680b9bf1d5"))
 	}
 	hash, err := hex.DecodeString(config.PasswordHash)
 	if err != nil || len(salt) != 16 || len(hash) != 32 {
-		return nil, nil, errors.New("contraseña web no configurada")
+		return nil, nil, errors.New(i18n.Source("text.69680b9bf1d5"))
 	}
 	return salt, hash, nil
 }
@@ -168,7 +170,7 @@ func (screen *MainScreen) applyWebConfig(config webConfig) error {
 	}
 	screen.webConfig = config
 	if err := screen.StartConfiguredWebServer(); err != nil {
-		return fmt.Errorf("configuración guardada; servidor no iniciado: %w", err)
+		return fmt.Errorf(i18n.Source("text.d80f041277c6"), err)
 	}
 	return nil
 }

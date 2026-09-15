@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -215,7 +217,7 @@ func (r *AudioRecorder) DeleteFile(path string) error {
 	}
 	relative, err := filepath.Rel(r.directory, absolute)
 	if err != nil || relative == ".." || len(relative) >= 3 && relative[:3] == ".."+string(os.PathSeparator) {
-		return fmt.Errorf("recording is outside recorder directory")
+		return fmt.Errorf("%s", i18n.Source("text.7f169d39fbfd"))
 	}
 	if err = os.Remove(absolute); err != nil {
 		return err
@@ -293,7 +295,7 @@ func (r *AudioRecorder) writeLoop() {
 					completedPath = fallback
 				}
 				r.mu.Lock()
-				r.lastError = "No se pudo crear el MP3; se conservó el WAV: " + err.Error()
+				r.lastError = i18n.Source("text.792fa167e3c4") + err.Error()
 				r.mu.Unlock()
 			} else {
 				completedPath = finalPath

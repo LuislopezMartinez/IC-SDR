@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -25,6 +27,7 @@ type RTL433Panel struct {
 	presets        []*simpleui.Button
 	widthButtons   []*simpleui.Button
 	selected       int
+	pressedRow     int
 	targetHz       int64
 	bandwidthHz    int
 	snapshotPath   string
@@ -39,7 +42,7 @@ type RTL433Panel struct {
 }
 
 func NewRTL433Panel(screen *MainScreen) *RTL433Panel {
-	p := &RTL433Panel{screen: screen, targetHz: 433_920_000, bandwidthHz: 500_000, selected: -1, snapshotPath: resources.WritablePath("cache", "rtl433-captures.json")}
+	p := &RTL433Panel{screen: screen, targetHz: 433_920_000, bandwidthHz: 500_000, selected: -1, pressedRow: -1, snapshotPath: resources.WritablePath("cache", "rtl433-captures.json")}
 	definitions := []struct {
 		label string
 		hz    int64
@@ -51,19 +54,19 @@ func NewRTL433Panel(screen *MainScreen) *RTL433Panel {
 		p.presets = append(p.presets, button)
 		p.controls = append(p.controls, button)
 	}
-	table := p.button("rtl433Table", 680, 660, 190, 42, "ABRIR TABLA", colors.blue)
+	table := p.button("rtl433Table", 680, 660, 190, 42, i18n.Source("text.a5b86d91647b"), colors.blue)
 	table.OnClick(p.openViewer)
-	export := p.button("rtl433Export", 885, 660, 180, 42, "EXPORTAR CSV", colors.green)
+	export := p.button("rtl433Export", 885, 660, 180, 42, i18n.Source("text.a15e7868d6b8"), colors.green)
 	export.SetColors(colors.green, colors.border, colors.background)
 	export.OnClick(p.exportCSV)
-	clearButton := p.button("rtl433Clear", 1080, 660, 130, 42, "LIMPIAR", colors.panelAlt)
+	clearButton := p.button("rtl433Clear", 1080, 660, 130, 42, i18n.Source("text.2aded7edd569"), colors.panelAlt)
 	clearButton.SetColors(actionClearFill, colors.red, colors.text)
 	clearButton.OnClick(func() {
 		if screen.receiver != nil {
 			screen.receiver.ClearRTL433Events()
 		}
 		p.selected = -1
-		p.feedback = "CAPTURAS LIMPIADAS"
+		p.feedback = i18n.Source("text.3845e3443d3c")
 		p.feedbackUntil = time.Now().Add(2 * time.Second)
 	})
 	p.controls = append(p.controls, table, export, clearButton)
@@ -146,7 +149,7 @@ func (p *RTL433Panel) selectBandwidth(width int) {
 	p.bandwidthHz = width
 	p.screen.rtl433BandwidthHz = width
 	p.selectFrequency(p.targetHz)
-	p.feedback = "ANCHO " + rtl433WidthLabel(width)
+	p.feedback = i18n.Source("text.6a15345420ac") + rtl433WidthLabel(width)
 	p.feedbackUntil = time.Now().Add(2 * time.Second)
 }
 func (p *RTL433Panel) styleWidths() {
@@ -162,15 +165,15 @@ func (p *RTL433Panel) styleWidths() {
 func rtl433WidthLabel(width int) string {
 	switch width {
 	case 250_000:
-		return "250 kHz · ALTA SENSIBILIDAD"
+		return i18n.Source("text.8b2aabf1dd4a")
 	case 500_000:
-		return "500 kHz · EQUILIBRADO"
+		return i18n.Source("text.dcad5c981797")
 	case 1_000_000:
-		return "1 MHz · BANDA ANCHA"
+		return i18n.Source("text.7a2ef656896a")
 	case 2_000_000:
-		return "2 MHz · MÁXIMA COBERTURA"
+		return i18n.Source("text.6f129691b06f")
 	}
-	return fmt.Sprintf("%d kHz", width/1000)
+	return fmt.Sprintf(i18n.Source("text.a47fa5c4f793"), width/1000)
 }
 func (p *RTL433Panel) stylePresets() {
 	freqs := []int64{315_000_000, 433_920_000, 868_300_000, 915_000_000}
@@ -195,20 +198,20 @@ func (p *RTL433Panel) Tick() {
 		default:
 		}
 	}
-	if p.screen.activeTool == "RTL_433" && p.pending {
+	if p.screen.activeTool == i18n.Source("text.8be70e7cb2c4") && p.pending {
 		if rl.IsKeyPressed(rl.KeyEscape) {
 			p.pending = false
-			p.feedback = "DESPLAZAMIENTO CANCELADO"
+			p.feedback = i18n.Source("text.c140aaefea05")
 			p.feedbackUntil = time.Now().Add(2 * time.Second)
 		} else if rl.GetTime() >= p.pendingApplyAt {
 			p.selectFrequency(p.pendingHz)
-			p.feedback = "NUEVO RANGO APLICADO"
+			p.feedback = i18n.Source("text.76ed2f1acd7c")
 			p.feedbackUntil = time.Now().Add(2 * time.Second)
 		}
 	}
 	// Frequency digits and the header wheel are shared controls. Convert any
 	// change they make into the same delayed preview used by the FFT gestures.
-	if p.screen.activeTool == "RTL_433" && !remoteLocked && !p.pending && p.screen.frequencyHz != p.targetHz {
+	if p.screen.activeTool == i18n.Source("text.8be70e7cb2c4") && !remoteLocked && !p.pending && p.screen.frequencyHz != p.targetHz {
 		candidate := p.screen.frequencyHz
 		p.screen.frequencyHz, p.screen.centerFrequencyHz, p.screen.centerMode = p.targetHz, p.targetHz, true
 		if p.screen.vfoModeSwitch != nil {
@@ -220,26 +223,37 @@ func (p *RTL433Panel) Tick() {
 		}
 		p.previewFrequency(candidate)
 	}
-	if p.screen.activeTool != "RTL_433" || p.screen.viewMode != 1 || p.screen.overlayOpen() {
+	if p.screen.activeTool != i18n.Source("text.8be70e7cb2c4") || p.screen.viewMode != 1 || p.screen.overlayOpen() {
+		p.pressedRow = -1
 		return
 	}
 	events := p.events()
 	p.writeSnapshot(events)
 	if controlCopyPressed() && p.selected >= 0 && p.selected < len(events) {
 		rl.SetClipboardText(rtl433ClipboardText(events[p.selected]))
-		p.feedback = "TRAMA COMPLETA COPIADA"
+		p.feedback = i18n.Source("text.9ea4cb382871")
 		p.feedbackUntil = time.Now().Add(2 * time.Second)
 	}
+	if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
+		p.pressedRow = rtl433TableRowAt(simpleui.MousePosition(), len(events))
+	}
 	if rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
-		mouse := simpleui.MousePosition()
-		for row := range min(len(events), 4) {
-			bounds := rl.Rectangle{X: 355, Y: 728 + float32(row)*22, Width: 845, Height: 21}
-			if rl.CheckCollisionPointRec(mouse, bounds) {
-				p.selected = row
-				simpleui.PlayActivationFeedback()
-			}
+		if row := rtl433TableRowAt(simpleui.MousePosition(), len(events)); row >= 0 && row == p.pressedRow {
+			p.selected = row
+			simpleui.PlayActivationFeedback()
+		}
+		p.pressedRow = -1
+	}
+}
+
+func rtl433TableRowAt(mouse rl.Vector2, count int) int {
+	for row := range min(count, 4) {
+		bounds := rl.Rectangle{X: 357, Y: 744 + float32(row)*14, Width: 840, Height: 14}
+		if mouse.X >= bounds.X && mouse.X < bounds.X+bounds.Width && mouse.Y >= bounds.Y && mouse.Y < bounds.Y+bounds.Height {
+			return row
 		}
 	}
+	return -1
 }
 
 func controlCopyPressed() bool {
@@ -267,7 +281,7 @@ func (p *RTL433Panel) previewFrequency(hz int64) {
 // HandleSpectrumInput owns tuning gestures while RTL_433 is selected so the
 // decoder is restarted only after the user pauses, not for every wheel notch.
 func (p *RTL433Panel) HandleSpectrumInput(mouse rl.Vector2, x, y, w, h float32) bool {
-	if p.screen.activeTool != "RTL_433" || p.screen.overlayOpen() || mouse.X < x || mouse.X > x+w || mouse.Y < y || mouse.Y > y+h {
+	if p.screen.activeTool != i18n.Source("text.8be70e7cb2c4") || p.screen.overlayOpen() || mouse.X < x || mouse.X > x+w || mouse.Y < y || mouse.Y > y+h {
 		return false
 	}
 	if steps := wheelSteps(rl.GetMouseWheelMove()); steps != 0 {
@@ -292,22 +306,22 @@ func (p *RTL433Panel) events() []rtl433.Event {
 }
 
 func (p *RTL433Panel) DrawPanel() {
-	status := rtl433.Status{State: "SDR NO DISPONIBLE"}
+	status := rtl433.Status{State: i18n.Source("text.dc2c64e7e3ca")}
 	if p.screen.receiver != nil {
 		status = p.screen.receiver.RTL433Status()
 	}
-	simpleui.DrawTextStyled("RTL_433 · DISPOSITIVOS ISM", 40, 638, 16, simpleui.FontSemiBold, rl.Color{R: 175, G: 145, B: 245, A: 255})
-	simpleui.DrawTextStyled(fmt.Sprintf("%s · %d kS/s · EVENTOS %d · DROP %d", status.State, status.SampleRate/1000, status.Events, status.Dropped), 700, 638, 12, simpleui.FontSemiBold, colors.muted)
-	simpleui.DrawTextStyled(fmt.Sprintf("OBJETIVO %.3f MHz", float64(p.targetHz)/1e6), 1230, 666, 14, simpleui.FontSemiBold, colors.orange)
+	simpleui.DrawTextStyled(i18n.Source("text.89c1cd146225"), 40, 638, 16, simpleui.FontSemiBold, rl.Color{R: 175, G: 145, B: 245, A: 255})
+	simpleui.DrawTextStyled(fmt.Sprintf(i18n.Source("text.e86583683f38"), status.State, status.SampleRate/1000, status.Events, status.Dropped), 700, 638, 12, simpleui.FontSemiBold, colors.muted)
+	simpleui.DrawTextStyled(fmt.Sprintf(i18n.Source("text.d3fc384b301d"), float64(p.targetHz)/1e6), 1230, 666, 14, simpleui.FontSemiBold, colors.orange)
 	drawPanel(40, 716, 300, 90)
-	simpleui.DrawTextStyled("ANCHO IQ DEL DECODER", 52, 719, 12, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(i18n.Source("text.f1a93e4d1c90"), 52, 719, 12, simpleui.FontSemiBold, colors.cyan)
 	simpleui.DrawText(rtl433WidthLabel(p.bandwidthHz), 52, 781, 12, colors.text)
 	events := p.events()
 	drawPanel(350, 716, 855, 90)
 	headers := []struct {
 		x float32
 		t string
-	}{{365, "HORA"}, {440, "MODELO / TIPO"}, {650, "ID"}, {745, "CANAL"}, {825, "FREC."}, {920, "RSSI/SNR"}, {1025, "DATOS"}}
+	}{{365, i18n.Source("text.e7563517a678")}, {440, i18n.Source("text.5a5b4d7c0e3c")}, {650, "ID"}, {745, i18n.Source("text.4e89bb9f11b4")}, {825, i18n.Source("text.dba4b22edbcd")}, {920, i18n.Source("text.99bf85f9fe95")}, {1025, i18n.Source("text.50d30c134163")}}
 	for _, h := range headers {
 		simpleui.DrawTextStyled(h.t, h.x, 721, 12, simpleui.FontSemiBold, colors.cyan)
 	}
@@ -326,7 +340,7 @@ func (p *RTL433Panel) DrawPanel() {
 	}
 	if p.selected >= 0 && p.selected < len(events) {
 		drawPanel(1220, 716, 330, 90)
-		simpleui.DrawTextStyled("JSON COMPLETO", 1232, 722, 12, simpleui.FontSemiBold, colors.cyan)
+		simpleui.DrawTextStyled(i18n.Source("text.ac84910ab13b"), 1232, 722, 12, simpleui.FontSemiBold, colors.cyan)
 		drawWrapped(short(events[p.selected].Raw, 150), 1232, 746, 305, 12, colors.text)
 	}
 	if time.Now().Before(p.feedbackUntil) {
@@ -337,7 +351,7 @@ func (p *RTL433Panel) DrawPanel() {
 // DrawSpectrumOverlay makes the exact RF interval submitted to rtl_433
 // visible in every FFT layout while this decoder owns the active tool.
 func (p *RTL433Panel) DrawSpectrumOverlay(x, y, w, h float32) {
-	if p.screen.activeTool != "RTL_433" || p.bandwidthHz <= 0 {
+	if p.screen.activeTool != i18n.Source("text.8be70e7cb2c4") || p.bandwidthHz <= 0 {
 		return
 	}
 	accent := rl.Color{R: 175, G: 125, B: 245, A: 255}
@@ -365,7 +379,7 @@ func (p *RTL433Panel) DrawSpectrumOverlay(x, y, w, h float32) {
 	if right <= left {
 		return
 	}
-	label := "RTL_433 · " + rtl433WidthLabel(p.bandwidthHz)
+	label := i18n.Source("text.bb34b5fe6a67") + rtl433WidthLabel(p.bandwidthHz)
 	tw := simpleui.MeasureTextStyled(label, 12, simpleui.FontSemiBold).X
 	// The decoder owns the first overlay lane. The tuning plate uses the lane
 	// immediately below it, so both labels remain readable even when centered
@@ -384,7 +398,7 @@ func (p *RTL433Panel) DrawSpectrumOverlay(x, y, w, h float32) {
 		}
 		rangeLow := float64(p.pendingHz-int64(p.bandwidthHz)/2) / 1e6
 		rangeHigh := float64(p.pendingHz+int64(p.bandwidthHz)/2) / 1e6
-		preview := fmt.Sprintf("NUEVO RANGO %.3f–%.3f MHz · %s%s · ESC CANCELA", rangeLow, rangeHigh, sign, formatStep(delta))
+		preview := fmt.Sprintf(i18n.Source("text.6ecc2602ed52"), rangeLow, rangeHigh, sign, formatStep(delta))
 		pw := simpleui.MeasureTextStyled(preview, 12, simpleui.FontSemiBold).X
 		px := min(max(cursorX-pw/2, x+8), x+w-pw-8)
 		// A third lane is reserved for the delayed retune preview.
@@ -393,6 +407,7 @@ func (p *RTL433Panel) DrawSpectrumOverlay(x, y, w, h float32) {
 	}
 }
 func short(s string, n int) string {
+	s = i18n.Display(s)
 	if len([]rune(s)) <= n {
 		return s
 	}
@@ -400,6 +415,7 @@ func short(s string, n int) string {
 	return string(r[:n-1]) + "…"
 }
 func drawWrapped(s string, x, y, w float32, size int32, color rl.Color) {
+	s = i18n.Display(s)
 	words := strings.Fields(s)
 	line := ""
 	for _, word := range words {
@@ -435,34 +451,34 @@ func (p *RTL433Panel) openViewer() {
 	p.writeSnapshot(p.events())
 	if p.viewer != nil && p.viewer.Process != nil {
 		focusRTL433Viewer(p.viewer.Process.Pid)
-		p.feedback = "TABLA YA ABIERTA"
+		p.feedback = i18n.Source("text.df8ed2b55cc5")
 		p.feedbackUntil = time.Now().Add(2 * time.Second)
 		return
 	}
 	executable, err := os.Executable()
 	if err != nil {
-		p.feedback = "ERROR AL ABRIR TABLA"
+		p.feedback = i18n.Source("text.21deef5a70b9")
 		return
 	}
 	cmd := exec.Command(executable, "--rtl433-viewer", p.snapshotPath)
 	cmd.SysProcAttr = rtl433ViewerProcessAttributes()
 	if err = cmd.Start(); err != nil {
-		p.feedback = "ERROR AL ABRIR TABLA"
+		p.feedback = i18n.Source("text.21deef5a70b9")
 	} else {
 		p.viewer = cmd
 		p.viewerDone = make(chan struct{})
 		done := p.viewerDone
 		go func() { _ = cmd.Wait(); close(done) }()
-		p.feedback = "TABLA ABIERTA"
+		p.feedback = i18n.Source("text.f2d48920d980")
 	}
 	p.feedbackUntil = time.Now().Add(2 * time.Second)
 }
 func (p *RTL433Panel) exportCSV() {
 	path, err := ExportRTL433CSV(p.events())
 	if err != nil {
-		p.feedback = "ERROR AL EXPORTAR"
+		p.feedback = i18n.Source("text.f020b3a6a762")
 	} else {
-		p.feedback = "CSV: " + filepath.Base(path)
+		p.feedback = i18n.Source("text.50e2734c33d7") + filepath.Base(path)
 	}
 	p.feedbackUntil = time.Now().Add(3 * time.Second)
 }
@@ -481,7 +497,7 @@ func ExportRTL433CSV(events []rtl433.Event) (string, error) {
 	_, _ = file.Write([]byte{0xEF, 0xBB, 0xBF})
 	writer := csv.NewWriter(file)
 	writer.Comma = ';'
-	_ = writer.Write([]string{"fecha", "hora", "frecuencia_MHz", "protocolo", "modelo", "tipo", "id", "canal", "modulacion", "RSSI", "SNR", "resumen", "JSON"})
+	_ = writer.Write([]string{"fecha", "hora", "frecuencia_MHz", "protocolo", "modelo", "tipo", "id", "canal", "modulacion", i18n.Source("text.3f3c5df3dada"), i18n.Source("text.33663bd5c0bf"), "resumen", i18n.Source("text.db1a21a0bc2e")})
 	for _, e := range events {
 		_ = writer.Write([]string{e.Received.Format("2006-01-02"), e.Received.Format("15:04:05"), fmt.Sprintf("%.6f", e.FreqMHz), strconv.Itoa(e.Protocol), e.Model, e.Type, e.ID, e.Channel, e.Mod, fmt.Sprintf("%.3f", e.RSSI), fmt.Sprintf("%.3f", e.SNR), e.Summary, e.Raw})
 	}

@@ -23,6 +23,30 @@ func TestAircraftMapProjectionRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAircraftMapWaitsForPositionBeforeFitting(t *testing.T) {
+	v := aircraftMap{centerLat: 40.2, centerLon: -3.7, lonSpan: 14, list: []aircraft.Aircraft{{ICAO: "ABC123"}}}
+	if v.fit() {
+		t.Fatal("fit succeeded without a position")
+	}
+	lat, lon := 51.5, -0.1
+	v.list = append(v.list, aircraft.Aircraft{ICAO: "DEF456", Latitude: &lat, Longitude: &lon})
+	if !v.fit() || abs64(v.centerLat-lat) > .001 || abs64(v.centerLon-lon) > .001 {
+		t.Fatalf("map did not fit later position: %+v", v)
+	}
+}
+
+func TestAircraftSelectionSurvivesListReorder(t *testing.T) {
+	lat, lon := 40.48, -3.57
+	v := aircraftMap{centerLat: lat, centerLon: lon, lonSpan: 2, selected: -1, list: []aircraft.Aircraft{{ICAO: "A", Latitude: &lat, Longitude: &lon}}}
+	b := rl.Rectangle{X: 20, Y: 78, Width: 970, Height: 690}
+	v.selectAt(v.project(lat, lon, b), b)
+	v.list = append([]aircraft.Aircraft{{ICAO: "B"}}, v.list...)
+	v.restoreSelection()
+	if v.selected != 1 || v.list[v.selected].ICAO != "A" {
+		t.Fatalf("selection lost after reorder: %+v", v)
+	}
+}
+
 func TestAircraftMapLabelClickAndZoomFromDetailsPanel(t *testing.T) {
 	lat, lon := 40.48, -3.57
 	v := aircraftMap{centerLat: lat, centerLon: lon, lonSpan: 2, selected: -1, list: []aircraft.Aircraft{{ICAO: "3451A2", Latitude: &lat, Longitude: &lon}}}
@@ -57,7 +81,7 @@ func TestAircraftMapRender(t *testing.T) {
 	data, _ := json.Marshal(list)
 	path := filepath.Join(dir, "aircraft.json")
 	_ = os.WriteFile(path, data, 0644)
-	v := &aircraftMap{path: path, centerLat: 40.4, centerLon: -3.7, lonSpan: 4, selected: 0, tracks: map[string][]geoPoint{"3451A2": {{40.9, -2.8}, {40.7, -3.1}, {40.48, -3.57}}}}
+	v := &aircraftMap{path: path, centerLat: 40.4, centerLon: -3.7, lonSpan: 4, selected: 0, selectedICAO: "3451A2", tracks: map[string][]geoPoint{"3451A2": {{40.9, -2.8}, {40.7, -3.1}, {40.48, -3.57}}}}
 	canvas := rl.LoadRenderTexture(1360, 800)
 	defer rl.UnloadRenderTexture(canvas)
 	rl.BeginTextureMode(canvas)

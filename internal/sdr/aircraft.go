@@ -1,5 +1,7 @@
 package sdr
 
+import "go-zero/internal/i18n"
+
 import "go-zero/internal/aircraft"
 
 func (r *Receiver) ConfigureAircraft(enabled bool, mode string) {
@@ -7,9 +9,14 @@ func (r *Receiver) ConfigureAircraft(enabled bool, mode string) {
 		r.aircraft.Configure(enabled, mode)
 	}
 }
+func (r *Receiver) SetAircraftReference(lat, lon float64, ok bool) {
+	if r.aircraft != nil {
+		r.aircraft.SetReference(lat, lon, ok)
+	}
+}
 func (r *Receiver) AircraftStatus() aircraft.Status {
 	if r.aircraft == nil {
-		return aircraft.Status{State: "NO DISPONIBLE"}
+		return aircraft.Status{State: i18n.Source("text.67b9e10a1cbd")}
 	}
 	return r.aircraft.Snapshot()
 }

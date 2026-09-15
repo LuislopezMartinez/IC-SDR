@@ -5,13 +5,15 @@ import "math"
 // frontend mirrors the original IC-SDR rtl_433 transport: it translates the
 // selected channel, applies a 127-tap Blackman low-pass and decimates to CU8.
 type frontend struct {
-	inputRate, offsetHz  float64
-	phase                float64
-	taps                 []float64
-	iRing, qRing         []float64
-	position, decimation int
-	outputRate           int
-	gain                 float64
+	inputRate, offsetHz         float64
+	phase                       float64
+	taps                        []float64
+	iRing, qRing                []float64
+	position, decimation        int
+	outputRate                  int
+	gain                        float64
+	oscI, oscQ, stepI, stepQ    float64
+	oscSamples, decimationPhase int
 }
 
 func newFrontend(inputRate, offsetHz float64, bandwidthHz int) *frontend {
@@ -25,8 +27,9 @@ func newFrontend(inputRate, offsetHz float64, bandwidthHz int) *frontend {
 			tapCount = 95
 		}
 		f.taps = lowPassTaps(tapCount, .45/float64(decimation))
-		f.iRing, f.qRing = make([]float64, len(f.taps)), make([]float64, len(f.taps))
+		f.iRing, f.qRing = make([]float64, len(f.taps)*2), make([]float64, len(f.taps)*2)
 	}
+	f.reset(offsetHz)
 	return f
 }
 
@@ -63,6 +66,8 @@ func lowPassTaps(count int, cutoff float64) []float64 {
 
 func (f *frontend) reset(offsetHz float64) {
 	f.offsetHz, f.phase, f.position, f.gain = offsetHz, 0, 0, 1
+	f.oscI, f.oscQ, f.oscSamples, f.decimationPhase = 1, 0, 0, 0
+	f.stepQ, f.stepI = math.Sincos(2 * math.Pi * offsetHz / f.inputRate)
 	clear(f.iRing)
 	clear(f.qRing)
 }
@@ -77,13 +82,14 @@ func (f *frontend) process(iq []float32) []byte {
 	for n := 0; n+1 < len(iq); n += 2 {
 		i, q := float64(iq[n]), float64(iq[n+1])
 		if step != 0 {
-			c, s := math.Cos(f.phase), math.Sin(f.phase)
+			c, s := f.oscI, f.oscQ
 			i, q = i*c+q*s, q*c-i*s
-			f.phase += step
-			if f.phase > math.Pi {
-				f.phase -= 2 * math.Pi
-			} else if f.phase < -math.Pi {
-				f.phase += 2 * math.Pi
+			f.oscI, f.oscQ = c*f.stepI-s*f.stepQ, s*f.stepI+c*f.stepQ
+			f.oscSamples++
+			if f.oscSamples == 4096 {
+				scale := 1 / math.Hypot(f.oscI, f.oscQ)
+				f.oscI, f.oscQ = f.oscI*scale, f.oscQ*scale
+				f.oscSamples = 0
 			}
 		}
 		if f.decimation == 1 {
@@ -92,19 +98,22 @@ func (f *frontend) process(iq []float32) []byte {
 			continue
 		}
 		f.iRing[f.position], f.qRing[f.position] = i, q
-		f.position = (f.position + 1) % len(f.taps)
-		if (n/2)%f.decimation != f.decimation-1 {
+		f.iRing[f.position+len(f.taps)], f.qRing[f.position+len(f.taps)] = i, q
+		f.position++
+		if f.position == len(f.taps) {
+			f.position = 0
+		}
+		f.decimationPhase++
+		if f.decimationPhase < f.decimation {
 			continue
 		}
-		fi, fq, index := float64(0), float64(0), f.position
+		f.decimationPhase = 0
+		fi, fq := float64(0), float64(0)
+		iWindow := f.iRing[f.position : f.position+len(f.taps)]
+		qWindow := f.qRing[f.position : f.position+len(f.taps)]
 		for k, tap := range f.taps {
-			index--
-			if index < 0 {
-				index = len(f.taps) - 1
-			}
-			fi += f.iRing[index] * tap
-			fq += f.qRing[index] * tap
-			_ = k
+			fi += iWindow[k] * tap
+			fq += qWindow[k] * tap
 		}
 		peak = max(peak, math.Abs(fi), math.Abs(fq))
 		out = append(out, cu8(fi*f.gain), cu8(fq*f.gain))

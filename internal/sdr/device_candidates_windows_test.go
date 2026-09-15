@@ -22,7 +22,21 @@ func TestDeviceCandidatesFallBackFromSpecificRSPToRTLSDR(t *testing.T) {
 
 func TestDeviceCandidatesDoNotRequireRSPForRTLSDR(t *testing.T) {
 	candidates := deviceCandidates(Config{Driver: "rtlsdr"})
-	if len(candidates) != 1 || candidates[0].Driver != "rtlsdr" {
+	if len(candidates) != 2 || candidates[0].Driver != "rtlsdr" || candidates[1].Driver != "sdrplay" {
 		t.Fatalf("unexpected RTL-SDR candidates: %+v", candidates)
+	}
+}
+
+func TestSavedRTLSerialFallsBackToOtherConnectedRadio(t *testing.T) {
+	candidates := deviceCandidates(Config{Driver: "rtlsdr", Serial: "missing"})
+	if len(candidates) != 3 || candidates[0].Serial != "missing" || candidates[1].Driver != "rtlsdr" || candidates[1].Serial != "" || candidates[2].Driver != "sdrplay" {
+		t.Fatalf("unexpected candidates: %+v", candidates)
+	}
+}
+
+func TestHackRFSerialDoesNotFallBackToAnotherHackRF(t *testing.T) {
+	candidates := deviceCandidates(Config{Driver: "hackrf", Serial: "missing"})
+	if len(candidates) != 2 || candidates[0].Driver != "hackrf" || candidates[0].Serial != "missing" || candidates[1].Driver != "rtlsdr" {
+		t.Fatalf("unexpected HackRF candidates: %+v", candidates)
 	}
 }

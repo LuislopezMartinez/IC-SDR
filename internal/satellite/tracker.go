@@ -1,6 +1,8 @@
 package satellite
 
 import (
+	"go-zero/internal/i18n"
+
 	"bufio"
 	"context"
 	"encoding/json"
@@ -75,25 +77,29 @@ type Snapshot struct {
 }
 
 type Tracker struct {
-	mu         sync.RWMutex
-	satellites []Satellite
-	station    Station
-	selected   int
-	source     string
-	cachePath  string
+	mu              sync.RWMutex
+	satellites      []Satellite
+	transmitters    map[int][]Signal
+	station         Station
+	selected        int
+	source          string
+	cachePath       string
+	transmitterPath string
 }
 
 var groups = []struct{ Name, Query string }{
-	{"Estaciones espaciales", "stations"}, {"Radioaficionados", "amateur"},
-	{"CubeSats", "cubesat"}, {"Meteorológicos", "weather"},
-	{"GPS", "gps-ops"}, {"Galileo", "galileo"}, {"GLONASS", "glo-ops"}, {"BeiDou", "beidou"},
-	{"Iridium NEXT", "iridium-NEXT"}, {"Orbcomm", "orbcomm"}, {"Starlink", "starlink"},
+	{i18n.Source("text.12ed7b219e4d"), "stations"}, {"Radioaficionados", "amateur"},
+	{"CubeSats", "cubesat"}, {i18n.Source("text.a5e950a77b49"), "weather"},
+	{i18n.Source("text.176c7866b945"), "gps-ops"}, {"Galileo", "galileo"}, {i18n.Source("text.af67a0dd11d7"), "glo-ops"}, {"BeiDou", "beidou"},
+	{i18n.Source("text.71cbe8f23926"), "iridium-NEXT"}, {"Orbcomm", "orbcomm"}, {"Starlink", "starlink"},
 }
 
 func NewTracker(cachePath string) *Tracker {
-	t := &Tracker{cachePath: cachePath, station: Station{Name: "Madrid", Latitude: 40.4168, Longitude: -3.7038, AltitudeMeters: 657}, selected: 25544, source: "catálogo integrado"}
+	t := &Tracker{cachePath: cachePath, transmitterPath: filepath.Join(filepath.Dir(cachePath), "satellites-transmitters.json"), transmitters: defaultTransmitters(), station: Station{Name: "Madrid", Latitude: 40.4168, Longitude: -3.7038, AltitudeMeters: 657}, selected: 25544, source: i18n.Source("text.d4e1869f239d")}
+	_ = t.loadTransmitters()
 	t.satellites = fallbackCatalog()
 	_ = t.loadCache()
+	t.attachSignalsLocked()
 	return t
 }
 
@@ -118,7 +124,7 @@ func (t *Tracker) Refresh(ctx context.Context) error {
 	var failures int
 	remoteCount := 0
 	for _, g := range groups {
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://celestrak.org/NORAD/elements/gp.php?GROUP="+g.Query+"&FORMAT=TLE", nil)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://celestrak.org/NORAD/elements/gp.php?GROUP="+g.Query+i18n.Source("text.2fbfc49b3541"), nil)
 		resp, err := client.Do(req)
 		if err != nil {
 			failures++
@@ -138,11 +144,14 @@ func (t *Tracker) Refresh(ctx context.Context) error {
 		}
 	}
 	if remoteCount == 0 {
-		return fmt.Errorf("no se pudo actualizar el catálogo orbital (%d grupos fallaron)", failures)
+		return fmt.Errorf(i18n.Source("text.aa0ed679347c"), failures)
+	}
+	var remoteTransmitters map[int][]Signal
+	if table, err := fetchSatnogsTransmitters(ctx, nil); err == nil {
+		remoteTransmitters = table
 	}
 	list := make([]Satellite, 0, len(seen))
 	for _, sat := range seen {
-		applyKnownSignals(&sat)
 		list = append(list, sat)
 	}
 	sort.Slice(list, func(i, j int) bool {
@@ -152,10 +161,29 @@ func (t *Tracker) Refresh(ctx context.Context) error {
 		return priority(list[i].Group) < priority(list[j].Group)
 	})
 	t.mu.Lock()
+	if remoteTransmitters != nil {
+		t.transmitters = mergeTransmitterTables(defaultTransmitters(), remoteTransmitters)
+	}
 	t.satellites = list
-	t.source = "CelesTrak · " + time.Now().Format("02 Jan 15:04")
+	t.attachSignalsLocked()
+	t.source = i18n.Source("text.24d9c1aa922f") + time.Now().Format(i18n.Source("text.492d2649cc8c"))
 	t.mu.Unlock()
+	if remoteTransmitters != nil {
+		_ = t.saveTransmitters()
+	}
 	return t.saveCache()
+}
+
+func (t *Tracker) RefreshTransmitters(ctx context.Context) error {
+	table, err := fetchSatnogsTransmitters(ctx, nil)
+	if err != nil {
+		return err
+	}
+	t.mu.Lock()
+	t.transmitters = mergeTransmitterTables(defaultTransmitters(), table)
+	t.attachSignalsLocked()
+	t.mu.Unlock()
+	return t.saveTransmitters()
 }
 
 func priority(group string) int {
@@ -176,7 +204,7 @@ func (t *Tracker) Snapshot(at time.Time) Snapshot {
 	for _, sat := range sats {
 		lat, lon, alt := position(sat.Elements, at)
 		az, el, rng := lookAngles(station, lat, lon, alt)
-		sig := Signal{Name: "Señal catalogada", Mode: "--"}
+		sig := Signal{Name: i18n.Source("text.9c4ca15347d4"), Mode: "--"}
 		if len(sat.Signals) > 0 {
 			sig = sat.Signals[0]
 		}
@@ -313,14 +341,14 @@ func parseTLE(r interface{ Read([]byte) (int, error) }, group string) ([]Satelli
 		}
 	}
 	if len(out) == 0 {
-		return nil, errors.New("respuesta sin TLE")
+		return nil, errors.New(i18n.Source("text.d5423e521cd5"))
 	}
 	return out, nil
 }
 
 func makeSatellite(name, l1, l2, group string) (Satellite, error) {
 	if len(l1) < 32 || len(l2) < 63 {
-		return Satellite{}, errors.New("TLE incompleto")
+		return Satellite{}, errors.New(i18n.Source("text.93fec06ffdce"))
 	}
 	norad, _ := strconv.Atoi(strings.TrimSpace(l1[2:7]))
 	year, _ := strconv.Atoi(l1[18:20])
@@ -333,7 +361,7 @@ func makeSatellite(name, l1, l2, group string) (Satellite, error) {
 	epoch := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration((day - 1) * float64(24*time.Hour)))
 	f := strings.Fields(l2)
 	if len(f) < 8 {
-		return Satellite{}, errors.New("línea 2 inválida")
+		return Satellite{}, errors.New(i18n.Source("text.71532ab8ee7d"))
 	}
 	inc, _ := strconv.ParseFloat(f[2], 64)
 	raan, _ := strconv.ParseFloat(f[3], 64)
@@ -425,23 +453,18 @@ func (t *Tracker) loadCache() error {
 	}
 	var c cachedCatalog
 	if json.Unmarshal(data, &c) != nil || len(c.Satellites) == 0 {
-		return errors.New("cache inválida")
+		return errors.New(i18n.Source("text.0658bf1241e5"))
 	}
 	t.satellites = c.Satellites
-	t.source = "caché CelesTrak · " + c.Saved.Format("02 Jan 15:04")
+	t.source = i18n.Source("text.ce583e32f0db") + c.Saved.Format(i18n.Source("text.492d2649cc8c"))
 	return nil
 }
 
 func applyKnownSignals(s *Satellite) {
-	switch s.NORAD {
-	case 25544:
-		s.Signals = []Signal{{"Voz / SSTV", "FM", 145800000}, {"APRS", "AFSK", 145825000}}
-	case 43700:
-		s.Signals = []Signal{{"Baliza PSK", "BPSK", 10489750000}, {"Transpondedor NB", "SSB/CW", 10489500000}, {"Transpondedor WB", "DVB-S2", 10491000000}}
-	}
+	s.Signals = mergeSignals(knownSignals(s.NORAD), s.Signals)
 }
 func fallbackCatalog() []Satellite {
-	raw := [][4]string{{"ISS (ZARYA)", "Estaciones espaciales", "1 25544U 98067A   25250.50000000  .00012000  00000-0  22000-3 0  9991", "2 25544  51.6340 150.0000 0004000 100.0000 260.0000 15.50000000123456"}, {"QO-100 (ES'HAIL 2)", "Radioaficionados", "1 43700U 18090A   25250.50000000  .00000010  00000-0  00000-0 0  9991", "2 43700   0.0150  85.0000 0001800 270.0000  90.0000  1.00270000 25000"}}
+	raw := [][4]string{{i18n.Source("text.010ea231020e"), i18n.Source("text.12ed7b219e4d"), "1 25544U 98067A   25250.50000000  .00012000  00000-0  22000-3 0  9991", "2 25544  51.6340 150.0000 0004000 100.0000 260.0000 15.50000000123456"}, {i18n.Source("text.a8c60364a180"), "Radioaficionados", "1 43700U 18090A   25250.50000000  .00000010  00000-0  00000-0 0  9991", "2 43700   0.0150  85.0000 0001800 270.0000  90.0000  1.00270000 25000"}}
 	out := make([]Satellite, 0, len(raw))
 	for _, v := range raw {
 		sat, _ := makeSatellite(v[0], v[2], v[3], v[1])

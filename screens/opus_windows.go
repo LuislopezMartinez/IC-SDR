@@ -3,6 +3,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"errors"
 	"fmt"
 	"runtime"
@@ -29,7 +31,7 @@ func newOpusEncoder() (*opusEncoder, error) {
 	path := resources.Path("tools", "digital_voice", "runtime", "bin", "opus.dll")
 	library, err := syscall.LoadLibrary(path)
 	if err != nil {
-		return nil, fmt.Errorf("cargar opus.dll: %w", err)
+		return nil, fmt.Errorf(i18n.Source("text.a5e0685efb68"), err)
 	}
 	e := &opusEncoder{library: library}
 	defer func() {
@@ -45,16 +47,16 @@ func newOpusEncoder() (*opusEncoder, error) {
 	var code int32
 	e.state = e.create(48000, 1, opusApplicationAudio, &code)
 	if e.state == 0 || code != 0 {
-		err = fmt.Errorf("crear codificador Opus: %d", code)
+		err = fmt.Errorf(i18n.Source("text.3ef464e0300d"), code)
 		return nil, err
 	}
 	if result := e.ctlSet(e.state, 4002, 24000); result != 0 {
-		err = fmt.Errorf("configurar bitrate Opus: %d", result)
+		err = fmt.Errorf(i18n.Source("text.0e34d827f15d"), result)
 		return nil, err
 	}
 	var lookahead int32
 	if result := e.ctlGet(e.state, 4027, &lookahead); result != 0 || lookahead < 0 || lookahead > 65535 {
-		err = errors.New("no se pudo consultar el retardo Opus")
+		err = errors.New(i18n.Source("text.8026430998d9"))
 		return nil, err
 	}
 	e.preSkip = uint16(lookahead)
@@ -63,13 +65,13 @@ func newOpusEncoder() (*opusEncoder, error) {
 
 func (e *opusEncoder) Encode(samples []float32) ([]byte, error) {
 	if len(samples) != 960 {
-		return nil, errors.New("Opus requiere tramas de 20 ms")
+		return nil, errors.New(i18n.Source("text.b01da05c90b5"))
 	}
 	packet := make([]byte, 4000)
 	length := e.encode(e.state, &samples[0], 960, &packet[0], int32(len(packet)))
 	runtime.KeepAlive(samples)
 	if length < 0 {
-		return nil, fmt.Errorf("opus_encode_float: %d", length)
+		return nil, fmt.Errorf(i18n.Source("text.176dbe49878f"), length)
 	}
 	return packet[:length], nil
 }

@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"strconv"
 
@@ -25,7 +27,7 @@ func NewStepSelector(selected int64, onSelect func(int64)) *StepSelector {
 	return &StepSelector{
 		BaseElement: simpleui.NewBaseElement("stepSelectorOverlay", 0, 0, designWidth, designHeight),
 		selected:    selected, pressed: -1, onSelect: onSelect,
-		close: simpleui.NewButton("stepSelectorClose", 650, 445, 300, 50, "CERRAR", 17),
+		close: simpleui.NewButton("stepSelectorClose", 650, 445, 300, 50, i18n.Source("text.b908be5df2f1"), 17),
 	}
 }
 
@@ -75,7 +77,7 @@ func (selector *StepSelector) DrawOverlay() {
 	rl.DrawRectangleRounded(panel, .03, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(panel, .03, 8, 2, colors.blue)
 	rl.DrawRectangleRounded(rl.Rectangle{X: 430, Y: 170, Width: 10, Height: 360}, .5, 8, colors.blue)
-	drawCentered("SELECCIONAR STEP", rl.Rectangle{X: 470, Y: 195, Width: 660, Height: 44}, 25, colors.text)
+	drawCentered(i18n.Source("text.2c770106f952"), rl.Rectangle{X: 470, Y: 195, Width: 660, Height: 44}, 25, colors.text)
 	for index, step := range tuningStepsHz {
 		bounds := selector.stepBounds(index)
 		fill := colors.panelAlt
@@ -109,7 +111,7 @@ func (selector *StepSelector) stepAt(point rl.Vector2) int {
 
 func formatStep(hz int64) string {
 	if hz < 1_000 {
-		return fmt.Sprintf("%d Hz", hz)
+		return fmt.Sprintf(i18n.Source("text.3999a0ad05ce"), hz)
 	}
-	return strconv.FormatFloat(float64(hz)/1_000, 'f', -1, 64) + " kHz"
+	return strconv.FormatFloat(float64(hz)/1_000, 'f', -1, 64) + i18n.Source("text.acaf5a32d70a")
 }

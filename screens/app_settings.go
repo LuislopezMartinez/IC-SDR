@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -118,7 +120,7 @@ func loadAppSettings(path string, screen *MainScreen) {
 	if validScanResume(settings.ScanResume) {
 		screen.scanResume = settings.ScanResume
 	}
-	if settings.ScanPolicy == "CURRENT" || settings.ScanPolicy == "STRONGER" {
+	if settings.ScanPolicy == i18n.Source("text.e3cc57e193d6") || settings.ScanPolicy == i18n.Source("text.8cb51251cc49") {
 		screen.scanPolicy = settings.ScanPolicy
 	}
 	if settings.ScanDwellMs >= 1000 && settings.ScanDwellMs <= 10000 {
@@ -190,7 +192,7 @@ func loadAppSettings(path string, screen *MainScreen) {
 	if settings.DMRAutoCenter != nil {
 		screen.dmrAutoCenter = *settings.DMRAutoCenter
 	}
-	if settings.DMRAudioSlot == "AUTO" || settings.DMRAudioSlot == "TS1" || settings.DMRAudioSlot == "TS2" {
+	if settings.DMRAudioSlot == i18n.Source("text.6ea56fae9eac") || settings.DMRAudioSlot == "TS1" || settings.DMRAudioSlot == "TS2" {
 		screen.dmrAudioSlot = settings.DMRAudioSlot
 	}
 	if settings.RTL433FrequencyHz >= 1_000 {
@@ -205,10 +207,10 @@ func loadAppSettings(path string, screen *MainScreen) {
 	if settings.RTL433BandwidthHz == 250_000 || settings.RTL433BandwidthHz == 500_000 || settings.RTL433BandwidthHz == 1_000_000 || settings.RTL433BandwidthHz == 2_000_000 {
 		screen.rtl433BandwidthHz = settings.RTL433BandwidthHz
 	}
-	if settings.APRSView == "PAQUETES" || settings.APRSView == "ESTACIONES" || settings.APRSView == "MENSAJES" || settings.APRSView == "RADAR" || settings.APRSView == "RAW" {
+	if settings.APRSView == i18n.Source("text.74b8a8ece330") || settings.APRSView == i18n.Source("text.87073e5d8db0") || settings.APRSView == i18n.Source("text.fe86cd5572c0") || settings.APRSView == i18n.Source("text.ddadd1fb4789") || settings.APRSView == i18n.Source("text.ac0562bba4a5") {
 		screen.aprsView = settings.APRSView
 	}
-	if settings.SubtoneMode == "AUTO" || settings.SubtoneMode == "CTCSS" || settings.SubtoneMode == "DCS" || settings.SubtoneMode == "OFF" {
+	if settings.SubtoneMode == i18n.Source("text.6ea56fae9eac") || settings.SubtoneMode == i18n.Source("text.74108b47eb26") || settings.SubtoneMode == i18n.Source("text.fb09c8f399c7") || settings.SubtoneMode == i18n.Source("text.38cca6bea010") {
 		screen.subtoneMode = settings.SubtoneMode
 	}
 	if settings.SSTVAutomatic != nil {
@@ -300,7 +302,7 @@ func boolSetting(value bool) *bool          { return &value }
 func float32Setting(value float32) *float32 { return &value }
 
 func validFFTWindow(value string) bool {
-	for _, candidate := range []string{"HANN", "BLACKMAN-HARRIS", "FLAT TOP", "RECTANGULAR"} {
+	for _, candidate := range []string{i18n.Source("text.26701b540b4b"), i18n.Source("text.dbcf1c5bae70"), i18n.Source("text.18012268eaac"), i18n.Source("text.2ac455cdbd57")} {
 		if value == candidate {
 			return true
 		}
@@ -309,7 +311,7 @@ func validFFTWindow(value string) bool {
 }
 
 func validWaterfallPalette(value string) bool {
-	for _, candidate := range []string{"BLUE", "VIRIDIS", "FIRE", "GRAY"} {
+	for _, candidate := range []string{i18n.Source("text.24a866f4940f"), i18n.Source("text.ddacfc88b465"), i18n.Source("text.f27f17e3f063"), i18n.Source("text.2d71cca47c3a")} {
 		if value == candidate {
 			return true
 		}
@@ -318,7 +320,7 @@ func validWaterfallPalette(value string) bool {
 }
 
 func validSSTVMode(value string) bool {
-	for _, candidate := range []string{"M1", "M2", "S1", "S2", "SDX", "R36", "R72", "PD50", "PD90", "PD120", "PD160", "PD180", "PD240", "PD290"} {
+	for _, candidate := range []string{"M1", "M2", "S1", "S2", i18n.Source("text.542213f49bef"), "R36", "R72", "PD50", "PD90", "PD120", "PD160", "PD180", "PD240", "PD290"} {
 		if value == candidate {
 			return true
 		}
@@ -372,7 +374,7 @@ func validBand(category, name string) bool {
 }
 
 func validDemodMode(mode string) bool {
-	for _, candidate := range []string{"AM", "NFM", "WFM", "USB", "LSB", "CW", "DMR BETA", "ADS-B", "UAT", "TETRA"} {
+	for _, candidate := range []string{"AM", i18n.Source("text.0896d612d497"), i18n.Source("text.6b742bac3eb4"), i18n.Source("text.61f0acff1735"), i18n.Source("text.6323db4948ad"), "CW", i18n.Source("text.2604864ce4d3"), i18n.Source("text.7866f9f32e66"), i18n.Source("text.72c048cb5100"), i18n.Source("text.f69d86a86926")} {
 		if mode == candidate {
 			return true
 		}
@@ -401,7 +403,7 @@ func validTuningStep(step int64) bool {
 func validTool(tool string) bool {
 	// Accepted for migration from releases where these utilities occupied the
 	// lower workspace. CreateControls moves them into the fixed sidebar.
-	if tool == "SCAN" || tool == "MEMORIES" || tool == "RECORDER" {
+	if tool == i18n.Source("text.7a1580c49e45") || tool == i18n.Source("text.70b71a34c2de") || tool == i18n.Source("text.e71378482f31") {
 		return true
 	}
 	for _, item := range toolMenuItems {
@@ -413,5 +415,5 @@ func validTool(tool string) bool {
 }
 
 func validScanResume(value string) bool {
-	return value == "AUTO" || value == "DELAY" || value == "HOLD"
+	return value == i18n.Source("text.6ea56fae9eac") || value == i18n.Source("text.85135a165905") || value == i18n.Source("text.aacf94b7be62")
 }

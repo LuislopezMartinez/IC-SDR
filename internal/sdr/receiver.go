@@ -1,8 +1,11 @@
 package sdr
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,6 +31,7 @@ type Config struct {
 	Aircraft978Executable     string
 	AircraftUATTextExecutable string
 	RuntimeRoot               string
+	PreferredDevicePath       string
 	Driver                    string
 	Serial                    string
 	FrequencyHz               int64
@@ -68,7 +72,8 @@ type Stats struct {
 type HardwareSettings struct {
 	Available, AGC, BiasT, RFNotch, DABNotch, IQCorrection bool
 	DigitalAGC, OffsetTuning, IQSwap                       bool
-	Device, Driver                                         string
+	Device, Driver, Serial, Antenna                        string
+	Antennas                                               []string
 	RFGain, IFGain, PPM                                    float32
 	AGCSetpoint, DirectSampling                            int
 }
@@ -92,13 +97,17 @@ type Receiver struct {
 	tetra      *tetra.Decoder
 	subtone    *dsp.SubtoneDetector
 
-	stop         chan struct{}
-	done         chan struct{}
-	tuneDone     chan struct{}
-	running      atomic.Bool
-	averagingMs  atomic.Int64
-	deemphasisUs atomic.Int64
-	closeOnce    sync.Once
+	stop           chan struct{}
+	done           chan struct{}
+	tuneDone       chan struct{}
+	running        atomic.Bool
+	averagingMs    atomic.Int64
+	deemphasisUs   atomic.Int64
+	closeOnce      sync.Once
+	startMu        sync.Mutex
+	closed         atomic.Bool
+	devices        []DeviceOption
+	selectedDevice DeviceOption
 
 	mu                                 sync.RWMutex
 	spectrum                           []float32
@@ -138,17 +147,18 @@ func NewReceiver(config Config) *Receiver {
 		config.CalibrationDB = 23
 	}
 	receiver := &Receiver{
-		config: config,
-		fft:    dsp.NewFFT(config.FFTSize),
-		am:     dsp.NewAMDemodulator(config.SampleRate, 48_000),
-		nfm:    dsp.NewNFMDemodulator(config.SampleRate, 48_000),
-		wfm:    dsp.NewNFMDemodulator(config.SampleRate, 48_000),
-		ssb:    dsp.NewSSBDemodulator(config.SampleRate, 48_000),
-		stop:   make(chan struct{}), done: make(chan struct{}), tuneDone: make(chan struct{}),
+		config:         config,
+		selectedDevice: DeviceOption{Driver: config.Driver, Serial: config.Serial},
+		fft:            dsp.NewFFT(config.FFTSize),
+		am:             dsp.NewAMDemodulator(config.SampleRate, 48_000),
+		nfm:            dsp.NewNFMDemodulator(config.SampleRate, 48_000),
+		wfm:            dsp.NewNFMDemodulator(config.SampleRate, 48_000),
+		ssb:            dsp.NewSSBDemodulator(config.SampleRate, 48_000),
+		stop:           make(chan struct{}), done: make(chan struct{}), tuneDone: make(chan struct{}),
 		tune:                make(chan int64, 1),
 		settings:            make(chan HardwareSettings, 1),
 		spectrum:            make([]float32, config.FFTSize),
-		stats:               Stats{Status: "SDR desconectado"},
+		stats:               Stats{Status: i18n.Source("text.b22e84b281cb")},
 		tunedHz:             config.FrequencyHz,
 		demodBandwidthHz:    9_000,
 		pbtLowHz:            100,
@@ -180,22 +190,41 @@ func NewReceiver(config Config) *Receiver {
 }
 
 func (receiver *Receiver) Start() error {
-	receiver.trace("SDR: buscando candidatos de dispositivo")
-	device, err := openSoapy(receiver.config)
+	receiver.startMu.Lock()
+	defer receiver.startMu.Unlock()
+	if receiver.closed.Load() {
+		return fmt.Errorf("%s", i18n.Source("text.7c243d044a07"))
+	}
+	if receiver.running.Load() {
+		return nil
+	}
+	return receiver.startLocked(false)
+}
+
+func (receiver *Receiver) startLocked(exact bool) error {
+	receiver.trace(i18n.Source("text.c165705317ba"))
+	open := openSoapy
+	if exact {
+		open = openSoapyExact
+	}
+	device, err := open(receiver.config)
 	if err != nil {
 		receiver.setError(err)
 		return err
 	}
 	receiver.device = device
-	receiver.trace("SDR: dispositivo abierto · hardware=%s · driver=%s", device.hardware, device.driver)
-	receiver.trace("SDR: leyendo controles físicos")
+	receiver.trace(i18n.Source("text.e9f48b0d4041"), device.hardware, device.driver)
+	receiver.trace(i18n.Source("text.b17e1c720bed"))
 	hardware := device.hardwareSettings()
-	if receiver.config.InitialHardware != nil {
-		receiver.trace("SDR: aplicando ajustes iniciales")
+	if receiver.config.InitialHardware != nil && device.driver == "sdrplay" {
+		receiver.trace(i18n.Source("text.2dc457ddc945"))
 		initial := *receiver.config.InitialHardware
 		initial.Available = true
 		initial.Device = hardware.Device
 		initial.Driver = hardware.Driver
+		initial.Serial = hardware.Serial
+		initial.Antenna = hardware.Antenna
+		initial.Antennas = hardware.Antennas
 		if err := device.applyHardwareSettings(initial); err != nil {
 			device.close()
 			receiver.device = nil
@@ -204,19 +233,115 @@ func (receiver *Receiver) Start() error {
 		}
 		hardware = device.hardwareSettings()
 	}
-	receiver.trace("SDR: ajustes confirmados · sampleRate=%.0f", device.sampleRate)
+	receiver.trace(i18n.Source("text.55fe651c6d4a"), device.sampleRate)
 	receiver.mu.Lock()
 	receiver.stats.Device = device.hardware
 	receiver.stats.SampleRate = device.sampleRate
 	receiver.stats.SpectrumCenterHz = receiver.config.FrequencyHz
-	receiver.stats.Status = "IQ esperando primeras muestras"
+	receiver.stats.Status = i18n.Source("text.80a390cd4870")
 	receiver.hardware = hardware
+	receiver.selectedDevice = DeviceOption{Driver: device.driver, Serial: device.serial, Label: device.hardware}
+	receiver.devices = mergeDeviceOptions(receiver.devices, []DeviceOption{{Driver: device.driver, Serial: device.serial, Label: device.hardware}})
 	receiver.mu.Unlock()
 	receiver.running.Store(true)
 	go receiver.run()
 	go receiver.runTuner()
-	receiver.trace("SDR: hilos de captura y sintonía iniciados")
+	receiver.trace(i18n.Source("text.a1ee52206a7d"))
 	return nil
+}
+
+func (receiver *Receiver) SetPreferredDevice(driver, serial string) {
+	receiver.startMu.Lock()
+	defer receiver.startMu.Unlock()
+	if strings.TrimSpace(driver) != "" {
+		receiver.config.Driver = driver
+	}
+	receiver.config.Serial = serial
+	receiver.mu.Lock()
+	receiver.selectedDevice = DeviceOption{Driver: receiver.config.Driver, Serial: serial}
+	receiver.mu.Unlock()
+}
+
+func (receiver *Receiver) SelectedDevice() DeviceOption {
+	receiver.mu.RLock()
+	defer receiver.mu.RUnlock()
+	return receiver.selectedDevice
+}
+
+func (receiver *Receiver) SelectDevice(driver, serial string) error {
+	receiver.startMu.Lock()
+	defer receiver.startMu.Unlock()
+	if receiver.closed.Load() {
+		return fmt.Errorf("%s", i18n.Source("text.7c243d044a07"))
+	}
+	if driver != "sdrplay" && driver != "rtlsdr" && driver != "hackrf" {
+		return fmt.Errorf(i18n.Source("text.a73cd0edc1ab"), driver)
+	}
+	if receiver.running.Load() && receiver.device != nil && receiver.device.driver == driver && receiver.device.serial == serial {
+		return nil
+	}
+	previous := receiver.config
+	receiver.stopCaptureLocked()
+	receiver.config.Driver, receiver.config.Serial = driver, serial
+	receiver.config.FrequencyHz = receiver.centerHz.Load()
+	if err := receiver.startLocked(true); err != nil {
+		receiver.config = previous
+		receiver.config.FrequencyHz = receiver.centerHz.Load()
+		if restoreErr := receiver.startLocked(false); restoreErr != nil {
+			failure := fmt.Errorf(i18n.Source("text.afbe88ea41d7"), driver, err, restoreErr)
+			receiver.setError(failure)
+			return failure
+		}
+		failure := fmt.Errorf(i18n.Source("text.959d8ee676e4"), driver, err)
+		receiver.setError(failure)
+		return failure
+	}
+	if receiver.config.PreferredDevicePath != "" {
+		_ = SavePreferredDevice(receiver.config.PreferredDevicePath, DeviceOption{Driver: driver, Serial: serial})
+	}
+	return nil
+}
+
+func (receiver *Receiver) ListDevices() []DeviceOption {
+	receiver.startMu.Lock()
+	config := receiver.config
+	receiver.startMu.Unlock()
+	list, err := listSoapyDevices(config)
+	receiver.mu.Lock()
+	defer receiver.mu.Unlock()
+	if err == nil {
+		receiver.devices = list
+		if receiver.hardware.Available {
+			receiver.devices = mergeDeviceOptions(receiver.devices, []DeviceOption{receiver.selectedDevice})
+		}
+	}
+	return append([]DeviceOption(nil), receiver.devices...)
+}
+
+func (receiver *Receiver) CachedDevices() []DeviceOption {
+	receiver.mu.RLock()
+	defer receiver.mu.RUnlock()
+	return append([]DeviceOption(nil), receiver.devices...)
+}
+
+func (receiver *Receiver) stopCaptureLocked() {
+	if receiver.running.Swap(false) {
+		close(receiver.stop)
+		<-receiver.done
+		<-receiver.tuneDone
+		receiver.stop = make(chan struct{})
+		receiver.done = make(chan struct{})
+		receiver.tuneDone = make(chan struct{})
+	}
+	if receiver.device != nil {
+		receiver.device.close()
+		receiver.device = nil
+	}
+	receiver.mu.Lock()
+	receiver.hardware.Available = false
+	receiver.stats.Device = ""
+	receiver.stats.Status = i18n.Source("text.b22e84b281cb")
+	receiver.mu.Unlock()
 }
 
 func (receiver *Receiver) trace(format string, args ...any) {
@@ -226,7 +351,10 @@ func (receiver *Receiver) trace(format string, args ...any) {
 }
 
 func (receiver *Receiver) Close() {
+	receiver.closed.Store(true)
 	receiver.closeOnce.Do(func() {
+		receiver.startMu.Lock()
+		defer receiver.startMu.Unlock()
 		if receiver.dmr != nil {
 			receiver.dmr.Stop()
 		}
@@ -254,14 +382,7 @@ func (receiver *Receiver) Close() {
 		if receiver.tetra != nil {
 			receiver.tetra.Close()
 		}
-		if receiver.running.Swap(false) {
-			close(receiver.stop)
-			<-receiver.done
-			<-receiver.tuneDone
-			receiver.device.close()
-		} else if receiver.device != nil {
-			receiver.device.close()
-		}
+		receiver.stopCaptureLocked()
 	})
 }
 
@@ -313,7 +434,7 @@ func (receiver *Receiver) SetSubtoneMode(mode string) {
 }
 func (receiver *Receiver) SubtoneStatus() dsp.SubtoneStatus {
 	if receiver.subtone == nil {
-		return dsp.SubtoneStatus{Mode: "OFF"}
+		return dsp.SubtoneStatus{Mode: i18n.Source("text.38cca6bea010")}
 	}
 	return receiver.subtone.Snapshot()
 }
@@ -326,15 +447,15 @@ func (receiver *Receiver) SetDemodulator(mode string, tunedHz int64, bandwidthHz
 	// Every demodulator owns the samples it placed in the common output ring.
 	// Keeping that ring across a mode change lets a digital tail leak into the
 	// newly selected analog path.
-	if previousMode != mode || (mode != "AM" && mode != "NFM" && mode != "WFM" && mode != "USB" && mode != "LSB") {
+	if previousMode != mode || (mode != "AM" && mode != i18n.Source("text.0896d612d497") && mode != i18n.Source("text.6b742bac3eb4") && mode != i18n.Source("text.61f0acff1735") && mode != i18n.Source("text.6323db4948ad")) {
 		receiver.audioRead, receiver.audioWrite, receiver.audioCount = 0, 0, 0
 		receiver.stats.AudioBuffered = 0
 	}
 	receiver.mu.Unlock()
 	if receiver.dmr != nil {
-		receiver.dmr.Configure(mode == "DMR BETA", float64(tunedHz-receiver.centerHz.Load()), bandwidthHz)
+		receiver.dmr.Configure(mode == i18n.Source("text.2604864ce4d3"), float64(tunedHz-receiver.centerHz.Load()), bandwidthHz)
 	}
-	if receiver.digital != nil && mode == "DIGITAL AUTO" {
+	if receiver.digital != nil && mode == i18n.Source("text.3ae4feb8250d") {
 		receiver.digital.Configure(float64(tunedHz-receiver.centerHz.Load()), max(bandwidthHz, 15_000))
 	}
 	if receiver.tetra != nil {
@@ -344,21 +465,21 @@ func (receiver *Receiver) SetDemodulator(mode string, tunedHz int64, bandwidthHz
 
 func (receiver *Receiver) DMRStatus() dmr.Status {
 	if receiver.dmr == nil {
-		return dmr.Status{State: "OFF", ColorCode: -1, Slot1: "--", Slot2: "--"}
+		return dmr.Status{State: i18n.Source("text.38cca6bea010"), ColorCode: -1, Slot1: "--", Slot2: "--"}
 	}
 	return receiver.dmr.Snapshot()
 }
 
 func (receiver *Receiver) DigitalVoiceStatus() digitalvoice.Status {
 	if receiver.digital == nil {
-		return digitalvoice.Status{State: "NO DISPONIBLE", Detail: "Runtime DSD-neo no configurado"}
+		return digitalvoice.Status{State: i18n.Source("text.67b9e10a1cbd"), Detail: i18n.Source("text.34dd80781de7")}
 	}
 	return receiver.digital.Snapshot()
 }
 
 func (receiver *Receiver) StartDigitalVoice(mode string) error {
 	if receiver.digital == nil {
-		return fmt.Errorf("decodificador digital no disponible")
+		return fmt.Errorf("%s", i18n.Source("text.804db42a2a9b"))
 	}
 	return receiver.digital.Start(mode)
 }
@@ -427,7 +548,7 @@ func (receiver *Receiver) ConfigureSSTV(enabled bool) {
 }
 func (receiver *Receiver) SSTVStatus() sstv.Status {
 	if receiver.sstv == nil {
-		return sstv.Status{State: "NO DISPONIBLE"}
+		return sstv.Status{State: i18n.Source("text.67b9e10a1cbd")}
 	}
 	return receiver.sstv.Snapshot()
 }
@@ -465,7 +586,7 @@ func (receiver *Receiver) RestartSSTV() bool {
 }
 func (receiver *Receiver) SaveSSTVPartial() (string, error) {
 	if receiver.sstv == nil {
-		return "", fmt.Errorf("SSTV no disponible")
+		return "", fmt.Errorf("%s", i18n.Source("text.69b721a7cb02"))
 	}
 	return receiver.sstv.SavePartial()
 }
@@ -487,7 +608,7 @@ func (receiver *Receiver) ConfigureRTL433(enabled bool, frequencyHz int64, bandw
 }
 func (receiver *Receiver) RTL433Status() rtl433.Status {
 	if receiver.rtl433 == nil {
-		return rtl433.Status{State: "NO DISPONIBLE"}
+		return rtl433.Status{State: i18n.Source("text.67b9e10a1cbd")}
 	}
 	return receiver.rtl433.Snapshot()
 }
@@ -510,7 +631,7 @@ func (receiver *Receiver) ConfigureAPRS(enabled bool, frequencyHz int64, bandwid
 }
 func (receiver *Receiver) APRSStatus() aprs.Status {
 	if receiver.aprs == nil {
-		return aprs.Status{State: "NO DISPONIBLE", AudioLevel: -1}
+		return aprs.Status{State: i18n.Source("text.67b9e10a1cbd"), AudioLevel: -1}
 	}
 	return receiver.aprs.Snapshot()
 }
@@ -579,12 +700,12 @@ func (receiver *Receiver) AudioPlaybackState() (mode string, digitalSignalActive
 	receiver.mu.RLock()
 	mode = receiver.demodMode
 	receiver.mu.RUnlock()
-	if mode == "DMR BETA" && receiver.dmr != nil {
+	if mode == i18n.Source("text.2604864ce4d3") && receiver.dmr != nil {
 		digitalSignalActive = receiver.dmr.Snapshot().SignalActive
-	} else if mode == "TETRA" && receiver.tetra != nil {
+	} else if mode == i18n.Source("text.f69d86a86926") && receiver.tetra != nil {
 		status := receiver.tetra.Snapshot()
 		digitalSignalActive = !status.LastAudio.IsZero() && time.Since(status.LastAudio) < time.Second
-	} else if mode == "DIGITAL AUTO" && receiver.digital != nil {
+	} else if mode == i18n.Source("text.3ae4feb8250d") && receiver.digital != nil {
 		status := receiver.digital.Snapshot()
 		digitalSignalActive = status.VoiceActive && !status.LastVoice.IsZero() && time.Since(status.LastVoice) < time.Second
 	}
@@ -639,6 +760,9 @@ func (receiver *Receiver) run() {
 		read, code, err := receiver.device.read(readBuffer)
 		if err != nil {
 			receiver.setError(err)
+			receiver.mu.Lock()
+			receiver.hardware.Available = false
+			receiver.mu.Unlock()
 			return
 		}
 		if code == soapyTimeout {
@@ -685,7 +809,7 @@ func (receiver *Receiver) run() {
 		receiver.stats.RMS = rms
 		receiver.stats.Peak = peak
 		receiver.stats.InvalidSamples += invalid
-		receiver.stats.Status = "IQ válido"
+		receiver.stats.Status = i18n.Source("text.687121e71b9e")
 		receiver.mu.Unlock()
 
 		source := 0
@@ -740,7 +864,7 @@ func (receiver *Receiver) processAudio(iq []float32) {
 	receiver.mu.Lock()
 	receiver.stats.SignalDBm = signalDBm
 	receiver.mu.Unlock()
-	if mode == "DMR BETA" {
+	if mode == i18n.Source("text.2604864ce4d3") {
 		if receiver.dmr != nil {
 			receiver.dmr.ProcessIQ(iq)
 			status := receiver.dmr.Snapshot()
@@ -750,7 +874,7 @@ func (receiver *Receiver) processAudio(iq []float32) {
 		}
 		return
 	}
-	if mode == "DIGITAL AUTO" {
+	if mode == i18n.Source("text.3ae4feb8250d") {
 		if receiver.digital != nil {
 			receiver.digital.ProcessIQ(iq)
 			status := receiver.digital.Snapshot()
@@ -832,9 +956,9 @@ func (receiver *Receiver) signalLevelLocked(mode string, tunedHz, centerHz int64
 	centerBin := (.5 + float64(tunedHz-centerHz)/receiver.config.SampleRate) * float64(len(receiver.spectrum))
 	bandBins := max(float64(bandwidthHz)/receiver.config.SampleRate*float64(len(receiver.spectrum)), 1)
 	low, high := centerBin-bandBins*.5, centerBin+bandBins*.5
-	if mode == "USB" {
+	if mode == i18n.Source("text.61f0acff1735") {
 		low, high = centerBin, centerBin+bandBins
-	} else if mode == "LSB" {
+	} else if mode == i18n.Source("text.6323db4948ad") {
 		low, high = centerBin-bandBins, centerBin
 	}
 	first := max(int(math.Floor(low)), 0)
@@ -946,7 +1070,7 @@ func (receiver *Receiver) addEvent(timeout, overflow bool) {
 
 func (receiver *Receiver) setError(err error) {
 	receiver.mu.Lock()
-	receiver.stats.Status = "ERROR: " + err.Error()
+	receiver.stats.Status = i18n.Source("text.0a13b1eba75c") + err.Error()
 	receiver.mu.Unlock()
 }
 
@@ -977,6 +1101,6 @@ func (config Config) deviceArguments() string {
 }
 
 func (stats Stats) String() string {
-	return fmt.Sprintf("%s · %.3f MS/s · IQ RMS %.4f PEAK %.4f · FFT %.1f/s · OVF %d",
+	return fmt.Sprintf(i18n.Source("text.78c959400077"),
 		stats.Status, stats.SampleRate/1e6, stats.RMS, stats.Peak, stats.FFTPerSecond, stats.Overflows)
 }

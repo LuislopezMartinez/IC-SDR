@@ -1,5 +1,7 @@
 package sdr
 
+import "go-zero/internal/i18n"
+
 import "go-zero/internal/tetra"
 
 func (r *Receiver) ConfigureTETRA(enabled bool) {
@@ -9,7 +11,7 @@ func (r *Receiver) ConfigureTETRA(enabled bool) {
 }
 func (r *Receiver) TETRAStatus() tetra.Status {
 	if r.tetra == nil {
-		return tetra.Status{State: "NO DISPONIBLE"}
+		return tetra.Status{State: i18n.Source("text.67b9e10a1cbd")}
 	}
 	return r.tetra.Snapshot()
 }

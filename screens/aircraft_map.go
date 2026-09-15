@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"encoding/json"
 	"fmt"
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -11,17 +13,23 @@ import (
 	"time"
 )
 
+var (
+	aircraftMarker1090  = rl.Color{R: 8, G: 32, B: 72, A: 255}
+	aircraftMarker978   = rl.Color{R: 92, G: 32, B: 6, A: 255}
+	aircraftMarkerStale = rl.Color{R: 22, G: 22, B: 24, A: 255}
+)
+
 func RunAircraftMap(path string) {
 	simpleui.SetMode(1360, 800, simpleui.Fit)
 	simpleui.SetCanvasFilter(rl.FilterBilinear)
 	simpleui.SetTextScale(1.25)
-	simpleui.SetTitle("IC-SDR · Tráfico aéreo")
+	simpleui.SetTitle(i18n.Source("text.b77b268a841e"))
 	simpleui.SetMinimumSize(900, 540)
 	v := &aircraftMap{path: path, centerLat: 40.2, centerLon: -3.7, lonSpan: 14, selected: -1, tracks: make(map[string][]geoPoint)}
-	center := simpleui.NewButton("flightCenter", 1040, 18, 145, 42, "CENTRAR TRÁFICO", 12)
+	center := simpleui.NewButton("flightCenter", 1040, 18, 145, 42, i18n.Source("text.c21a19cedffd"), 12)
 	center.SetColors(colors.panelAlt, colors.border, colors.text)
-	center.OnClick(func() { v.fit(); v.fitted = true })
-	world := simpleui.NewButton("flightWorld", 1200, 18, 130, 42, "VER MUNDO", 13)
+	center.OnClick(func() { v.fitted = v.fit() })
+	world := simpleui.NewButton("flightWorld", 1200, 18, 130, 42, i18n.Source("text.4b20060b2d1c"), 13)
 	world.SetColors(colors.panelAlt, colors.border, colors.text)
 	world.OnClick(func() { v.centerLat, v.centerLon, v.lonSpan = 15, 0, 260 })
 	simpleui.Add(center)
@@ -35,10 +43,10 @@ type aircraftMap struct {
 	next                          time.Time
 	centerLat, centerLon, lonSpan float64
 	selected                      int
+	selectedICAO                  string
 	fitted, dragging              bool
 	dragOrigin, lastMouse         rl.Vector2
 	tracks                        map[string][]geoPoint
-	texture                       rl.Texture2D
 }
 
 func (v *aircraftMap) read() {
@@ -55,6 +63,7 @@ func (v *aircraftMap) read() {
 		return
 	}
 	v.list = list
+	v.restoreSelection()
 	for _, a := range list {
 		if a.Latitude == nil || a.Longitude == nil {
 			continue
@@ -69,12 +78,23 @@ func (v *aircraftMap) read() {
 			v.tracks[a.ICAO] = t
 		}
 	}
-	if !v.fitted && len(list) > 0 {
-		v.fit()
-		v.fitted = true
+	if !v.fitted {
+		v.fitted = v.fit()
 	}
 }
-func (v *aircraftMap) fit() {
+func (v *aircraftMap) restoreSelection() {
+	v.selected = -1
+	if v.selectedICAO == "" {
+		return
+	}
+	for i, a := range v.list {
+		if a.ICAO == v.selectedICAO {
+			v.selected = i
+			return
+		}
+	}
+}
+func (v *aircraftMap) fit() bool {
 	minLat, maxLat, minLon, maxLon := 90., -90., 180., -180.
 	n := 0
 	for _, a := range v.list {
@@ -88,45 +108,30 @@ func (v *aircraftMap) fit() {
 		n++
 	}
 	if n == 0 {
-		return
+		return false
 	}
 	v.centerLat, v.centerLon = (minLat+maxLat)/2, (minLon+maxLon)/2
 	v.lonSpan = math.Max(.8, math.Max((maxLon-minLon)*1.6, (maxLat-minLat)*2.5))
 	v.clamp()
+	return true
 }
-func (v *aircraftMap) latSpan(b rl.Rectangle) float64 { return v.lonSpan * float64(b.Height/b.Width) }
+func (v *aircraftMap) latSpan(b rl.Rectangle) float64 {
+	return mercatorLatSpan(v.centerLat, v.lonSpan, b)
+}
 func (v *aircraftMap) clamp() {
-	v.lonSpan = math.Max(.1, math.Min(260, v.lonSpan))
-	ls := v.lonSpan * 690 / 970
-	v.centerLat = math.Max(-90+ls/2, math.Min(90-ls/2, v.centerLat))
-	v.centerLon = math.Max(-180+v.lonSpan/2, math.Min(180-v.lonSpan/2, v.centerLon))
+	v.centerLat, v.centerLon, v.lonSpan = clampMapView(v.centerLat, v.centerLon, v.lonSpan, rl.Rectangle{Width: 970, Height: 690})
 }
 func (v *aircraftMap) project(lat, lon float64, b rl.Rectangle) rl.Vector2 {
-	ls := v.latSpan(b)
-	return rl.Vector2{X: b.X + float32((lon-v.centerLon+v.lonSpan/2)/v.lonSpan)*b.Width, Y: b.Y + float32((v.centerLat+ls/2-lat)/ls)*b.Height}
+	return projectMercator(v.centerLat, v.centerLon, v.lonSpan, lat, lon, b)
 }
 func (v *aircraftMap) unproject(p rl.Vector2, b rl.Rectangle) (float64, float64) {
-	ls := v.latSpan(b)
-	return v.centerLat + ls/2 - float64((p.Y-b.Y)/b.Height)*ls, v.centerLon - v.lonSpan/2 + float64((p.X-b.X)/b.Width)*v.lonSpan
+	return unprojectMercator(v.centerLat, v.centerLon, v.lonSpan, p, b)
 }
 func (v *aircraftMap) background(b rl.Rectangle) {
-	if v.texture.ID == 0 {
-		img := rl.LoadImageFromMemory(".png", aisWorldPNG, int32(len(aisWorldPNG)))
-		if img != nil && img.Data != nil {
-			v.texture = rl.LoadTextureFromImage(img)
-			rl.UnloadImage(img)
-			rl.SetTextureFilter(v.texture, rl.FilterBilinear)
-		}
-	}
-	if v.texture.ID == 0 {
-		return
-	}
-	ls := v.latSpan(b)
-	src := rl.Rectangle{X: float32((v.centerLon-v.lonSpan/2+180)/360) * float32(v.texture.Width), Y: float32((90-v.centerLat-ls/2)/180) * float32(v.texture.Height), Width: float32(v.lonSpan/360) * float32(v.texture.Width), Height: float32(ls/180) * float32(v.texture.Height)}
-	rl.DrawTexturePro(v.texture, src, b, rl.Vector2{}, 0, rl.White)
+	drawGeoMap(v.centerLat, v.centerLon, v.lonSpan, b)
 }
 func (v *aircraftMap) input(b rl.Rectangle) {
-	m := rl.GetMousePosition()
+	m := simpleui.MousePosition()
 	inside := rl.CheckCollisionPointRec(m, b)
 	if w := rl.GetMouseWheelMove(); w != 0 {
 		v.zoomAt(m, b, w)
@@ -137,8 +142,7 @@ func (v *aircraftMap) input(b rl.Rectangle) {
 	}
 	if v.dragging && rl.IsMouseButtonDown(rl.MouseButtonLeft) {
 		d := rl.Vector2Subtract(m, v.lastMouse)
-		v.centerLon -= float64(d.X) / float64(b.Width) * v.lonSpan
-		v.centerLat += float64(d.Y) / float64(b.Height) * v.latSpan(b)
+		v.centerLat, v.centerLon = panMap(v.centerLat, v.centerLon, v.lonSpan, d, b)
 		v.lastMouse = m
 		v.clamp()
 	}
@@ -154,13 +158,7 @@ func (v *aircraftMap) zoomAt(m rl.Vector2, b rl.Rectangle, wheel float32) {
 	if !rl.CheckCollisionPointRec(anchor, b) {
 		anchor = rl.Vector2{X: b.X + b.Width/2, Y: b.Y + b.Height/2}
 	}
-	lat, lon := v.unproject(anchor, b)
-	v.lonSpan *= math.Pow(.78, float64(wheel))
-	v.clamp()
-	lat2, lon2 := v.unproject(anchor, b)
-	v.centerLat += lat - lat2
-	v.centerLon += lon - lon2
-	v.clamp()
+	v.centerLat, v.centerLon, v.lonSpan = zoomMap(v.centerLat, v.centerLon, v.lonSpan, anchor, b, wheel)
 }
 func (v *aircraftMap) selectAt(m rl.Vector2, b rl.Rectangle) {
 	best, dist := -1, float32(1e9)
@@ -178,20 +176,11 @@ func (v *aircraftMap) selectAt(m rl.Vector2, b rl.Rectangle) {
 	}
 	if best >= 0 {
 		v.selected = best
+		v.selectedICAO = v.list[best].ICAO
 	}
 }
 func (v *aircraftMap) grid(b rl.Rectangle) {
-	ls := v.latSpan(b)
-	for i := 0; i <= 10; i++ {
-		x := b.X + b.Width*float32(i)/10
-		rl.DrawLine(int32(x), int32(b.Y), int32(x), int32(b.Y+b.Height), rl.Color{R: 90, G: 150, B: 170, A: 38})
-		simpleui.DrawText(fmt.Sprintf("%.2f°", v.centerLon-v.lonSpan/2+v.lonSpan*float64(i)/10), x+2, b.Y+b.Height-18, 9, colors.muted)
-	}
-	for i := 0; i <= 8; i++ {
-		y := b.Y + b.Height*float32(i)/8
-		rl.DrawLine(int32(b.X), int32(y), int32(b.X+b.Width), int32(y), rl.Color{R: 90, G: 150, B: 170, A: 38})
-		simpleui.DrawText(fmt.Sprintf("%.2f°", v.centerLat+ls/2-ls*float64(i)/8), b.X+3, y+2, 9, colors.muted)
-	}
+	drawMapGrid(v.centerLat, v.centerLon, v.lonSpan, b)
 }
 func (v *aircraftMap) draw() {
 	v.read()
@@ -201,6 +190,7 @@ func (v *aircraftMap) draw() {
 	v.background(b)
 	v.grid(b)
 	rl.DrawRectangleLinesEx(b, 2, colors.border)
+	rl.BeginScissorMode(int32(b.X), int32(b.Y), int32(b.Width), int32(b.Height))
 	for _, t := range v.tracks {
 		for i := 1; i < len(t); i++ {
 			rl.DrawLineEx(v.project(t[i-1].lat, t[i-1].lon, b), v.project(t[i].lat, t[i].lon, b), 1.5, rl.Color{R: 196, G: 120, B: 255, A: 120})
@@ -214,21 +204,21 @@ func (v *aircraftMap) draw() {
 		if !rl.CheckCollisionPointRec(p, b) {
 			continue
 		}
-		c := colors.cyan
+		c := aircraftMarker1090
 		if a.Source == aircraft.Mode978 {
-			c = colors.orange
+			c = aircraftMarker978
 		}
 		if time.Since(a.LastSeen) > 60*time.Second {
-			c = colors.muted
+			c = aircraftMarkerStale
 		}
 		angle := float32(0)
 		if a.Track != nil {
 			angle = float32(*a.Track)
 		}
-		size := float32(12)
+		size := float32(14)
 		if i == v.selected {
-			size = 16
-			rl.DrawCircleLines(int32(p.X), int32(p.Y), 22, colors.orange)
+			size = 18
+			rl.DrawCircleLines(int32(p.X), int32(p.Y), 23, rl.Black)
 		}
 		drawAircraftSymbol(p, size, angle, c)
 		label := a.Callsign
@@ -237,16 +227,22 @@ func (v *aircraftMap) draw() {
 		}
 		alt := ""
 		if a.Altitude != nil {
-			alt = fmt.Sprintf(" · %d ft", *a.Altitude)
+			alt = fmt.Sprintf(i18n.Source("text.bcbd21c32147"), *a.Altitude)
 		}
-		simpleui.DrawText(label+alt, p.X+13, p.Y-8, 10, colors.text)
+		drawMapCallout(label+alt, p.X+14, p.Y-9)
 	}
-	simpleui.DrawText("TRÁFICO AÉREO EN VIVO", 24, 20, 24, colors.cyan)
-	simpleui.DrawText(fmt.Sprintf("%d aeronaves · cyan 1090 · naranja 978 · arrastra y usa la rueda", len(v.list)), 340, 29, 13, colors.muted)
+	rl.EndScissorMode()
+	simpleui.DrawText(i18n.Source("text.efeab38ced85"), 24, 20, 24, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.6a5c9b643e60"), len(v.list)), 340, 29, 13, colors.muted)
 	v.details()
-	simpleui.DrawText("Natural Earth · posiciones recibidas directamente por radio", 1015, 742, 9, colors.muted)
+	simpleui.DrawText(i18n.Source("text.6ec2a8e7cdac"), 1015, 742, 9, colors.muted)
 }
 func drawAircraftSymbol(p rl.Vector2, size, angle float32, c rl.Color) {
+	drawAircraftPoly(p, size+2.4, angle, rl.White)
+	drawAircraftPoly(p, size+1.1, angle, rl.Black)
+	drawAircraftPoly(p, size, angle, c)
+}
+func drawAircraftPoly(p rl.Vector2, size, angle float32, c rl.Color) {
 	r := float64(angle) * math.Pi / 180
 	rot := func(x, y float32) rl.Vector2 {
 		return rl.Vector2{X: p.X + x*float32(math.Cos(r)) - y*float32(math.Sin(r)), Y: p.Y + x*float32(math.Sin(r)) + y*float32(math.Cos(r))}
@@ -260,9 +256,9 @@ func drawAircraftSymbol(p rl.Vector2, size, angle float32, c rl.Color) {
 }
 func (v *aircraftMap) details() {
 	x := float32(1015)
-	simpleui.DrawText("DETALLE DE AERONAVE", x, 88, 14, colors.orange)
+	simpleui.DrawText(i18n.Source("text.ff530d0a74b8"), x, 88, 14, colors.orange)
 	if v.selected < 0 || v.selected >= len(v.list) {
-		simpleui.DrawText("Pulsa una aeronave", x, 125, 13, colors.muted)
+		simpleui.DrawText(i18n.Source("text.d540f863d24b"), x, 125, 13, colors.muted)
 		return
 	}
 	a := v.list[v.selected]
@@ -274,9 +270,9 @@ func (v *aircraftMap) details() {
 	}
 	alt := "--"
 	if a.Altitude != nil {
-		alt = fmt.Sprintf("%d ft", *a.Altitude)
+		alt = fmt.Sprintf(i18n.Source("text.37a9c8313faf"), *a.Altitude)
 	}
-	lines := []struct{ l, v string }{{"VUELO", a.Callsign}, {"ICAO", a.ICAO}, {"FUENTE", a.Source}, {"LATITUD", val(a.Latitude, "%.6f°")}, {"LONGITUD", val(a.Longitude, "%.6f°")}, {"ALTITUD", alt}, {"VELOCIDAD", val(a.Speed, "%.0f kt")}, {"RUMBO", val(a.Track, "%.1f°")}, {"VELOCIDAD VERTICAL", val(a.VerticalRate, "%.0f ft/min")}, {"SQUAWK", a.Squawk}, {"CATEGORÍA", a.Category}, {"MENSAJES", fmt.Sprintf("%d", a.Messages)}, {"ACTUALIZADO", time.Since(a.LastSeen).Round(time.Second).String() + " atrás"}}
+	lines := []struct{ l, v string }{{i18n.Source("text.a2e919b357dd"), a.Callsign}, {i18n.Source("text.fbe27652285f"), a.ICAO}, {i18n.Source("text.f0417f5218f5"), a.Source}, {i18n.Source("text.5b99241b86d1"), val(a.Latitude, "%.6f°")}, {i18n.Source("text.b0ddd4ea3459"), val(a.Longitude, "%.6f°")}, {i18n.Source("text.dfd99438a5a6"), alt}, {i18n.Source("text.5734c29f4857"), val(a.Speed, i18n.Source("text.67f69e02a226"))}, {i18n.Source("text.6cbb45c7f467"), val(a.Track, "%.1f°")}, {i18n.Source("text.ced7fb5bc492"), val(a.VerticalRate, i18n.Source("text.f158c749d844"))}, {i18n.Source("text.9b26abbcf267"), a.Squawk}, {i18n.Source("text.fe3242664a55"), a.Category}, {i18n.Source("text.fe86cd5572c0"), fmt.Sprintf("%d", a.Messages)}, {i18n.Source("text.25acc60bbe8a"), time.Since(a.LastSeen).Round(time.Second).String() + i18n.Source("text.4b39a7e94844")}}
 	for i, z := range lines {
 		y := float32(125 + i*42)
 		simpleui.DrawText(z.l, x, y, 9, colors.muted)

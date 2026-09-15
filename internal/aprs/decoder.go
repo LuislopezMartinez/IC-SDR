@@ -1,6 +1,8 @@
 package aprs
 
 import (
+	"go-zero/internal/i18n"
+
 	"bufio"
 	"encoding/binary"
 	"fmt"
@@ -57,7 +59,7 @@ func New(inputRate float64, executable, configPath, workingDirectory string) *De
 	if absolute, err := filepath.Abs(workingDirectory); err == nil {
 		workingDirectory = absolute
 	}
-	return &Decoder{inputRate: inputRate, executable: executable, configTemplate: configPath, workingDirectory: workingDirectory, state: "DETENIDO", audioLevel: -1, recentPackets: make(map[string]time.Time)}
+	return &Decoder{inputRate: inputRate, executable: executable, configTemplate: configPath, workingDirectory: workingDirectory, state: i18n.Source("text.7dc7253c376a"), audioLevel: -1, recentPackets: make(map[string]time.Time)}
 }
 func (d *Decoder) Configure(enabled bool, tuned, center int64, bandwidth int) {
 	if !enabled {
@@ -79,7 +81,7 @@ func (d *Decoder) Configure(enabled bool, tuned, center int64, bandwidth int) {
 }
 func (d *Decoder) start() {
 	if d.executable == "" {
-		d.setError(fmt.Errorf("Dire Wolf no configurado"))
+		d.setError(fmt.Errorf("%s", i18n.Source("text.32661fecaee0")))
 		return
 	}
 	port, err := freePort()
@@ -113,7 +115,7 @@ func (d *Decoder) start() {
 	session := d.session.Add(1)
 	d.running.Store(true)
 	d.mu.Lock()
-	d.state, d.detail, d.audioLevel = "BUSCANDO", "Conectando KISS local", -1
+	d.state, d.detail, d.audioLevel = i18n.Source("text.dc65cdab4d29"), i18n.Source("text.86dcda755a58"), -1
 	d.mu.Unlock()
 	go d.writer()
 	go d.readLines(stdout)
@@ -133,7 +135,7 @@ func freePort() (int, error) {
 		_ = listener.Close()
 		return port, nil
 	}
-	return 0, fmt.Errorf("no hay un puerto KISS libre entre 18101 y 18199")
+	return 0, fmt.Errorf("%s", i18n.Source("text.b5f3459babcd"))
 }
 func (d *Decoder) runtimeConfig(port int) (string, error) {
 	data, err := os.ReadFile(d.configTemplate)
@@ -143,12 +145,12 @@ func (d *Decoder) runtimeConfig(port int) (string, error) {
 	lines := []string{}
 	for _, line := range strings.Split(string(data), "\n") {
 		upper := strings.ToUpper(strings.TrimSpace(line))
-		if strings.HasPrefix(upper, "KISSPORT") || strings.HasPrefix(upper, "AGWPORT") {
+		if strings.HasPrefix(upper, i18n.Source("text.98201c45b45a")) || strings.HasPrefix(upper, i18n.Source("text.303564eca847")) {
 			continue
 		}
 		lines = append(lines, line)
 	}
-	lines = append(lines, "AGWPORT 0", "KISSPORT "+strconv.Itoa(port))
+	lines = append(lines, i18n.Source("text.3cb0ee1671c1"), i18n.Source("text.c51e3ac91592")+strconv.Itoa(port))
 	directory := resources.WritablePath("cache", "aprs")
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return "", err
@@ -224,7 +226,7 @@ func (d *Decoder) connectKISS(port int, session uint64) {
 		}
 		d.mu.Lock()
 		d.kiss = connection
-		d.detail = "KISS conectado · esperando AX.25"
+		d.detail = i18n.Source("text.fd838bff204b")
 		d.mu.Unlock()
 		d.readKISS(connection, session)
 		_ = connection.Close()
@@ -307,7 +309,7 @@ func (d *Decoder) add(packet Packet) {
 	if len(d.packets) > 500 {
 		d.packets = d.packets[:500]
 	}
-	d.state = "RECIBIENDO"
+	d.state = i18n.Source("text.3ec713946605")
 	d.detail = packet.Source + " > " + packet.Destination
 	d.mu.Unlock()
 	d.packetCount.Add(1)
@@ -323,7 +325,7 @@ func (d *Decoder) readLines(reader io.Reader) {
 			}
 			d.mu.Unlock()
 		}
-		if marker := strings.Index(line, " audio level = "); marker > 0 {
+		if marker := strings.Index(line, i18n.Source("text.812b7f295ed3")); marker > 0 {
 			tail := strings.TrimSpace(line[marker+15:])
 			if end := strings.IndexByte(tail, '('); end > 0 {
 				tail = strings.TrimSpace(tail[:end])
@@ -345,8 +347,8 @@ func (d *Decoder) Clear() {
 	d.mu.Lock()
 	d.packets = nil
 	d.recentPackets = make(map[string]time.Time)
-	d.state = "BUSCANDO"
-	d.detail = "Esperando tramas AX.25"
+	d.state = i18n.Source("text.dc65cdab4d29")
+	d.detail = i18n.Source("text.0045b7951be4")
 	d.mu.Unlock()
 	d.packetCount.Store(0)
 }
@@ -357,7 +359,7 @@ func (d *Decoder) Snapshot() Status {
 }
 func (d *Decoder) setError(err error) {
 	d.mu.Lock()
-	d.state, d.detail = "ERROR", err.Error()
+	d.state, d.detail = i18n.Source("text.d98ee0e5f939"), err.Error()
 	d.mu.Unlock()
 }
 func (d *Decoder) Stop() {
@@ -380,7 +382,7 @@ func (d *Decoder) Stop() {
 		_ = os.Remove(d.configPath)
 	}
 	d.mu.Lock()
-	d.state, d.detail, d.audioLevel = "DETENIDO", "", -1
+	d.state, d.detail, d.audioLevel = i18n.Source("text.7dc7253c376a"), "", -1
 	d.kiss = nil
 	d.mu.Unlock()
 }

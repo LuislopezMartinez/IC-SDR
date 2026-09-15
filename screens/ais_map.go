@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -20,13 +22,13 @@ func RunAISMap(path string) {
 	simpleui.SetMode(1360, 800, simpleui.Fit)
 	simpleui.SetCanvasFilter(rl.FilterBilinear)
 	simpleui.SetTextScale(1.25)
-	simpleui.SetTitle("IC-SDR · Mapa AIS")
+	simpleui.SetTitle(i18n.Source("text.3b8dbfbc6b8b"))
 	simpleui.SetMinimumSize(900, 540)
 	v := &aisMap{path: path, centerLat: 40.2, centerLon: -3.7, lonSpan: 14, selected: -1, tracks: make(map[uint32][]geoPoint)}
-	center := simpleui.NewButton("aisCenterFleet", 1040, 18, 145, 42, "CENTRAR FLOTA", 13)
+	center := simpleui.NewButton("aisCenterFleet", 1040, 18, 145, 42, i18n.Source("text.e52f329a21b6"), 13)
 	center.SetColors(colors.panelAlt, colors.border, colors.text)
 	center.OnClick(func() { v.fit(); v.fitted = true })
-	world := simpleui.NewButton("aisWorld", 1200, 18, 130, 42, "VER MUNDO", 13)
+	world := simpleui.NewButton("aisWorld", 1200, 18, 130, 42, i18n.Source("text.4b20060b2d1c"), 13)
 	world.SetColors(colors.panelAlt, colors.border, colors.text)
 	world.OnClick(func() { v.centerLat, v.centerLon, v.lonSpan = 15, 0, 260 })
 	simpleui.Add(center)
@@ -45,19 +47,6 @@ type aisMap struct {
 	fitted, dragging              bool
 	dragOrigin, lastMouse         rl.Vector2
 	tracks                        map[uint32][]geoPoint
-	mapTexture                    rl.Texture2D
-}
-
-func (v *aisMap) ensureTexture() {
-	if v.mapTexture.ID != 0 {
-		return
-	}
-	img := rl.LoadImageFromMemory(".png", aisWorldPNG, int32(len(aisWorldPNG)))
-	if img != nil && img.Data != nil {
-		v.mapTexture = rl.LoadTextureFromImage(img)
-		rl.UnloadImage(img)
-		rl.SetTextureFilter(v.mapTexture, rl.FilterBilinear)
-	}
 }
 
 func (v *aisMap) read() {
@@ -129,36 +118,17 @@ func (v *aisMap) fit() {
 	v.clampView()
 }
 
-func (v *aisMap) latSpan(b rl.Rectangle) float64 { return v.lonSpan * float64(b.Height/b.Width) }
+func (v *aisMap) latSpan(b rl.Rectangle) float64 { return mercatorLatSpan(v.centerLat, v.lonSpan, b) }
 func (v *aisMap) clampView() {
-	v.lonSpan = math.Max(.08, math.Min(360, v.lonSpan))
-	latSpan := v.lonSpan * 690 / 970
-	if latSpan > 180 {
-		v.lonSpan = 180 * 970 / 690
-		latSpan = 180
-	}
-	v.centerLat = math.Max(-90+latSpan/2, math.Min(90-latSpan/2, v.centerLat))
-	v.centerLon = math.Max(-180+v.lonSpan/2, math.Min(180-v.lonSpan/2, v.centerLon))
+	v.centerLat, v.centerLon, v.lonSpan = clampMapView(v.centerLat, v.centerLon, v.lonSpan, rl.Rectangle{Width: 970, Height: 690})
 }
 func (v *aisMap) project(lat, lon float64, b rl.Rectangle) rl.Vector2 {
-	latSpan := v.latSpan(b)
-	return rl.Vector2{X: b.X + float32((lon-(v.centerLon-v.lonSpan/2))/v.lonSpan)*b.Width, Y: b.Y + float32(((v.centerLat+latSpan/2)-lat)/latSpan)*b.Height}
+	return projectMercator(v.centerLat, v.centerLon, v.lonSpan, lat, lon, b)
 }
 func (v *aisMap) unproject(p rl.Vector2, b rl.Rectangle) (float64, float64) {
-	latSpan := v.latSpan(b)
-	return v.centerLat + latSpan/2 - float64((p.Y-b.Y)/b.Height)*latSpan, v.centerLon - v.lonSpan/2 + float64((p.X-b.X)/b.Width)*v.lonSpan
+	return unprojectMercator(v.centerLat, v.centerLon, v.lonSpan, p, b)
 }
-
-func (v *aisMap) drawMap(b rl.Rectangle) {
-	v.ensureTexture()
-	if v.mapTexture.ID == 0 {
-		rl.DrawRectangleRec(b, rl.Color{R: 7, G: 31, B: 48, A: 255})
-		return
-	}
-	latSpan := v.latSpan(b)
-	src := rl.Rectangle{X: float32((v.centerLon-v.lonSpan/2+180)/360) * float32(v.mapTexture.Width), Y: float32((90-(v.centerLat+latSpan/2))/180) * float32(v.mapTexture.Height), Width: float32(v.lonSpan/360) * float32(v.mapTexture.Width), Height: float32(latSpan/180) * float32(v.mapTexture.Height)}
-	rl.DrawTexturePro(v.mapTexture, src, b, rl.Vector2{}, 0, rl.White)
-}
+func (v *aisMap) drawMap(b rl.Rectangle) { drawGeoMap(v.centerLat, v.centerLon, v.lonSpan, b) }
 
 func (v *aisMap) input(b rl.Rectangle) {
 	m := rl.GetMousePosition()
@@ -173,8 +143,7 @@ func (v *aisMap) input(b rl.Rectangle) {
 	}
 	if v.dragging && rl.IsMouseButtonDown(rl.MouseButtonLeft) {
 		d := rl.Vector2Subtract(m, v.lastMouse)
-		v.centerLon -= float64(d.X) / float64(b.Width) * v.lonSpan
-		v.centerLat += float64(d.Y) / float64(b.Height) * v.latSpan(b)
+		v.centerLat, v.centerLon = panMap(v.centerLat, v.centerLon, v.lonSpan, d, b)
 		v.lastMouse = m
 		v.clampView()
 	}
@@ -190,13 +159,7 @@ func (v *aisMap) zoomAt(m rl.Vector2, b rl.Rectangle, wheel float32) {
 	if !rl.CheckCollisionPointRec(anchor, b) {
 		anchor = rl.Vector2{X: b.X + b.Width/2, Y: b.Y + b.Height/2}
 	}
-	lat, lon := v.unproject(anchor, b)
-	v.lonSpan *= math.Pow(.78, float64(wheel))
-	v.clampView()
-	lat2, lon2 := v.unproject(anchor, b)
-	v.centerLat += lat - lat2
-	v.centerLon += lon - lon2
-	v.clampView()
+	v.centerLat, v.centerLon, v.lonSpan = zoomMap(v.centerLat, v.centerLon, v.lonSpan, anchor, b, wheel)
 }
 func (v *aisMap) selectAt(m rl.Vector2, b rl.Rectangle) {
 	best, bestD := -1, float32(1e9)
@@ -221,7 +184,6 @@ func (v *aisMap) selectAt(m rl.Vector2, b rl.Rectangle) {
 }
 
 func (v *aisMap) drawGrid(b rl.Rectangle) {
-	latSpan := v.latSpan(b)
 	for i := 0; i <= 10; i++ {
 		x := b.X + b.Width*float32(i)/10
 		rl.DrawLine(int32(x), int32(b.Y), int32(x), int32(b.Y+b.Height), rl.Color{R: 80, G: 145, B: 160, A: 40})
@@ -231,12 +193,12 @@ func (v *aisMap) drawGrid(b rl.Rectangle) {
 	for i := 0; i <= 8; i++ {
 		y := b.Y + b.Height*float32(i)/8
 		rl.DrawLine(int32(b.X), int32(y), int32(b.X+b.Width), int32(y), rl.Color{R: 80, G: 145, B: 160, A: 40})
-		lat := v.centerLat + latSpan/2 - latSpan*float64(i)/8
+		lat, _ := v.unproject(rl.Vector2{X: b.X, Y: y}, b)
 		simpleui.DrawText(fmt.Sprintf("%.2f°", lat), b.X+3, y+2, 9, colors.muted)
 	}
 }
 func (v *aisMap) drawScale(b rl.Rectangle) {
-	nmPerPixel := v.lonSpan * 60 * math.Max(.15, math.Cos(v.centerLat*math.Pi/180)) / float64(b.Width)
+	nmPerPixel := 360 / math.Exp2(mapZoom(v.lonSpan, b.Width)) / 256 * 60 * math.Max(.15, math.Cos(v.centerLat*math.Pi/180))
 	target := nmPerPixel * 140
 	pow := math.Pow(10, math.Floor(math.Log10(target)))
 	scale := pow
@@ -250,7 +212,7 @@ func (v *aisMap) drawScale(b rl.Rectangle) {
 	rl.DrawLineEx(rl.Vector2{X: x, Y: y}, rl.Vector2{X: x + w, Y: y}, 3, colors.text)
 	rl.DrawLine(int32(x), int32(y-5), int32(x), int32(y+5), colors.text)
 	rl.DrawLine(int32(x+w), int32(y-5), int32(x+w), int32(y+5), colors.text)
-	simpleui.DrawText(fmt.Sprintf("%.0f NM", scale), x, y-22, 10, colors.text)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.3467c2758114"), scale), x, y-22, 10, colors.text)
 }
 
 func (v *aisMap) draw() {
@@ -259,6 +221,7 @@ func (v *aisMap) draw() {
 	b := rl.Rectangle{X: 20, Y: 78, Width: 970, Height: 690}
 	v.input(b)
 	v.drawMap(b)
+	rl.BeginScissorMode(int32(b.X), int32(b.Y), int32(b.Width), int32(b.Height))
 	v.drawGrid(b)
 	rl.DrawRectangleLinesEx(b, 2, colors.border)
 	for _, track := range v.tracks {
@@ -287,32 +250,34 @@ func (v *aisMap) draw() {
 			radius = 14
 			rl.DrawCircleLines(int32(p.X), int32(p.Y), 20, colors.orange)
 		}
+		rl.DrawPoly(p, 3, radius+2, heading, mapCalloutEdge)
 		rl.DrawPoly(p, 3, radius, heading, c)
 		name := s.Name
 		if name == "" {
 			name = fmt.Sprintf("%09d", s.MMSI)
 		}
-		simpleui.DrawText(sondeClip(name, 19), p.X+12, p.Y-7, 10, colors.text)
+		drawMapCallout(sondeClip(name, 19), p.X+12, p.Y-7)
 	}
 	v.drawScale(b)
-	simpleui.DrawText("MAPA AIS EN VIVO", 24, 20, 24, colors.cyan)
-	simpleui.DrawText(fmt.Sprintf("%d barcos con señal · arrastra para mover · rueda para zoom", len(v.vessels)), 310, 29, 13, colors.muted)
+	rl.EndScissorMode()
+	simpleui.DrawText(i18n.Source("text.7d585bc1f57e"), 24, 20, 24, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.b2209e56e53d"), len(v.vessels)), 310, 29, 13, colors.muted)
 	v.drawDetails()
-	simpleui.DrawText("Natural Earth · cartografía integrada · sin conexión a Internet", 1015, 742, 9, colors.muted)
+	simpleui.DrawText(i18n.Source("text.6ec2a8e7cdac"), 1015, 742, 9, colors.muted)
 }
 
 func (v *aisMap) drawDetails() {
 	x := float32(1015)
-	simpleui.DrawText("DETALLE DEL BARCO", x, 88, 14, colors.orange)
+	simpleui.DrawText(i18n.Source("text.e632996d3969"), x, 88, 14, colors.orange)
 	if v.selected < 0 || v.selected >= len(v.vessels) {
-		simpleui.DrawText("Pulsa un barco en el mapa", x, 125, 13, colors.muted)
-		simpleui.DrawText("para consultar sus datos.", x, 148, 13, colors.muted)
+		simpleui.DrawText(i18n.Source("text.fef4c8b3e209"), x, 125, 13, colors.muted)
+		simpleui.DrawText(i18n.Source("text.30c733e47553"), x, 148, 13, colors.muted)
 		return
 	}
 	s := v.vessels[v.selected]
 	name := s.Name
 	if name == "" {
-		name = "SIN NOMBRE"
+		name = i18n.Source("text.7a825d95674a")
 	}
 	value := func(p *float64, format string) string {
 		if p == nil {
@@ -321,7 +286,7 @@ func (v *aisMap) drawDetails() {
 		return fmt.Sprintf(format, *p)
 	}
 	age := time.Since(s.LastSeen).Round(time.Second)
-	lines := []struct{ label, val string }{{"NOMBRE", name}, {"MMSI", fmt.Sprintf("%09d", s.MMSI)}, {"CALLSIGN", s.Callsign}, {"TIPO", s.ShipTypeText}, {"ESTADO", s.StatusText}, {"LATITUD", value(s.Latitude, "%.6f°")}, {"LONGITUD", value(s.Longitude, "%.6f°")}, {"VELOCIDAD", value(s.Speed, "%.1f kn")}, {"RUMBO COG", value(s.Course, "%.1f°")}, {"PROA HDG", value(s.Heading, "%.0f°")}, {"DESTINO", s.Destination}, {"MENSAJES", fmt.Sprintf("%d", s.Messages)}, {"ACTUALIZADO", age.String() + " atrás"}}
+	lines := []struct{ label, val string }{{i18n.Source("text.1ce0cee583e6"), name}, {i18n.Source("text.71bffdfedad3"), fmt.Sprintf("%09d", s.MMSI)}, {i18n.Source("text.3369ec17e9a7"), s.Callsign}, {i18n.Source("text.cd4c8ecf7e4b"), s.ShipTypeText}, {i18n.Source("text.f16fe7d4376e"), s.StatusText}, {i18n.Source("text.5b99241b86d1"), value(s.Latitude, "%.6f°")}, {i18n.Source("text.b0ddd4ea3459"), value(s.Longitude, "%.6f°")}, {i18n.Source("text.5734c29f4857"), value(s.Speed, i18n.Source("text.22780603f84f"))}, {i18n.Source("text.55cfa14868ba"), value(s.Course, "%.1f°")}, {i18n.Source("text.a244b78add6e"), value(s.Heading, "%.0f°")}, {i18n.Source("text.2adab83f1039"), s.Destination}, {i18n.Source("text.fe86cd5572c0"), fmt.Sprintf("%d", s.Messages)}, {i18n.Source("text.25acc60bbe8a"), age.String() + i18n.Source("text.4b39a7e94844")}}
 	for i, line := range lines {
 		y := float32(125 + i*42)
 		simpleui.DrawText(line.label, x, y, 9, colors.muted)

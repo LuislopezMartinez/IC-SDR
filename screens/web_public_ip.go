@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"context"
 	"errors"
 	"io"
@@ -31,7 +33,7 @@ func lookupPublicIPv4From(ctx context.Context, client *http.Client, endpoint str
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return "", errors.New("servicio de IP pública no disponible")
+		return "", errors.New(i18n.Source("text.a6751286cf22"))
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, 64))
 	if err != nil {
@@ -39,7 +41,7 @@ func lookupPublicIPv4From(ctx context.Context, client *http.Client, endpoint str
 	}
 	address := net.ParseIP(strings.TrimSpace(string(data))).To4()
 	if address == nil || !address.IsGlobalUnicast() || address.IsPrivate() || address[0] == 100 && address[1]&0xc0 == 64 {
-		return "", errors.New("el servicio no devolvió una IPv4 pública")
+		return "", errors.New(i18n.Source("text.17a60dbd2ef6"))
 	}
 	return address.String(), nil
 }

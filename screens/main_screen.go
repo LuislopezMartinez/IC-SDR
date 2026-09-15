@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"math"
 	"time"
@@ -218,7 +220,7 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		spectrum:               make([]float32, 4096),
 		waterfallSettings:      defaultWaterfallSettings(),
 		waterfallVisible:       true,
-		activeTool:             "WATERFALL_ADJUST",
+		activeTool:             i18n.Source("text.9b6bb9932898"),
 		viewMode:               1,
 		themeName:              themeDark,
 		spectrumMinimumDB:      -37,
@@ -227,25 +229,25 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		fftRefreshFPS:          60,
 		fftPeakHold:            true,
 		fftPeakDecay:           3,
-		fftWindow:              "HANN",
+		fftWindow:              i18n.Source("text.26701b540b4b"),
 		memoryViewEnabled:      true,
 		recorderFormat:         recorderFormatMP3,
-		scanResume:             "DELAY",
-		scanPolicy:             "CURRENT",
+		scanResume:             i18n.Source("text.85135a165905"),
+		scanPolicy:             i18n.Source("text.e3cc57e193d6"),
 		scanDwellMs:            3000,
 		demodBandwidthHz:       9_000,
-		bandCategory:           "HAM",
+		bandCategory:           i18n.Source("text.4fae663ae96a"),
 		bandName:               "20 m",
-		savedMode:              "USB",
+		savedMode:              i18n.Source("text.61f0acff1735"),
 		dmrAutoCenter:          true,
-		dmrAudioSlot:           "AUTO",
-		aprsView:               "PAQUETES",
+		dmrAudioSlot:           i18n.Source("text.6ea56fae9eac"),
+		aprsView:               i18n.Source("text.74b8a8ece330"),
 		rtl433FrequencyHz:      433_920_000,
 		rtl433BandwidthHz:      500_000,
 		sstvAutomatic:          true,
 		sstvMode:               "R36",
 		sstvCandidateModes:     [4]string{"R36", "R72", "M1", "S1"},
-		subtoneMode:            "AUTO",
+		subtoneMode:            i18n.Source("text.6ea56fae9eac"),
 		settingsPath:           defaultAppSettingsPath(),
 		sMeter:                 &SMeter{},
 	}
@@ -259,12 +261,12 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 }
 
 func (screen *MainScreen) CreateControls() {
-	if screen.activeTool == "SCAN" || screen.activeTool == "MEMORIES" || screen.activeTool == "RECORDER" {
-		screen.activeTool = "WATERFALL_ADJUST"
+	if screen.activeTool == i18n.Source("text.7a1580c49e45") || screen.activeTool == i18n.Source("text.70b71a34c2de") || screen.activeTool == i18n.Source("text.e71378482f31") {
+		screen.activeTool = i18n.Source("text.9b6bb9932898")
 	}
 	screen.filterSelector = NewFilterSelector(screen.selectFilter)
-	screen.mode = simpleui.NewDropdown("mode", 134, 16, 110, 48, "MODE",
-		[]string{"AM", "NFM", "WFM", "USB", "LSB", "CW", "DMR BETA", "ADS-B", "UAT", "TETRA"}, 16)
+	screen.mode = simpleui.NewDropdown("mode", 134, 16, 110, 48, i18n.Source("text.ac6c84ed1369"),
+		[]string{"AM", i18n.Source("text.0896d612d497"), i18n.Source("text.6b742bac3eb4"), i18n.Source("text.61f0acff1735"), i18n.Source("text.6323db4948ad"), "CW", i18n.Source("text.2604864ce4d3"), i18n.Source("text.7866f9f32e66"), i18n.Source("text.72c048cb5100"), i18n.Source("text.f69d86a86926")}, 16)
 	for index, item := range screen.mode.Items() {
 		if item == screen.savedMode {
 			screen.mode.SetSelected(index)
@@ -275,10 +277,10 @@ func (screen *MainScreen) CreateControls() {
 	screen.mode.OnChange(func(_ int, mode string) {
 		screen.savedMode = mode
 		screen.selectFilter(screen.filterSelector.Current(mode))
-		if mode == "DMR BETA" && screen.activeTool != "SCAN" {
-			screen.selectTool("DMR_MONITOR")
-		} else if mode != "DMR BETA" && screen.activeTool == "DMR_MONITOR" {
-			screen.selectTool("PBT_AUDIO")
+		if mode == i18n.Source("text.2604864ce4d3") && screen.activeTool != i18n.Source("text.7a1580c49e45") {
+			screen.selectTool(i18n.Source("text.93239b223632"))
+		} else if mode != i18n.Source("text.2604864ce4d3") && screen.activeTool == i18n.Source("text.93239b223632") {
+			screen.selectTool(i18n.Source("text.a42c60257b01"))
 		}
 		screen.markSettingsDirty()
 	})
@@ -288,54 +290,54 @@ func (screen *MainScreen) CreateControls() {
 	screen.filter = simpleui.NewButton("filter", 252, 16, 108, 48, filterButtonLabel(initialFilter), 12)
 	screen.filter.OnClick(func() { screen.filterSelector.Open(screen.mode.SelectedText()) })
 
-	screen.band = simpleui.NewButton("band", 368, 16, 140, 48, "BAND  "+screen.bandName, 12)
+	screen.band = simpleui.NewButton("band", 368, 16, 140, 48, i18n.Source("text.eae2605aec31")+screen.bandName, 12)
 	screen.bandSelector = NewBandSelector(screen.bandCategory, screen.bandName, screen.selectBand)
 	screen.band.OnClick(screen.bandSelector.Open)
 
-	squelch := simpleui.NewSwitch("squelch", 972, 24, 82, 28, "SQL", screen.squelchEnabled, 12)
+	squelch := simpleui.NewSwitch("squelch", 972, 24, 82, 28, i18n.Source("text.a7056a455639"), screen.squelchEnabled, 12)
 	screen.squelchSwitch = squelch
 	squelch.OnChange(func(active bool) { screen.squelchEnabled = active; screen.applySquelch(); screen.markSettingsDirty() })
-	screen.squelchLabel = simpleui.NewLabel("squelchLabel", 1059, 24, 103, 22, fmt.Sprintf("LEVEL %d dBm", screen.squelchThreshold), 10)
+	screen.squelchLabel = simpleui.NewLabel("squelchLabel", 1059, 24, 103, 22, fmt.Sprintf(i18n.Source("text.95de47dd223a"), screen.squelchThreshold), 10)
 	screen.squelchLabel.SetColor(colors.orange)
 	screen.squelchSlider = simpleui.NewSlider("squelchLevel", 1152, 27, 92, 20, screen.spectrumMinimumDB, screen.spectrumMaximumDB, float32(screen.squelchThreshold))
 	screen.squelchSlider.SetStep(1)
 	screen.squelchSlider.OnChange(func(value float32) {
 		screen.squelchThreshold = int(value)
-		screen.squelchLabel.SetText(fmt.Sprintf("LEVEL %.0f dBm", value))
+		screen.squelchLabel.SetText(fmt.Sprintf(i18n.Source("text.7bb48685d845"), value))
 		screen.applySquelch()
 		screen.markSettingsDirty()
 	})
-	holdLabel := simpleui.NewLabel("holdLabel", 972, 83, 108, 20, fmt.Sprintf("HOLD TIME %d ms", screen.squelchHoldMs), 10)
+	holdLabel := simpleui.NewLabel("holdLabel", 972, 83, 108, 20, fmt.Sprintf(i18n.Source("text.4bec5be2178a"), screen.squelchHoldMs), 10)
 	holdLabel.SetColor(colors.muted)
 	holdSlider := simpleui.NewSlider("hold", 1082, 85, 162, 18, 0, 300, float32(screen.squelchHoldMs))
 	holdSlider.SetStep(1)
 	holdSlider.OnChange(func(value float32) {
 		screen.squelchHoldMs = int(value)
-		holdLabel.SetText(fmt.Sprintf("HOLD TIME %.0f ms", value))
+		holdLabel.SetText(fmt.Sprintf(i18n.Source("text.0da7421dd019"), value))
 		screen.applySquelch()
 		screen.markSettingsDirty()
 	})
-	closeLabel := simpleui.NewLabel("closeLabel", 972, 116, 108, 20, fmt.Sprintf("CLOSE TIME %d ms", screen.squelchCloseMs), 10)
+	closeLabel := simpleui.NewLabel("closeLabel", 972, 116, 108, 20, fmt.Sprintf(i18n.Source("text.19c469a67b80"), screen.squelchCloseMs), 10)
 	closeLabel.SetColor(colors.muted)
 	closeSlider := simpleui.NewSlider("close", 1082, 118, 162, 18, 20, 500, float32(screen.squelchCloseMs))
 	closeSlider.SetStep(1)
 	closeSlider.OnChange(func(value float32) {
 		screen.squelchCloseMs = int(value)
-		closeLabel.SetText(fmt.Sprintf("CLOSE TIME %.0f ms", value))
+		closeLabel.SetText(fmt.Sprintf(i18n.Source("text.64cc825f4b03"), value))
 		screen.applySquelch()
 		screen.markSettingsDirty()
 	})
 	screen.syncSquelchToSpectrumRange()
 
-	mute := simpleui.NewSwitch("mute", 338, 111, 166, 28, "MUTE", screen.muted, uiMinimumFontSize)
-	screen.volumeLabel = simpleui.NewLabel("volumeLabel", 338, 148, 58, 22, fmt.Sprintf("VOL %.0f%%", screen.volume), uiMinimumFontSize)
+	mute := simpleui.NewSwitch("mute", 338, 111, 166, 28, i18n.Source("text.699ea8f5b381"), screen.muted, uiMinimumFontSize)
+	screen.volumeLabel = simpleui.NewLabel("volumeLabel", 338, 148, 58, 22, fmt.Sprintf(i18n.Source("text.594875f2c60c"), screen.volume), uiMinimumFontSize)
 	screen.volumeLabel.SetColor(colors.cyan)
 	screen.volumeSlider = simpleui.NewSlider("volume", 397, 149, 107, 22, 0, 100, screen.volume)
 	screen.volumeSlider.SetStep(1)
 	screen.volumeSlider.OnChange(func(value float32) {
 		screen.volume = value
 		screen.audioPlayer.SetVolume(value / 100)
-		screen.volumeLabel.SetText(fmt.Sprintf("VOL %.0f%%", value))
+		screen.volumeLabel.SetText(fmt.Sprintf(i18n.Source("text.594875f2c60c"), value))
 		screen.markSettingsDirty()
 	})
 	mute.OnChange(func(active bool) {
@@ -343,25 +345,25 @@ func (screen *MainScreen) CreateControls() {
 		screen.audioPlayer.SetMuted(active)
 		screen.volumeSlider.SetEnabled(!active)
 		if active {
-			screen.volumeLabel.SetText("MUTED")
+			screen.volumeLabel.SetText(i18n.Source("text.03b0c21a17ef"))
 			screen.volumeLabel.SetColor(colors.red)
 		} else {
-			screen.volumeLabel.SetText(fmt.Sprintf("VOL %.0f%%", screen.volume))
+			screen.volumeLabel.SetText(fmt.Sprintf(i18n.Source("text.594875f2c60c"), screen.volume))
 			screen.volumeLabel.SetColor(colors.cyan)
 		}
 		screen.markSettingsDirty()
 	})
 
-	modeLabel := "CENTER"
+	modeLabel := i18n.Source("text.2215b79651c3")
 	if !screen.centerMode {
-		modeLabel = "FIX"
+		modeLabel = i18n.Source("text.74b313a5c9bc")
 	}
 	screen.vfoModeSwitch = simpleui.NewSwitch("vfoMode", 1110, 159, 136, 28, modeLabel, !screen.centerMode, 12)
 	screen.vfoModeSwitch.OnChange(func(fixed bool) {
 		screen.centerMode = !fixed
-		screen.vfoModeSwitch.SetLabel("FIX")
+		screen.vfoModeSwitch.SetLabel(i18n.Source("text.74b313a5c9bc"))
 		if screen.centerMode {
-			screen.vfoModeSwitch.SetLabel("CENTER")
+			screen.vfoModeSwitch.SetLabel(i18n.Source("text.2215b79651c3"))
 			screen.centerFrequencyHz = screen.frequencyHz
 		}
 		if screen.receiver != nil {
@@ -373,24 +375,24 @@ func (screen *MainScreen) CreateControls() {
 		}
 		screen.markSettingsDirty()
 	})
-	screen.memViewSwitch = simpleui.NewSwitch("memView", 972, 159, 128, 28, "MEM VIEW", screen.memoryViewEnabled, 12)
+	screen.memViewSwitch = simpleui.NewSwitch("memView", 972, 159, 128, 28, i18n.Source("text.92f6879b244f"), screen.memoryViewEnabled, 12)
 	screen.memViewSwitch.OnChange(screen.setMemoryView)
 	spanDown := simpleui.NewButton("spanDown", frequencyPanelX+16, frequencyPanelY+36, 36, 32, "-", 16)
 	spanUp := simpleui.NewButton("spanUp", frequencyPanelX+58, frequencyPanelY+36, 36, 32, "+", 16)
-	screen.menuButton = simpleui.NewButton("menu", 24, 16, 102, 48, "MENÚ", 13)
+	screen.menuButton = simpleui.NewButton("menu", 24, 16, 102, 48, i18n.Source("text.e10d09208b67"), 13)
 	screen.menuButton.SetColors(rl.Color{R: 13, G: 92, B: 164, A: 255}, rl.Color{R: 17, G: 185, B: 240, A: 255}, rl.White)
 	screen.menuButton.SetMenuIcon(true)
-	screen.viewButton = simpleui.NewButton("view", frequencyDialX+9, frequencyPanelY+7, 140, 24, "VIEW 1", 12)
-	screen.step = simpleui.NewButton("step", frequencyDialX+9, frequencyPanelY+frequencyPanelH-23, 43, 19, "STEP", 10)
+	screen.viewButton = simpleui.NewButton("view", frequencyDialX+9, frequencyPanelY+7, 140, 24, i18n.Source("text.e94ca1cb48a2"), 12)
+	screen.step = simpleui.NewButton("step", frequencyDialX+9, frequencyPanelY+frequencyPanelH-23, 43, 19, i18n.Source("text.78e75a25d809"), 10)
 	screen.stepDown = simpleui.NewButton("stepDown", frequencyDialX+57, frequencyPanelY+frequencyPanelH-23, 27, 19, "-", 13)
 	screen.stepUp = simpleui.NewButton("stepUp", frequencyDialX+197, frequencyPanelY+frequencyPanelH-23, 27, 19, "+", 13)
-	screen.themeButton = simpleui.NewButton("theme", frequencyDialX+155, frequencyPanelY+7, 147, 24, "ESTILO", 12)
+	screen.themeButton = simpleui.NewButton("theme", frequencyDialX+155, frequencyPanelY+7, 147, 24, i18n.Source("text.193f56324ce6"), 12)
 	spanDown.OnClick(func() { screen.changeSpan(-1) })
 	spanUp.OnClick(func() { screen.changeSpan(1) })
 	screen.toolMenu = NewToolMenu(screen.activeTool, screen.selectTool)
 	screen.toolMenu.SetSelectSound(screen.uiSounds.PlayToolSelect)
 	simpleui.SetActivationFeedback(screen.uiSounds.PlayButton)
-	if screen.receiver != nil && screen.savedHardware != nil {
+	if screen.receiver != nil && screen.savedHardware != nil && screen.savedHardware.Driver == screen.receiver.HardwareSettings().Driver {
 		screen.receiver.ApplyHardwareSettings(*screen.savedHardware)
 	}
 	screen.sdrHeader = NewSDRHeaderPanel(screen.receiver, screen.markSettingsDirty)
@@ -427,7 +429,7 @@ func (screen *MainScreen) CreateControls() {
 	if screen.rtl433BandwidthHz > 0 {
 		screen.rtl433Panel.bandwidthHz = screen.rtl433BandwidthHz
 	}
-	if screen.activeTool == "SCAN" {
+	if screen.activeTool == i18n.Source("text.7a1580c49e45") {
 		screen.scanPanel.Enter()
 	}
 	screen.recorder = NewAudioRecorder()
@@ -530,31 +532,31 @@ func (screen *MainScreen) CreateControls() {
 	screen.applyTheme(screen.themeName)
 	// Apply the restored workspace only after every tool control exists.
 	screen.setViewMode(screen.viewMode)
-	if screen.activeTool == "RTL_433" {
+	if screen.activeTool == i18n.Source("text.8be70e7cb2c4") {
 		screen.rtl433Panel.Enter()
 	}
-	if screen.activeTool == "RADIOSONDE" {
+	if screen.activeTool == i18n.Source("text.7dd172035702") {
 		screen.radiosondePanel.Enter()
 	}
-	if screen.activeTool == "AIS" {
+	if screen.activeTool == i18n.Source("text.208a2a3f8f27") {
 		screen.aisPanel.Enter()
 	}
-	if screen.activeTool == "AIRCRAFT" {
+	if screen.activeTool == i18n.Source("text.a3201958b4e6") {
 		screen.aircraftPanel.Enter()
 	}
-	if screen.activeTool == "SATELLITES" {
+	if screen.activeTool == i18n.Source("text.bcdc9d50f2be") {
 		screen.satellitePanel.Enter()
 	}
-	if screen.activeTool == "APRS" {
+	if screen.activeTool == i18n.Source("text.4c4310fd27fd") {
 		screen.aprsPanel.Enter()
 	}
-	if screen.activeTool == "SSTV" {
+	if screen.activeTool == i18n.Source("text.820d4685bc9d") {
 		screen.sstvPanel.Enter()
 	}
-	if screen.activeTool == "TETRA" {
+	if screen.activeTool == i18n.Source("text.f69d86a86926") {
 		screen.tetraPanel.Enter()
 	}
-	if screen.activeTool == "DIGITAL_AUTO" {
+	if screen.activeTool == i18n.Source("text.a8cbb160caa6") {
 		screen.digitalVoicePanel.Enter()
 	}
 	if screen.receiver != nil {
@@ -572,9 +574,9 @@ func (screen *MainScreen) Draw() {
 	}
 	if screen.vfoModeSwitch != nil {
 		if screen.centerMode {
-			screen.vfoModeSwitch.SetLabel("CENTER")
+			screen.vfoModeSwitch.SetLabel(i18n.Source("text.2215b79651c3"))
 		} else {
-			screen.vfoModeSwitch.SetLabel("FIX")
+			screen.vfoModeSwitch.SetLabel(i18n.Source("text.74b313a5c9bc"))
 		}
 	}
 	screen.flushSettings(false)
@@ -582,7 +584,7 @@ func (screen *MainScreen) Draw() {
 	screen.recorderPanel.Tick()
 	// Valid DMR voice frames are already gated by DSDcc; the RF squelch must
 	// never cut or omit decoded digital audio from a recording.
-	digitalAudio := screen.mode != nil && (screen.mode.SelectedText() == "DMR BETA" || screen.mode.SelectedText() == "TETRA" || screen.activeTool == "DIGITAL_AUTO")
+	digitalAudio := screen.mode != nil && (screen.mode.SelectedText() == i18n.Source("text.2604864ce4d3") || screen.mode.SelectedText() == i18n.Source("text.f69d86a86926") || screen.activeTool == i18n.Source("text.a8cbb160caa6"))
 	screen.audioPlayer.SetRecorderSquelch(screen.squelchEnabled && !digitalAudio, screen.stats.SquelchOpen)
 	screen.audioPlayer.Pump()
 	screen.uiSounds.EnsureLoaded()
@@ -644,7 +646,7 @@ func (screen *MainScreen) Draw() {
 	rl.DrawRectangle(0, 0, int32(designWidth), int32(designHeight), colors.background)
 	screen.drawHeader()
 	screen.drawSpectrum()
-	if screen.activeTool != "DIGITAL_AUTO" {
+	if screen.activeTool != i18n.Source("text.a8cbb160caa6") {
 		if screen.receiver != nil {
 			screen.waterfall.Update(screen.receiver, screen.stats.SampleRate, screen.spanHz)
 		}
@@ -729,7 +731,7 @@ func (screen *MainScreen) syncSquelchToSpectrumRange() {
 	threshold := min(max(float32(screen.squelchThreshold), screen.spectrumMinimumDB), screen.spectrumMaximumDB)
 	screen.squelchThreshold = int(math.Round(float64(threshold)))
 	screen.squelchSlider.SetValue(float32(screen.squelchThreshold))
-	screen.squelchLabel.SetText(fmt.Sprintf("LEVEL %d dBm", screen.squelchThreshold))
+	screen.squelchLabel.SetText(fmt.Sprintf(i18n.Source("text.95de47dd223a"), screen.squelchThreshold))
 	screen.applySquelch()
 }
 
@@ -742,7 +744,7 @@ func (screen *MainScreen) drawHeader() {
 
 	screen.sMeter.Draw(24, 94, 290, 96)
 	drawPanel(326, 94, 190, 96)
-	simpleui.DrawTextStyled(fmt.Sprintf("AUDIO  %.0f dB", screen.audioMeterDB), 338, 101, 12, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(fmt.Sprintf(i18n.Source("text.63fe745de86a"), screen.audioMeterDB), 338, 101, 12, simpleui.FontSemiBold, colors.cyan)
 	drawCompactAudioMeter(338, 178, 166, 7, screen.audioMeterDB)
 
 	screen.drawFrequencyDisplay()
@@ -762,7 +764,7 @@ const (
 func (screen *MainScreen) drawFrequencyDisplay() {
 	drawPanel(frequencyPanelX, frequencyPanelY, frequencyPanelW, frequencyPanelH)
 	rl.DrawLineEx(rl.Vector2{X: frequencyDividerX, Y: frequencyPanelY + 7}, rl.Vector2{X: frequencyDividerX, Y: frequencyPanelY + frequencyPanelH - 7}, 1, colors.border)
-	simpleui.DrawTextStyled("SPAN", frequencyPanelX+16, frequencyPanelY+9, 11, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(i18n.Source("text.07014fb273ea"), frequencyPanelX+16, frequencyPanelY+9, 11, simpleui.FontSemiBold, colors.cyan)
 
 	formatted := formatDialFrequency(screen.frequencyHz)
 	totalWidth := simpleui.MeasureTextStyled(formatted, frequencyFontSize, simpleui.FontMono).X
@@ -792,15 +794,15 @@ func (screen *MainScreen) drawFrequencyDisplay() {
 	}
 
 	footerY := frequencyPanelY + frequencyPanelH - 18
-	spanValue := fmt.Sprintf("%.3f MHz", float64(screen.spanHz)/1_000_000)
+	spanValue := fmt.Sprintf(i18n.Source("text.a433787084ce"), float64(screen.spanHz)/1_000_000)
 	spanWidth := simpleui.MeasureTextStyled(spanValue, 11, simpleui.FontSemiBold).X
 	simpleui.DrawTextStyled(spanValue, frequencyPanelX+(108-spanWidth)*.5, footerY, 11, simpleui.FontSemiBold, colors.muted)
 	label := formatStep(screen.tuningStepHz)
 	width := simpleui.MeasureTextStyled(label, 12, simpleui.FontSemiBold).X
 	simpleui.DrawTextStyled(label, frequencyDialX+140-width*.5, footerY, 12, simpleui.FontSemiBold, colors.orange)
-	centerLabel, centerColor := "FIX", colors.orange
+	centerLabel, centerColor := i18n.Source("text.74b313a5c9bc"), colors.orange
 	if screen.centerMode {
-		centerLabel, centerColor = "CENTER", colors.green
+		centerLabel, centerColor = i18n.Source("text.2215b79651c3"), colors.green
 	}
 	centerWidth := simpleui.MeasureTextStyled(centerLabel, 12, simpleui.FontSemiBold).X
 	simpleui.DrawTextStyled(centerLabel, frequencyPanelX+frequencyPanelW-18-centerWidth, footerY, 12, simpleui.FontSemiBold, centerColor)
@@ -867,8 +869,8 @@ func (screen *MainScreen) drawSquelchPanel() {
 	if screen.squelchEnabled {
 		rl.DrawRectangleRounded(rl.Rectangle{X: timelineX, Y: timelineY, Width: holdWidth, Height: 9}, .4, 6, colors.orange)
 	}
-	simpleui.DrawTextStyled("HOLD", timelineX, timelineY-17, 9, simpleui.FontSemiBold, colors.orange)
-	closeText := "CLOSE → 0"
+	simpleui.DrawTextStyled(i18n.Source("text.aacf94b7be62"), timelineX, timelineY-17, 9, simpleui.FontSemiBold, colors.orange)
+	closeText := i18n.Source("text.d3f0053c6196")
 	closeWidth := simpleui.MeasureTextStyled(closeText, 9, simpleui.FontSemiBold).X
 	simpleui.DrawTextStyled(closeText, timelineX+timelineWidth-closeWidth, timelineY-17, 9, simpleui.FontSemiBold, colors.red)
 
@@ -886,12 +888,12 @@ func (screen *MainScreen) drawSpectrum() {
 		screen.rtl433Panel.DrawSpectrumOverlay(x, y, width, height)
 	}
 	// Leave the left dB scale its own lane so the spectrum title never overlaps it.
-	drawSmallText("RF SPECTRUM", x+58, y+10, colors.cyan)
+	drawSmallText(i18n.Source("text.6a02e0c6f85a"), x+58, y+10, colors.cyan)
 	for division := 0; division <= 5; division++ {
 		fraction := float32(division) / 5
 		level := screen.spectrumMaximumDB + (screen.spectrumMinimumDB-screen.spectrumMaximumDB)*fraction
 		labelY := screen.spectrumY(level, y, height)
-		drawSmallText(fmt.Sprintf("%.0f dBm", level), x+5, labelY+2, colors.muted)
+		drawSmallText(fmt.Sprintf(i18n.Source("text.53958b285bfc"), level), x+5, labelY+2, colors.muted)
 	}
 
 	if screen.stats.FFTBlocks > 0 {
@@ -928,7 +930,7 @@ func (screen *MainScreen) drawSpectrum() {
 	} else {
 		message := screen.stats.Status
 		if message == "" {
-			message = "Esperando stream IQ…"
+			message = i18n.Source("text.813798c6ec04")
 		}
 		simpleui.DrawText(message, x+48, y+height*.5, 13, colors.orange)
 	}
@@ -954,11 +956,11 @@ func (screen *MainScreen) drawSpectrum() {
 	if screen.scanPanel != nil {
 		screen.scanPanel.DrawSpectrumOverlay(x, y, width, height)
 	}
-	scannerUsesSQL := screen.scanPanel != nil && (screen.activeTool == "SCAN" || screen.scanPanel.running)
+	scannerUsesSQL := screen.scanPanel != nil && (screen.activeTool == i18n.Source("text.7a1580c49e45") || screen.scanPanel.running)
 	if screen.squelchEnabled || scannerUsesSQL {
 		sqlY := screen.spectrumY(float32(screen.squelchThreshold), y, height)
 		rl.DrawLineEx(rl.Vector2{X: x, Y: sqlY}, rl.Vector2{X: x + width, Y: sqlY}, 1.5, rl.Color{R: 255, G: 105, B: 45, A: 175})
-		label := fmt.Sprintf("SQL %d", screen.squelchThreshold)
+		label := fmt.Sprintf(i18n.Source("text.c86cfab66c5e"), screen.squelchThreshold)
 		labelWidth := simpleui.MeasureTextStyled(label, 11, simpleui.FontSemiBold).X
 		tag := rl.Rectangle{X: x + 5, Y: sqlY - 10, Width: labelWidth + 12, Height: 18}
 		rl.DrawRectangleRounded(tag, .2, 6, rl.Color{R: 15, G: 18, B: 26, A: 220})
@@ -1001,8 +1003,8 @@ func (screen *MainScreen) drawSpectrumHoverTooltip(x, y, width, height float32) 
 		return
 	}
 	frequencyHz := float64(screen.centerFrequencyHz-screen.spanHz/2) + float64(fraction)*float64(screen.spanHz)
-	frequencyText := fmt.Sprintf("%.6f MHz", frequencyHz/1e6)
-	levelText := fmt.Sprintf("%+.1f dBFS", level)
+	frequencyText := fmt.Sprintf(i18n.Source("text.5c87fd270c6b"), frequencyHz/1e6)
+	levelText := fmt.Sprintf(i18n.Source("text.9b0a1dd8d03d"), level)
 	fontSize := int32(13)
 	textWidth := max(simpleui.MeasureTextStyled(frequencyText, fontSize, simpleui.FontMono).X,
 		simpleui.MeasureTextStyled(levelText, fontSize, simpleui.FontMono).X)
@@ -1036,10 +1038,10 @@ func (screen *MainScreen) drawDemodulatedBandwidth(x, y, width, height float32) 
 	bandPixels := width * float32(screen.demodBandwidthHz) / float32(screen.spanHz)
 	left, right := cursorX-bandPixels*.5, cursorX+bandPixels*.5
 	mode := screen.mode.SelectedText()
-	if (mode == "USB" || mode == "LSB") && screen.audioPanel != nil && !screen.audioPanel.pbtBypassed {
+	if (mode == i18n.Source("text.61f0acff1735") || mode == i18n.Source("text.6323db4948ad")) && screen.audioPanel != nil && !screen.audioPanel.pbtBypassed {
 		lowPixels := width * float32(screen.audioPanel.pbtLow) / float32(screen.spanHz)
 		highPixels := width * float32(screen.audioPanel.pbtHigh) / float32(screen.spanHz)
-		if mode == "USB" {
+		if mode == i18n.Source("text.61f0acff1735") {
 			left, right = cursorX+lowPixels, cursorX+highPixels
 		} else {
 			left, right = cursorX-highPixels, cursorX-lowPixels
@@ -1061,17 +1063,17 @@ func (screen *MainScreen) drawDemodulatedBandwidth(x, y, width, height float32) 
 	rl.DrawLineEx(rl.Vector2{X: visibleLeft, Y: y + 1}, rl.Vector2{X: visibleLeft, Y: y + height - 27}, 1, colors.orange)
 	rl.DrawLineEx(rl.Vector2{X: visibleRight, Y: y + 1}, rl.Vector2{X: visibleRight, Y: y + height - 27}, 1, colors.orange)
 	labelBandwidth := screen.demodBandwidthHz
-	if (mode == "USB" || mode == "LSB") && screen.audioPanel != nil && !screen.audioPanel.pbtBypassed {
+	if (mode == i18n.Source("text.61f0acff1735") || mode == i18n.Source("text.6323db4948ad")) && screen.audioPanel != nil && !screen.audioPanel.pbtBypassed {
 		labelBandwidth = screen.audioPanel.pbtHigh - screen.audioPanel.pbtLow
 	}
 	_ = labelBandwidth // Rendered together with the frequency in the cursor plate.
 }
 
 func (screen *MainScreen) drawTuningCursorLabel(cursorX, y, graphX, graphWidth float32, markerColor rl.Color) {
-	frequency := fmt.Sprintf("%.6f MHz", float64(screen.frequencyHz)/1e6)
+	frequency := fmt.Sprintf(i18n.Source("text.5c87fd270c6b"), float64(screen.frequencyHz)/1e6)
 	bandwidth := "BW  " + formatFilterBandwidth(screen.demodBandwidthHz)
-	if mode := screen.mode.SelectedText(); (mode == "USB" || mode == "LSB") && screen.audioPanel != nil && !screen.audioPanel.pbtBypassed {
-		bandwidth = "PBT  " + formatFilterBandwidth(screen.audioPanel.pbtHigh-screen.audioPanel.pbtLow)
+	if mode := screen.mode.SelectedText(); (mode == i18n.Source("text.61f0acff1735") || mode == i18n.Source("text.6323db4948ad")) && screen.audioPanel != nil && !screen.audioPanel.pbtBypassed {
+		bandwidth = i18n.Source("text.3f182c244942") + formatFilterBandwidth(screen.audioPanel.pbtHigh-screen.audioPanel.pbtLow)
 	}
 	frequencySize, detailSize := int32(15), int32(12)
 	freqWidth := simpleui.MeasureTextStyled(frequency, frequencySize, simpleui.FontMono).X
@@ -1088,45 +1090,45 @@ func (screen *MainScreen) drawTuningCursorLabel(cursorX, y, graphX, graphWidth f
 }
 
 func (screen *MainScreen) drawLowerWorkspace() {
-	if screen.activeTool == "DIGITAL_AUTO" {
+	if screen.activeTool == i18n.Source("text.a8cbb160caa6") {
 		screen.digitalVoicePanel.DrawPanel()
 		return
 	}
 	drawPanel(toolContentX, toolY, toolContentRight-toolContentX, toolH)
-	if screen.activeTool == "TETRA" && !screen.waterfallVisible {
+	if screen.activeTool == i18n.Source("text.f69d86a86926") && !screen.waterfallVisible {
 		screen.tetraPanel.DrawPanel()
 		return
 	}
-	if screen.activeTool == "WEB_SERVER" {
+	if screen.activeTool == i18n.Source("text.918191dc299c") {
 		screen.webPanel.DrawPanel()
 		return
 	}
 	drawCompactedTool(func() {
 		if screen.waterfallVisible {
-			drawSmallText("WATERFALL ADJUST", 40, toolY+12, colors.cyan)
-		} else if screen.activeTool == "FFT" {
+			drawSmallText(i18n.Source("text.5a921a588ee1"), 40, toolY+12, colors.cyan)
+		} else if screen.activeTool == i18n.Source("text.94fa3fe96dde") {
 			screen.fftDisplay.DrawPanel()
-		} else if screen.activeTool == "PBT_AUDIO" {
+		} else if screen.activeTool == i18n.Source("text.a42c60257b01") {
 			screen.audioPanel.DrawPanel()
-		} else if screen.activeTool == "DMR_MONITOR" {
+		} else if screen.activeTool == i18n.Source("text.93239b223632") {
 			screen.dmrPanel.DrawPanel()
-		} else if screen.activeTool == "RTL_433" {
+		} else if screen.activeTool == i18n.Source("text.8be70e7cb2c4") {
 			screen.rtl433Panel.DrawPanel()
-		} else if screen.activeTool == "RADIOSONDE" {
+		} else if screen.activeTool == i18n.Source("text.7dd172035702") {
 			screen.radiosondePanel.DrawPanel()
-		} else if screen.activeTool == "AIS" {
+		} else if screen.activeTool == i18n.Source("text.208a2a3f8f27") {
 			screen.aisPanel.DrawPanel()
-		} else if screen.activeTool == "AIRCRAFT" {
+		} else if screen.activeTool == i18n.Source("text.a3201958b4e6") {
 			screen.aircraftPanel.DrawPanel()
-		} else if screen.activeTool == "APRS" {
+		} else if screen.activeTool == i18n.Source("text.4c4310fd27fd") {
 			screen.aprsPanel.DrawPanel()
-		} else if screen.activeTool == "SSTV" {
+		} else if screen.activeTool == i18n.Source("text.820d4685bc9d") {
 			screen.sstvPanel.DrawPanel()
-		} else if screen.activeTool == "SATELLITES" {
+		} else if screen.activeTool == i18n.Source("text.bcdc9d50f2be") {
 			screen.satellitePanel.DrawPanel()
 		} else {
 			drawSmallText(toolDisplayName(screen.activeTool), 40, toolY+14, colors.cyan)
-			simpleui.DrawText("Esta herramienta se implementará en la siguiente fase. Pulsa MENU para cambiar de tool.", 40, toolY+48, 10, colors.muted)
+			simpleui.DrawText(i18n.Source("text.cfa75b09d20e"), 40, toolY+48, 10, colors.muted)
 		}
 	})
 }
@@ -1138,31 +1140,31 @@ func (screen *MainScreen) drawWaterfall() {
 }
 
 func (screen *MainScreen) createWaterfallControls() {
-	screen.wfOffsetLabel = simpleui.NewLabel("wfOffsetLabel", 40, 650, 175, 18, "COLOR OFFSET  0 dB", 12)
+	screen.wfOffsetLabel = simpleui.NewLabel("wfOffsetLabel", 40, 650, 175, 18, i18n.Source("text.05e2f3d86df6"), 12)
 	screen.wfOffsetLabel.SetAlignment(simpleui.AlignCenter)
 	screen.wfOffsetSlider = simpleui.NewSlider("wfOffset", 48, 684, 167, 20, -80, 40, float32(screen.waterfallSettings.ColorOffsetDB))
 	screen.wfOffsetSlider.SetStep(1)
 
-	screen.wfContrastLabel = simpleui.NewLabel("wfContrastLabel", 230, 650, 180, 18, "CONTRAST  100 %", 12)
+	screen.wfContrastLabel = simpleui.NewLabel("wfContrastLabel", 230, 650, 180, 18, i18n.Source("text.ef785025081a"), 12)
 	screen.wfContrastLabel.SetAlignment(simpleui.AlignCenter)
 	screen.wfContrastSlider = simpleui.NewSlider("wfContrast", 238, 684, 170, 20, 25, 200, float32(screen.waterfallSettings.Contrast))
 	screen.wfContrastSlider.SetStep(1)
 
-	screen.wfRangeLabel = simpleui.NewLabel("wfRangeLabel", 430, 650, 210, 18, "LEVEL  -80 / -20 dBm", 12)
+	screen.wfRangeLabel = simpleui.NewLabel("wfRangeLabel", 430, 650, 210, 18, i18n.Source("text.4258625aea4f"), 12)
 	screen.wfRangeLabel.SetAlignment(simpleui.AlignCenter)
 	screen.wfRangeSlider = simpleui.NewRangeSlider("wfRange", 438, 684, 194, 20, -140, 20, screen.waterfallSettings.MinimumDBm, screen.waterfallSettings.MaximumDBm)
 	screen.wfRangeSlider.SetStep(1)
 	screen.wfRangeSlider.SetMinimumGap(10)
 	screen.wfRangeSlider.SetRangeDragging(false)
 
-	screen.wfSpeedLabel = simpleui.NewLabel("wfSpeedLabel", 655, 650, 175, 18, "SPEED  31 lines/s", 12)
+	screen.wfSpeedLabel = simpleui.NewLabel("wfSpeedLabel", 655, 650, 175, 18, i18n.Source("text.c4d670fd6a8b"), 12)
 	screen.wfSpeedLabel.SetAlignment(simpleui.AlignCenter)
 	screen.wfSpeedSlider = simpleui.NewSlider("wfSpeed", 660, 684, 170, 20, 5, 60, float32(screen.waterfallSettings.LinesPerSecond))
 	screen.wfSpeedSlider.SetStep(1)
 
-	screen.wfPaletteButton = simpleui.NewButton("wfPalette", 850, 657, 150, 48, "PALETTE  BLUE", 12)
-	reset := simpleui.NewButton("wfReset", 1015, 657, 90, 48, "RESET", 12)
-	closeButton := simpleui.NewButton("wfClose", 1120, 657, 110, 48, "CLOSE", 12)
+	screen.wfPaletteButton = simpleui.NewButton("wfPalette", 850, 657, 150, 48, i18n.Source("text.18652a0d4bd5"), 12)
+	reset := simpleui.NewButton("wfReset", 1015, 657, 90, 48, i18n.Source("text.7ef2fad58d1f"), 12)
+	closeButton := simpleui.NewButton("wfClose", 1120, 657, 110, 48, i18n.Source("text.f13a1ed0cf3c"), 12)
 
 	screen.wfOffsetSlider.OnChange(func(value float32) {
 		screen.waterfallSettings.ColorOffsetDB = int(value)
@@ -1189,7 +1191,7 @@ func (screen *MainScreen) createWaterfallControls() {
 		screen.markSettingsDirty()
 	})
 	screen.wfPaletteButton.OnClick(func() {
-		palettes := []string{"BLUE", "VIRIDIS", "FIRE", "GRAY"}
+		palettes := []string{i18n.Source("text.24a866f4940f"), i18n.Source("text.ddacfc88b465"), i18n.Source("text.f27f17e3f063"), i18n.Source("text.2d71cca47c3a")}
 		index := 0
 		for current, palette := range palettes {
 			if palette == screen.waterfallSettings.Palette {
@@ -1213,7 +1215,7 @@ func (screen *MainScreen) createWaterfallControls() {
 		screen.waterfall.InvalidateColors()
 		screen.markSettingsDirty()
 	})
-	closeButton.OnClick(func() { screen.selectTool("WATERFALL") })
+	closeButton.OnClick(func() { screen.selectTool(i18n.Source("text.e52a5d80bf71")) })
 
 	screen.waterfallControls = []simpleui.Element{
 		screen.wfOffsetLabel, screen.wfOffsetSlider,
@@ -1231,11 +1233,11 @@ func (screen *MainScreen) refreshWaterfallControls() {
 	if settings.ColorOffsetDB > 0 {
 		offset = "+" + offset
 	}
-	screen.wfOffsetLabel.SetText("COLOR OFFSET  " + offset + " dB")
-	screen.wfContrastLabel.SetText(fmt.Sprintf("CONTRAST  %d %%", settings.Contrast))
-	screen.wfRangeLabel.SetText(fmt.Sprintf("LEVEL  %.0f / %.0f dBm", settings.MinimumDBm, settings.MaximumDBm))
-	screen.wfSpeedLabel.SetText(fmt.Sprintf("SPEED  %d lines/s", settings.LinesPerSecond))
-	screen.wfPaletteButton.SetLabel("PALETTE  " + settings.Palette)
+	screen.wfOffsetLabel.SetText(i18n.Source("text.719e064d75e9") + offset + " dB")
+	screen.wfContrastLabel.SetText(fmt.Sprintf(i18n.Source("text.c74ba288f018"), settings.Contrast))
+	screen.wfRangeLabel.SetText(fmt.Sprintf(i18n.Source("text.4653448ee607"), settings.MinimumDBm, settings.MaximumDBm))
+	screen.wfSpeedLabel.SetText(fmt.Sprintf(i18n.Source("text.1bd26570468c"), settings.LinesPerSecond))
+	screen.wfPaletteButton.SetLabel(i18n.Source("text.e5cc60822acd") + settings.Palette)
 }
 
 func (screen *MainScreen) setWaterfallControlsVisible(visible bool) {
@@ -1246,32 +1248,41 @@ func (screen *MainScreen) setWaterfallControlsVisible(visible bool) {
 }
 
 func (screen *MainScreen) selectTool(tool string) {
+	if tool == "DISTANCE_MAP" {
+		if err := OpenDistanceMap(); err != nil {
+			fmt.Println("No se pudo abrir Distancias:", err)
+		}
+		if screen.toolMenu != nil {
+			screen.toolMenu.selected = screen.activeTool
+		}
+		return
+	}
 	previous := screen.activeTool
-	if previous == "RADIOSONDE" && tool != "RADIOSONDE" && screen.radiosondePanel != nil {
+	if previous == i18n.Source("text.7dd172035702") && tool != i18n.Source("text.7dd172035702") && screen.radiosondePanel != nil {
 		screen.radiosondePanel.Leave()
 	}
-	if previous == "AIS" && tool != "AIS" && screen.aisPanel != nil {
+	if previous == i18n.Source("text.208a2a3f8f27") && tool != i18n.Source("text.208a2a3f8f27") && screen.aisPanel != nil {
 		screen.aisPanel.Leave()
 	}
-	if previous == "AIRCRAFT" && tool != "AIRCRAFT" && screen.aircraftPanel != nil {
+	if previous == i18n.Source("text.a3201958b4e6") && tool != i18n.Source("text.a3201958b4e6") && screen.aircraftPanel != nil {
 		screen.aircraftPanel.Leave()
 	}
-	if previous == "RTL_433" && tool != "RTL_433" && screen.rtl433Panel != nil {
+	if previous == i18n.Source("text.8be70e7cb2c4") && tool != i18n.Source("text.8be70e7cb2c4") && screen.rtl433Panel != nil {
 		screen.rtl433Panel.Leave()
 	}
-	if previous == "APRS" && tool != "APRS" && screen.aprsPanel != nil {
+	if previous == i18n.Source("text.4c4310fd27fd") && tool != i18n.Source("text.4c4310fd27fd") && screen.aprsPanel != nil {
 		screen.aprsPanel.Leave()
 	}
-	if previous == "SSTV" && tool != "SSTV" && screen.sstvPanel != nil {
+	if previous == i18n.Source("text.820d4685bc9d") && tool != i18n.Source("text.820d4685bc9d") && screen.sstvPanel != nil {
 		screen.sstvPanel.Leave()
 	}
-	if previous == "TETRA" && tool != "TETRA" && screen.tetraPanel != nil {
+	if previous == i18n.Source("text.f69d86a86926") && tool != i18n.Source("text.f69d86a86926") && screen.tetraPanel != nil {
 		screen.tetraPanel.Leave()
 	}
-	if previous == "SATELLITES" && tool != "SATELLITES" && screen.satellitePanel != nil {
+	if previous == i18n.Source("text.bcdc9d50f2be") && tool != i18n.Source("text.bcdc9d50f2be") && screen.satellitePanel != nil {
 		screen.satellitePanel.Leave()
 	}
-	if previous == "DIGITAL_AUTO" && tool != "DIGITAL_AUTO" && screen.digitalVoicePanel != nil {
+	if previous == i18n.Source("text.a8cbb160caa6") && tool != i18n.Source("text.a8cbb160caa6") && screen.digitalVoicePanel != nil {
 		screen.digitalVoicePanel.Leave()
 	}
 	// A tool can be selected while VIEW 2 is active and while the menu owns the
@@ -1284,37 +1295,37 @@ func (screen *MainScreen) selectTool(tool string) {
 	}
 	screen.activeTool = tool
 	screen.setViewMode(1)
-	if tool == "DMR_MONITOR" && screen.mode != nil && screen.mode.SelectedText() != "DMR BETA" {
+	if tool == i18n.Source("text.93239b223632") && screen.mode != nil && screen.mode.SelectedText() != i18n.Source("text.2604864ce4d3") {
 		for index, item := range screen.mode.Items() {
-			if item == "DMR BETA" {
+			if item == i18n.Source("text.2604864ce4d3") {
 				screen.mode.SetSelected(index)
 				break
 			}
 		}
-		screen.savedMode = "DMR BETA"
-		screen.selectFilter(screen.filterSelector.Current("DMR BETA"))
+		screen.savedMode = i18n.Source("text.2604864ce4d3")
+		screen.selectFilter(screen.filterSelector.Current(i18n.Source("text.2604864ce4d3")))
 	}
-	if tool == "SSTV" && screen.mode != nil {
+	if tool == i18n.Source("text.820d4685bc9d") && screen.mode != nil {
 		current := screen.mode.SelectedText()
-		if current != "USB" && current != "LSB" && current != "NFM" {
+		if current != i18n.Source("text.61f0acff1735") && current != i18n.Source("text.6323db4948ad") && current != i18n.Source("text.0896d612d497") {
 			for index, item := range screen.mode.Items() {
-				if item == "USB" {
+				if item == i18n.Source("text.61f0acff1735") {
 					screen.mode.SetSelected(index)
 					break
 				}
 			}
-			screen.savedMode = "USB"
-			screen.selectFilter(screen.filterSelector.Current("USB"))
+			screen.savedMode = i18n.Source("text.61f0acff1735")
+			screen.selectFilter(screen.filterSelector.Current(i18n.Source("text.61f0acff1735")))
 		}
 	}
-	if tool == "SCAN" && screen.scanPanel != nil {
+	if tool == i18n.Source("text.7a1580c49e45") && screen.scanPanel != nil {
 		screen.scanPanel.Enter()
 	}
 	if screen.toolMenu != nil {
 		screen.toolMenu.selected = tool
 	}
-	screen.setWaterfallControlsVisible(tool == "WATERFALL_ADJUST")
-	if tool == "WATERFALL_ADJUST" {
+	screen.setWaterfallControlsVisible(tool == i18n.Source("text.9b6bb9932898"))
+	if tool == i18n.Source("text.9b6bb9932898") {
 		screen.wfOffsetSlider.SetValue(float32(screen.waterfallSettings.ColorOffsetDB))
 		screen.wfContrastSlider.SetValue(float32(screen.waterfallSettings.Contrast))
 		screen.wfRangeSlider.SetValues(screen.waterfallSettings.MinimumDBm, screen.waterfallSettings.MaximumDBm)
@@ -1322,74 +1333,74 @@ func (screen *MainScreen) selectTool(tool string) {
 		screen.refreshWaterfallControls()
 	}
 	if screen.fftDisplay != nil {
-		if tool == "FFT" {
+		if tool == i18n.Source("text.94fa3fe96dde") {
 			screen.fftDisplay.Sync()
 		}
-		screen.fftDisplay.SetVisible(tool == "FFT")
+		screen.fftDisplay.SetVisible(tool == i18n.Source("text.94fa3fe96dde"))
 	}
 	if screen.audioPanel != nil {
-		screen.audioPanel.SetVisible(tool == "PBT_AUDIO")
+		screen.audioPanel.SetVisible(tool == i18n.Source("text.a42c60257b01"))
 	}
 	if screen.memoryPanel != nil {
-		screen.memoryPanel.SetVisible(tool == "MEMORIES")
+		screen.memoryPanel.SetVisible(tool == i18n.Source("text.70b71a34c2de"))
 	}
 	if screen.recorderPanel != nil {
-		screen.recorderPanel.SetToolVisible(tool == "RECORDER")
+		screen.recorderPanel.SetToolVisible(tool == i18n.Source("text.e71378482f31"))
 	}
 	if screen.dmrPanel != nil {
-		screen.dmrPanel.SetVisible(tool == "DMR_MONITOR")
+		screen.dmrPanel.SetVisible(tool == i18n.Source("text.93239b223632"))
 	}
 	if screen.digitalVoicePanel != nil {
-		screen.digitalVoicePanel.SetVisible(tool == "DIGITAL_AUTO")
-		if tool == "DIGITAL_AUTO" && previous != "DIGITAL_AUTO" {
+		screen.digitalVoicePanel.SetVisible(tool == i18n.Source("text.a8cbb160caa6"))
+		if tool == i18n.Source("text.a8cbb160caa6") && previous != i18n.Source("text.a8cbb160caa6") {
 			screen.digitalVoicePanel.Enter()
 		}
 	}
 	if screen.rtl433Panel != nil {
-		screen.rtl433Panel.SetVisible(tool == "RTL_433")
-		if tool == "RTL_433" && previous != "RTL_433" {
+		screen.rtl433Panel.SetVisible(tool == i18n.Source("text.8be70e7cb2c4"))
+		if tool == i18n.Source("text.8be70e7cb2c4") && previous != i18n.Source("text.8be70e7cb2c4") {
 			screen.rtl433Panel.Enter()
 		}
 	}
 	if screen.radiosondePanel != nil {
-		screen.radiosondePanel.SetVisible(tool == "RADIOSONDE")
-		if tool == "RADIOSONDE" && previous != "RADIOSONDE" {
+		screen.radiosondePanel.SetVisible(tool == i18n.Source("text.7dd172035702"))
+		if tool == i18n.Source("text.7dd172035702") && previous != i18n.Source("text.7dd172035702") {
 			screen.radiosondePanel.Enter()
 		}
 	}
 	if screen.aisPanel != nil {
-		screen.aisPanel.SetVisible(tool == "AIS")
-		if tool == "AIS" && previous != "AIS" {
+		screen.aisPanel.SetVisible(tool == i18n.Source("text.208a2a3f8f27"))
+		if tool == i18n.Source("text.208a2a3f8f27") && previous != i18n.Source("text.208a2a3f8f27") {
 			screen.aisPanel.Enter()
 		}
 	}
 	if screen.aircraftPanel != nil {
-		screen.aircraftPanel.SetVisible(tool == "AIRCRAFT")
-		if tool == "AIRCRAFT" && previous != "AIRCRAFT" {
+		screen.aircraftPanel.SetVisible(tool == i18n.Source("text.a3201958b4e6"))
+		if tool == i18n.Source("text.a3201958b4e6") && previous != i18n.Source("text.a3201958b4e6") {
 			screen.aircraftPanel.Enter()
 		}
 	}
 	if screen.aprsPanel != nil {
-		screen.aprsPanel.SetVisible(tool == "APRS")
-		if tool == "APRS" && previous != "APRS" {
+		screen.aprsPanel.SetVisible(tool == i18n.Source("text.4c4310fd27fd"))
+		if tool == i18n.Source("text.4c4310fd27fd") && previous != i18n.Source("text.4c4310fd27fd") {
 			screen.aprsPanel.Enter()
 		}
 	}
 	if screen.sstvPanel != nil {
-		screen.sstvPanel.SetVisible(tool == "SSTV")
-		if tool == "SSTV" && previous != "SSTV" {
+		screen.sstvPanel.SetVisible(tool == i18n.Source("text.820d4685bc9d"))
+		if tool == i18n.Source("text.820d4685bc9d") && previous != i18n.Source("text.820d4685bc9d") {
 			screen.sstvPanel.Enter()
 		}
 	}
 	if screen.tetraPanel != nil {
-		screen.tetraPanel.SetVisible(tool == "TETRA")
-		if tool == "TETRA" && previous != "TETRA" {
+		screen.tetraPanel.SetVisible(tool == i18n.Source("text.f69d86a86926"))
+		if tool == i18n.Source("text.f69d86a86926") && previous != i18n.Source("text.f69d86a86926") {
 			screen.tetraPanel.Enter()
 		}
 	}
 	if screen.satellitePanel != nil {
-		screen.satellitePanel.SetVisible(tool == "SATELLITES")
-		if tool == "SATELLITES" && previous != "SATELLITES" {
+		screen.satellitePanel.SetVisible(tool == i18n.Source("text.bcdc9d50f2be"))
+		if tool == i18n.Source("text.bcdc9d50f2be") && previous != i18n.Source("text.bcdc9d50f2be") {
 			screen.satellitePanel.Enter()
 		}
 	}
@@ -1411,63 +1422,63 @@ func (screen *MainScreen) setViewMode(mode int) {
 	}
 	screen.viewMode = mode
 	if screen.viewButton != nil {
-		screen.viewButton.SetLabel(fmt.Sprintf("VIEW %d", mode))
+		screen.viewButton.SetLabel(fmt.Sprintf(i18n.Source("text.2acd54e3ff5b"), mode))
 	}
 	showTool := mode == 1
 	if screen.waterfallControls != nil {
-		screen.setWaterfallControlsVisible(showTool && screen.activeTool == "WATERFALL_ADJUST")
+		screen.setWaterfallControlsVisible(showTool && screen.activeTool == i18n.Source("text.9b6bb9932898"))
 	}
 	if screen.fftDisplay != nil {
-		screen.fftDisplay.SetVisible(showTool && screen.activeTool == "FFT")
+		screen.fftDisplay.SetVisible(showTool && screen.activeTool == i18n.Source("text.94fa3fe96dde"))
 	}
 	if screen.audioPanel != nil {
-		screen.audioPanel.SetVisible(showTool && screen.activeTool == "PBT_AUDIO")
+		screen.audioPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.a42c60257b01"))
 	}
 	if screen.memoryPanel != nil {
-		screen.memoryPanel.SetVisible(showTool && screen.activeTool == "MEMORIES")
+		screen.memoryPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.70b71a34c2de"))
 	}
 	if screen.recorderPanel != nil {
-		screen.recorderPanel.SetToolVisible(showTool && screen.activeTool == "RECORDER")
+		screen.recorderPanel.SetToolVisible(showTool && screen.activeTool == i18n.Source("text.e71378482f31"))
 	}
 	if screen.dmrPanel != nil {
-		screen.dmrPanel.SetVisible(showTool && screen.activeTool == "DMR_MONITOR")
+		screen.dmrPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.93239b223632"))
 	}
 	if screen.digitalVoicePanel != nil {
-		screen.digitalVoicePanel.SetVisible(showTool && screen.activeTool == "DIGITAL_AUTO")
+		screen.digitalVoicePanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.a8cbb160caa6"))
 	}
 	if screen.rtl433Panel != nil {
-		screen.rtl433Panel.SetVisible(showTool && screen.activeTool == "RTL_433")
+		screen.rtl433Panel.SetVisible(showTool && screen.activeTool == i18n.Source("text.8be70e7cb2c4"))
 	}
 	if screen.radiosondePanel != nil {
-		screen.radiosondePanel.SetVisible(showTool && screen.activeTool == "RADIOSONDE")
+		screen.radiosondePanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.7dd172035702"))
 	}
 	if screen.aisPanel != nil {
-		screen.aisPanel.SetVisible(showTool && screen.activeTool == "AIS")
+		screen.aisPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.208a2a3f8f27"))
 	}
 	if screen.aircraftPanel != nil {
-		screen.aircraftPanel.SetVisible(showTool && screen.activeTool == "AIRCRAFT")
+		screen.aircraftPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.a3201958b4e6"))
 	}
 	if screen.aprsPanel != nil {
-		screen.aprsPanel.SetVisible(showTool && screen.activeTool == "APRS")
+		screen.aprsPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.4c4310fd27fd"))
 	}
 	if screen.sstvPanel != nil {
-		screen.sstvPanel.SetVisible(showTool && screen.activeTool == "SSTV")
+		screen.sstvPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.820d4685bc9d"))
 	}
 	if screen.tetraPanel != nil {
-		screen.tetraPanel.SetVisible(showTool && screen.activeTool == "TETRA")
+		screen.tetraPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.f69d86a86926"))
 	}
 	if screen.satellitePanel != nil {
-		screen.satellitePanel.SetVisible(showTool && screen.activeTool == "SATELLITES")
+		screen.satellitePanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.bcdc9d50f2be"))
 	}
 	if screen.webPanel != nil {
-		screen.webPanel.SetVisible(showTool && screen.activeTool == "WEB_SERVER")
+		screen.webPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.918191dc299c"))
 	}
 	screen.markSettingsDirty()
 }
 
 func (screen *MainScreen) spectrumGeometry() (x, y, width, height float32) {
 	x, y, width, height = toolContentX, 215, toolContentRight-toolContentX, 235
-	if screen.activeTool == "DIGITAL_AUTO" && screen.viewMode == 1 {
+	if screen.activeTool == i18n.Source("text.a8cbb160caa6") && screen.viewMode == 1 {
 		height = 261
 	}
 	if screen.viewMode == 2 {
@@ -1478,7 +1489,7 @@ func (screen *MainScreen) spectrumGeometry() (x, y, width, height float32) {
 
 func (screen *MainScreen) waterfallGeometry() (x, y, width, height float32) {
 	x, y, width, height = toolContentX, 450, toolContentRight-toolContentX, 170
-	if screen.activeTool == "DIGITAL_AUTO" && screen.viewMode == 1 {
+	if screen.activeTool == i18n.Source("text.a8cbb160caa6") && screen.viewMode == 1 {
 		y, height = 365, 111
 	}
 	if screen.viewMode == 2 {
@@ -1521,8 +1532,8 @@ func (screen *MainScreen) stopAllDecodersForBandChange() {
 	if screen.audioPlayer != nil {
 		screen.audioPlayer.ResetPlayback()
 	}
-	if screen.activeTool != "PBT_AUDIO" {
-		screen.selectTool("PBT_AUDIO")
+	if screen.activeTool != i18n.Source("text.a42c60257b01") {
+		screen.selectTool(i18n.Source("text.a42c60257b01"))
 	}
 }
 
@@ -1531,7 +1542,7 @@ func (screen *MainScreen) selectBand(band BandDefinition) {
 	screen.setFrequencyDigitExponent(-1)
 	screen.bandCategory = band.Category
 	screen.bandName = band.Name
-	screen.band.SetLabel("BAND  " + band.Name)
+	screen.band.SetLabel(i18n.Source("text.eae2605aec31") + band.Name)
 	screen.selectMode(recommendedModeForBand(band))
 	screen.frequencyHz = band.FrequencyHz
 	screen.centerFrequencyHz = band.FrequencyHz
@@ -1737,22 +1748,22 @@ func (screen *MainScreen) selectMode(mode string) {
 }
 
 func recommendedModeForBand(band BandDefinition) string {
-	if band.Category == "HAM" {
+	if band.Category == i18n.Source("text.4fae663ae96a") {
 		switch band.Name {
 		case "160 m", "80 m", "40 m":
-			return "LSB"
+			return i18n.Source("text.6323db4948ad")
 		case "4 m", "2 m", "70 cm", "23 cm":
-			return "NFM"
+			return i18n.Source("text.0896d612d497")
 		default:
-			return "USB"
+			return i18n.Source("text.61f0acff1735")
 		}
 	}
-	if band.Category == "COMMERCIAL" {
+	if band.Category == i18n.Source("text.00c2ae96f694") {
 		switch band.Name {
 		case "FM", "DAB":
-			return "WFM"
+			return i18n.Source("text.6b742bac3eb4")
 		case "MARINE", "SONDAS":
-			return "NFM"
+			return i18n.Source("text.0896d612d497")
 		default:
 			return "AM"
 		}
@@ -1760,7 +1771,7 @@ func recommendedModeForBand(band BandDefinition) string {
 	if band.Name == "CB 27" {
 		return "AM"
 	}
-	return "NFM"
+	return i18n.Source("text.0896d612d497")
 }
 
 func (screen *MainScreen) selectFilter(preset FilterPreset) {
@@ -1776,8 +1787,8 @@ func (screen *MainScreen) selectFilter(preset FilterPreset) {
 
 func filterButtonLabel(preset FilterPreset) string {
 	name := preset.ID
-	if name == "CUSTOM" {
-		name = "FIL4"
+	if name == i18n.Source("text.7cd5885327fd") {
+		name = i18n.Source("text.f2e3d2103b8c")
 	}
 	return name + "  " + formatFilterBandwidth(preset.BandwidthHz)
 }
@@ -1792,8 +1803,8 @@ func toolDisplayName(tool string) string {
 }
 
 func (screen *MainScreen) receiverDemodMode() string {
-	if screen.activeTool == "DIGITAL_AUTO" {
-		return "DIGITAL AUTO"
+	if screen.activeTool == i18n.Source("text.a8cbb160caa6") {
+		return i18n.Source("text.3ae4feb8250d")
 	}
 	if screen.mode == nil {
 		return ""
@@ -1935,7 +1946,7 @@ func (screen *MainScreen) updateSpectrumDrag() {
 }
 
 func (screen *MainScreen) resetTETRAAfterManualSpectrumTune(previousFrequency int64) {
-	if screen.frequencyHz == previousFrequency || screen.activeTool != "TETRA" || screen.tetraPanel == nil {
+	if screen.frequencyHz == previousFrequency || screen.activeTool != i18n.Source("text.f69d86a86926") || screen.tetraPanel == nil {
 		return
 	}
 	screen.tetraPanel.resetAfterManualTune()
@@ -1992,7 +2003,7 @@ func (screen *MainScreen) tuneFixedBySteps(steps int64) bool {
 	if screen.mode != nil {
 		mode = screen.mode.SelectedText()
 	}
-	if mode == "USB" || mode == "LSB" {
+	if mode == i18n.Source("text.61f0acff1735") || mode == i18n.Source("text.6323db4948ad") {
 		passbandGuard = int64(screen.demodBandwidthHz)
 	}
 	guardHz := max(int64(math.Round(float64(screen.spanHz)*0.05)), passbandGuard)

@@ -1,10 +1,12 @@
 package screens
 
+import "go-zero/internal/i18n"
+
 import "strings"
 
 func validMemoryGroup(name string) bool {
 	name = strings.TrimSpace(name)
-	return name != "" && len(name) <= 40 && !strings.EqualFold(name, "TODAS") && !strings.EqualFold(name, "SIN GRUPO")
+	return name != "" && len(name) <= 40 && !strings.EqualFold(name, i18n.Source("text.201f15dab8b3")) && !strings.EqualFold(name, i18n.Source("text.445a7d952a48"))
 }
 
 func errInvalidMemory(memory MemoryEntry) bool {
@@ -17,10 +19,10 @@ func errInvalidMemory(memory MemoryEntry) bool {
 	if len(memory.Description) > 500 || len(memory.Group) > 40 || len(memory.CTCSSHz) > 24 || len(memory.DCSCode) > 24 {
 		return true
 	}
-	if memory.Group == "" || strings.EqualFold(memory.Group, "TODAS") {
+	if memory.Group == "" || strings.EqualFold(memory.Group, i18n.Source("text.201f15dab8b3")) {
 		return true
 	}
-	for _, mode := range []string{"AM", "NFM", "WFM", "USB", "LSB", "CW", "DMR BETA", "ADS-B", "UAT", "TETRA"} {
+	for _, mode := range []string{"AM", i18n.Source("text.0896d612d497"), i18n.Source("text.6b742bac3eb4"), i18n.Source("text.61f0acff1735"), i18n.Source("text.6323db4948ad"), "CW", i18n.Source("text.2604864ce4d3"), i18n.Source("text.7866f9f32e66"), i18n.Source("text.72c048cb5100"), i18n.Source("text.f69d86a86926")} {
 		if memory.Mode == mode {
 			return false
 		}

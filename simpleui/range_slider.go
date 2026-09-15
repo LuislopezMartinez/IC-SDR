@@ -1,6 +1,8 @@
 package simpleui
 
 import (
+	"go-zero/internal/i18n"
+
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -58,7 +60,7 @@ func (slider *RangeSlider) SetStep(step float32) {
 
 func (slider *RangeSlider) SetMinimumGap(gap float32) {
 	if gap < 0 || gap > slider.maximum-slider.minimum {
-		panic("simpleui: range slider minimum gap is outside its range")
+		panic(i18n.Source("text.a70ec4fb4218"))
 	}
 	slider.minimumGap = quantize(gap, 0, slider.maximum-slider.minimum, slider.step)
 	slider.SetValues(slider.low, slider.high)

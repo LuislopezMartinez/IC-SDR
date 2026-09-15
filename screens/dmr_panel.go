@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"strings"
 	"time"
@@ -27,7 +29,7 @@ type DMRPanel struct {
 
 func NewDMRPanel(screen *MainScreen) *DMRPanel {
 	p := &DMRPanel{screen: screen}
-	p.autoCenter = simpleui.NewSwitch("dmrAutoCenter", 1280, 655, 260, 28, "CORRECCIÓN AUTOMÁTICA", screen.dmrAutoCenter, uiMinimumFontSize)
+	p.autoCenter = simpleui.NewSwitch("dmrAutoCenter", 1280, 655, 260, 28, i18n.Source("text.a4c290b13a9d"), screen.dmrAutoCenter, uiMinimumFontSize)
 	p.autoCenter.SetTrackColors(rl.Color{R: 51, G: 61, B: 70, A: 255}, colors.green)
 	p.autoCenter.OnChange(func(value bool) {
 		screen.dmrAutoCenter = value
@@ -36,19 +38,19 @@ func NewDMRPanel(screen *MainScreen) *DMRPanel {
 		}
 		screen.markSettingsDirty()
 	})
-	p.auto = p.button("dmrAuto", 1280, 699, 82, 42, "AUTO", colors.blue)
+	p.auto = p.button("dmrAuto", 1280, 699, 82, 42, i18n.Source("text.6ea56fae9eac"), colors.blue)
 	p.ts1 = p.button("dmrTS1", 1370, 699, 80, 42, "TS1", colors.panelAlt)
 	p.ts2 = p.button("dmrTS2", 1458, 699, 80, 42, "TS2", colors.panelAlt)
-	p.resync = p.button("dmrResync", 1280, 754, 154, 48, "RESINCRONIZAR", colors.orange)
+	p.resync = p.button("dmrResync", 1280, 754, 154, 48, i18n.Source("text.688ca3416da3"), colors.orange)
 	p.resync.SetColors(colors.orange, colors.border, colors.background)
-	p.clear = p.button("dmrClear", 1442, 754, 96, 48, "LIMPIAR", colors.panelAlt)
+	p.clear = p.button("dmrClear", 1442, 754, 96, 48, i18n.Source("text.2aded7edd569"), colors.panelAlt)
 	p.clear.SetColors(actionClearFill, colors.red, colors.text)
-	p.auto.OnClick(func() { p.selectSlot("AUTO") })
+	p.auto.OnClick(func() { p.selectSlot(i18n.Source("text.6ea56fae9eac")) })
 	p.ts1.OnClick(func() { p.selectSlot("TS1") })
 	p.ts2.OnClick(func() { p.selectSlot("TS2") })
 	p.resync.OnClick(func() {
 		if screen.receiver != nil && screen.receiver.ResyncDMR() {
-			p.add("SYSTEM", "--", "Reinicio manual solicitado")
+			p.add(i18n.Source("text.d621c1a7169f"), "--", i18n.Source("text.5278aa00d5e8"))
 		}
 	})
 	p.clear.OnClick(func() { p.events = nil })
@@ -68,13 +70,13 @@ func (p *DMRPanel) selectSlot(slot string) {
 	if p.screen.receiver != nil {
 		p.screen.receiver.SetDMRAudioSlot(slot)
 	}
-	p.add("AUDIO", slot, "Slot de audio seleccionado")
+	p.add(i18n.Source("text.859e89a729c2"), slot, i18n.Source("text.ee1d8d5cb40e"))
 	p.screen.markSettingsDirty()
 	p.styleSlots()
 }
 
 func (p *DMRPanel) styleSlots() {
-	for slot, button := range map[string]*simpleui.Button{"AUTO": p.auto, "TS1": p.ts1, "TS2": p.ts2} {
+	for slot, button := range map[string]*simpleui.Button{i18n.Source("text.6ea56fae9eac"): p.auto, "TS1": p.ts1, "TS2": p.ts2} {
 		background := colors.panelAlt
 		if slot == p.screen.dmrAudioSlot {
 			background = colors.blue
@@ -94,11 +96,11 @@ func (p *DMRPanel) SetVisible(visible bool) {
 
 func (p *DMRPanel) add(state, slot, detail string) {
 	color := colors.cyan
-	if state == "VOICE" {
+	if state == i18n.Source("text.a430e6d293d0") {
 		color = colors.green
-	} else if state == "ERROR" {
+	} else if state == i18n.Source("text.d98ee0e5f939") {
 		color = colors.red
-	} else if state == "SEARCH" {
+	} else if state == i18n.Source("text.56f21695a650") {
 		color = colors.orange
 	}
 	p.events = append(p.events, dmrEvent{time.Now().Format("15:04:05"), state, slot, detail, color})
@@ -115,31 +117,31 @@ func (p *DMRPanel) capture(status dmr.Status) {
 	if status.Slot1 != p.lastTS1 {
 		p.lastTS1 = status.Slot1
 		if status.Slot1 != "--" {
-			p.add("DATA", "TS1", status.Slot1)
+			p.add(i18n.Source("text.c97c29c7a71b"), "TS1", status.Slot1)
 		}
 	}
 	if status.Slot2 != p.lastTS2 {
 		p.lastTS2 = status.Slot2
 		if status.Slot2 != "--" {
-			p.add("DATA", "TS2", status.Slot2)
+			p.add(i18n.Source("text.c97c29c7a71b"), "TS2", status.Slot2)
 		}
 	}
 }
 
 func (p *DMRPanel) DrawPanel() {
-	status := dmr.Status{State: "OFF", Slot1: "--", Slot2: "--", ColorCode: -1}
+	status := dmr.Status{State: i18n.Source("text.38cca6bea010"), Slot1: "--", Slot2: "--", ColorCode: -1}
 	if p.screen.receiver != nil {
 		status = p.screen.receiver.DMRStatus()
 	}
 	p.capture(status)
-	simpleui.DrawTextStyled("DMR MONITOR", 40, 642, 16, simpleui.FontSemiBold, rl.Color{R: 175, G: 145, B: 245, A: 255})
+	simpleui.DrawTextStyled(i18n.Source("text.ae7216ed6f02"), 40, 642, 16, simpleui.FontSemiBold, rl.Color{R: 175, G: 145, B: 245, A: 255})
 	drawPanel(38, 665, 210, 142)
 	stateColor := colors.orange
-	if status.State == "VOICE" {
+	if status.State == i18n.Source("text.a430e6d293d0") {
 		stateColor = colors.green
-	} else if status.State == "DATA" {
+	} else if status.State == i18n.Source("text.c97c29c7a71b") {
 		stateColor = colors.cyan
-	} else if status.State == "ERROR" {
+	} else if status.State == i18n.Source("text.d98ee0e5f939") {
 		stateColor = colors.red
 	}
 	rl.DrawCircle(55, 688, 6, stateColor)
@@ -148,14 +150,14 @@ func (p *DMRPanel) DrawPanel() {
 	if status.ColorCode >= 0 {
 		cc = fmt.Sprint(status.ColorCode)
 	}
-	simpleui.DrawText(fmt.Sprintf("COLOR CODE  %s", cc), 52, 711, 13, colors.text)
-	simpleui.DrawText(fmt.Sprintf("PLL  %s", map[bool]string{true: "BLOQUEADO", false: "SIN LOCK"}[status.PLLLocked]), 52, 734, 13, colors.text)
-	simpleui.DrawText(fmt.Sprintf("SYNC %d   NIVEL %d", status.SyncQuality, status.InputLevel), 52, 757, 13, colors.text)
-	simpleui.DrawText(fmt.Sprintf("COLA %d/%d   DROP %d   UND %d", status.Queued, status.Capacity, status.Dropped, p.screen.stats.AudioUnderflows), 52, 780, 12, colors.muted)
-	p.drawSlot(262, 665, "TIME SLOT 1", status.Slot1, p.screen.dmrAudioSlot == "TS1")
-	p.drawSlot(262, 738, "TIME SLOT 2", status.Slot2, p.screen.dmrAudioSlot == "TS2")
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.369660ea9c3f"), cc), 52, 711, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.33a5b9fa7e99"), map[bool]string{true: i18n.Source("text.52fc523baf24"), false: i18n.Source("text.31313da67e97")}[status.PLLLocked]), 52, 734, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.578917444543"), status.SyncQuality, status.InputLevel), 52, 757, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.0f28341d32b3"), status.Queued, status.Capacity, status.Dropped, p.screen.stats.AudioUnderflows), 52, 780, 12, colors.muted)
+	p.drawSlot(262, 665, i18n.Source("text.7c7c98979e20"), status.Slot1, p.screen.dmrAudioSlot == "TS1")
+	p.drawSlot(262, 738, i18n.Source("text.ce6d4ea6916a"), status.Slot2, p.screen.dmrAudioSlot == "TS2")
 	p.drawEvents(530, 665, 730, 142)
-	simpleui.DrawText(fmt.Sprintf("ERR %+.0f Hz   AFC %+.0f Hz   %s", status.FrequencyErrorHz, status.AFCCorrectionHz, status.AFCState), 1280, 636, 12, colors.muted)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.ca1ffacff316"), status.FrequencyErrorHz, status.AFCCorrectionHz, status.AFCState), 1280, 636, 12, colors.muted)
 }
 
 func (p *DMRPanel) drawSlot(x, y float32, title, value string, selected bool) {
@@ -169,13 +171,13 @@ func (p *DMRPanel) drawSlot(x, y float32, title, value string, selected bool) {
 	}
 	simpleui.DrawText(value, x+12, y+34, 14, colors.text)
 	if selected {
-		simpleui.DrawText("AUDIO SELECCIONADO", x+126, y+9, 12, colors.green)
+		simpleui.DrawText(i18n.Source("text.5b442db27f43"), x+126, y+9, 12, colors.green)
 	}
 }
 
 func (p *DMRPanel) drawEvents(x, y, w, h float32) {
 	drawPanel(x, y, w, h)
-	simpleui.DrawTextStyled("ACTIVIDAD DMR", x+12, y+8, 14, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(i18n.Source("text.8db39183b07c"), x+12, y+8, 14, simpleui.FontSemiBold, colors.cyan)
 	start := max(0, len(p.events)-5)
 	for row, event := range p.events[start:] {
 		ry := y + 35 + float32(row)*20

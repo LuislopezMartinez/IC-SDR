@@ -1,5 +1,7 @@
 package simpleui
 
+import "go-zero/internal/i18n"
+
 import rl "github.com/gen2brain/raylib-go/raylib"
 
 // Manager owns controls and dispatches input from front to back.
@@ -27,10 +29,10 @@ func Add(element Element) {
 
 func (m *Manager) Add(element Element) {
 	if element == nil {
-		panic("simpleui: cannot add a nil element")
+		panic(i18n.Source("text.ed4fad023ba1"))
 	}
 	if _, exists := m.byID[element.ID()]; exists {
-		panic("simpleui: duplicate element ID: " + element.ID())
+		panic(i18n.Source("text.bbba2a0d8209") + element.ID())
 	}
 	m.elements = append(m.elements, element)
 	m.byID[element.ID()] = element

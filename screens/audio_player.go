@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"math"
 	"sync/atomic"
 
@@ -61,7 +63,7 @@ func (player *AudioPlayer) Pump() {
 	if player.receiver != nil {
 		mode, active := player.receiver.AudioPlaybackState()
 		player.transitionPlaybackMode(mode)
-		player.digitalMode.Store(mode == "DMR BETA" || mode == "TETRA" || mode == "DIGITAL AUTO")
+		player.digitalMode.Store(mode == i18n.Source("text.2604864ce4d3") || mode == i18n.Source("text.f69d86a86926") || mode == i18n.Source("text.3ae4feb8250d"))
 		player.digitalActive.Store(active)
 	}
 	if !player.ready {

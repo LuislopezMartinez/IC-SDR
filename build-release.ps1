@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
 $distRoot = [System.IO.Path]::GetFullPath((Join-Path $projectRoot 'dist\IC-SDR-Go'))
 $expectedDist = [System.IO.Path]::GetFullPath((Join-Path $projectRoot 'dist\IC-SDR-Go'))
-$digitalVoiceRuntime = Join-Path $projectRoot 'ORIGEN\IC_SDR\tools\digital_voice\runtime'
+$digitalVoiceRuntime = Join-Path $projectRoot 'DATA\tools\digital_voice\runtime'
 $digitalVoiceManifestPath = Join-Path $digitalVoiceRuntime 'runtime-version.json'
 
 if ($distRoot -ne $expectedDist -or -not $distRoot.StartsWith($projectRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -72,18 +72,18 @@ $exePath = Join-Path $distRoot 'IC-SDR-Go.exe'
 if ($LASTEXITCODE -ne 0) { throw 'No se pudo compilar IC-SDR-Go.exe.' }
 
 $copies = @(
-    @{ Source = 'ORIGEN\IC_SDR\runtime\windows-x64'; Destination = 'DATA\runtime\windows-x64' },
-    @{ Source = 'ORIGEN\IC_SDR\tools\dmr\runtime'; Destination = 'DATA\tools\dmr\runtime' },
-    @{ Source = 'ORIGEN\IC_SDR\tools\digital_voice\runtime'; Destination = 'DATA\tools\digital_voice\runtime' },
-    @{ Source = 'ORIGEN\IC_SDR\tools\rtl_433\runtime'; Destination = 'DATA\tools\rtl_433\runtime' },
-    @{ Source = 'ORIGEN\IC_SDR\tools\radiosonde\runtime'; Destination = 'DATA\tools\radiosonde\runtime' },
-	@{ Source = 'ORIGEN\IC_SDR\tools\ais\runtime'; Destination = 'DATA\tools\ais\runtime' },
-	@{ Source = 'ORIGEN\IC_SDR\tools\aircraft\runtime'; Destination = 'DATA\tools\aircraft\runtime' },
-    @{ Source = 'ORIGEN\IC_SDR\tools\aprs\runtime'; Destination = 'DATA\tools\aprs\runtime' },
-    @{ Source = 'ORIGEN\IC_SDR\tools\aprs\config'; Destination = 'DATA\tools\aprs\config' },
-	@{ Source = 'ORIGEN\IC_SDR\tools\sstv\runtime'; Destination = 'DATA\tools\sstv\runtime' },
-	@{ Source = 'ORIGEN\IC_SDR\tools\tetra\runtime'; Destination = 'DATA\tools\tetra\runtime' },
-    @{ Source = 'ORIGEN\IC_SDR\data\ic-sdr-settings.json'; Destination = 'DATA\data\ic-sdr-settings.json' }
+    @{ Source = 'DATA\runtime\windows-x64'; Destination = 'DATA\runtime\windows-x64' },
+    @{ Source = 'DATA\tools\dmr\runtime'; Destination = 'DATA\tools\dmr\runtime' },
+    @{ Source = 'DATA\tools\digital_voice\runtime'; Destination = 'DATA\tools\digital_voice\runtime' },
+    @{ Source = 'DATA\tools\rtl_433\runtime'; Destination = 'DATA\tools\rtl_433\runtime' },
+    @{ Source = 'DATA\tools\radiosonde\runtime'; Destination = 'DATA\tools\radiosonde\runtime' },
+    @{ Source = 'DATA\tools\ais\runtime'; Destination = 'DATA\tools\ais\runtime' },
+    @{ Source = 'DATA\tools\aircraft\runtime'; Destination = 'DATA\tools\aircraft\runtime' },
+    @{ Source = 'DATA\tools\aprs\runtime'; Destination = 'DATA\tools\aprs\runtime' },
+    @{ Source = 'DATA\tools\aprs\config'; Destination = 'DATA\tools\aprs\config' },
+    @{ Source = 'DATA\tools\sstv\runtime'; Destination = 'DATA\tools\sstv\runtime' },
+    @{ Source = 'DATA\tools\tetra\runtime'; Destination = 'DATA\tools\tetra\runtime' },
+    @{ Source = 'DATA\data\ic-sdr-settings.json'; Destination = 'DATA\data\ic-sdr-settings.json' }
 )
 
 foreach ($copy in $copies) {
@@ -96,11 +96,16 @@ foreach ($copy in $copies) {
 }
 
 # SoapySDR and rtlsdrSupport are built with MSVC. Bundling their runtime keeps
+
+$languageDestination = Join-Path $distRoot 'contenidos'
+New-Item -ItemType Directory -Path $languageDestination -Force | Out-Null
+Get-ChildItem -LiteralPath (Join-Path $projectRoot 'contenidos') -File | Where-Object { $_.Extension -in @('.json', '.md') } | Copy-Item -Destination $languageDestination -Force
+
 # the folder genuinely portable on Windows installations without VC++ installed.
 $runtimeBin = Join-Path $distRoot 'DATA\runtime\windows-x64\bin'
 $vcRuntimeFiles = @('MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll')
 foreach ($name in $vcRuntimeFiles) {
-    $bundled = Join-Path $projectRoot (Join-Path 'ORIGEN\IC_SDR\runtime\windows-x64\bin' $name)
+    $bundled = Join-Path $projectRoot (Join-Path 'DATA\runtime\windows-x64\bin' $name)
     if (-not (Test-Path -LiteralPath $bundled)) {
         $systemCopy = Join-Path $env:SystemRoot (Join-Path 'System32' $name)
         if (-not (Test-Path -LiteralPath $systemCopy)) {

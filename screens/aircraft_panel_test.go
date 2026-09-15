@@ -25,6 +25,10 @@ func TestAircraftToolSelectsMatchingDemodulator(t *testing.T) {
 	if s.frequencyHz != 433_920_000 || s.centerFrequencyHz != 433_920_000 {
 		t.Fatalf("opening aircraft tool changed tuning to %d / %d", s.frequencyHz, s.centerFrequencyHz)
 	}
+	p.selectMode(aircraft.Mode1090)
+	if s.frequencyHz != aircraft.Frequency1090Hz || s.centerFrequencyHz != aircraft.Frequency1090Hz {
+		t.Fatalf("clicking active 1090 button did not tune: %d / %d", s.frequencyHz, s.centerFrequencyHz)
+	}
 
 	p.selectMode(aircraft.Mode978)
 	if got := s.mode.SelectedText(); got != "UAT" {

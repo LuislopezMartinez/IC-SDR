@@ -1,6 +1,8 @@
 package digitalvoice
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"os"
 	"strings"
@@ -44,7 +46,7 @@ func (b *Bank) Start(selection string) error {
 		modes = strings.Split(selection, "|")
 	}
 	if len(modes) == 0 {
-		modes = []string{"AUTO · TODOS"}
+		modes = []string{i18n.Source("text.5f08cf2bcce3")}
 	}
 	b.mu.Lock()
 	for range modes {
@@ -69,7 +71,7 @@ func (b *Bank) Start(selection string) error {
 		return firstErr
 	}
 	if firstErr != nil {
-		return fmt.Errorf("algunos modos no pudieron iniciarse: %w", firstErr)
+		return fmt.Errorf(i18n.Source("text.2c6ce48d1160"), firstErr)
 	}
 	return nil
 }
@@ -100,11 +102,11 @@ func (b *Bank) Snapshot() Status {
 	decoders := append([]*Decoder(nil), b.decoders...)
 	b.mu.RUnlock()
 	if len(decoders) == 0 {
-		detail := "Pulsa INICIAR para activar la detección"
+		detail := i18n.Source("text.e2cab4411acf")
 		if !b.available {
-			detail = "Runtime DSD-neo no instalado"
+			detail = i18n.Source("text.c25c64e91cd9")
 		}
-		return Status{State: "DETENIDO", Detail: detail, Available: b.available, InputDBFS: -60}
+		return Status{State: i18n.Source("text.7dc7253c376a"), Detail: detail, Available: b.available, InputDBFS: -60}
 	}
 	result := decoders[0].Snapshot()
 	result.Events = nil

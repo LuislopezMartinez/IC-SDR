@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -53,57 +55,57 @@ func (command webControlCommand) validate() error {
 	switch command.Action {
 	case "frequency", "tuneAt":
 		if command.FrequencyHz < 100_000 || command.FrequencyHz > 6_000_000_000 {
-			return errors.New("frecuencia fuera de rango")
+			return errors.New(i18n.Source("text.f74f3e59118e"))
 		}
 	case "panCenter":
 		if command.CenterHz < 100_000 || command.CenterHz > 6_000_000_000 {
-			return errors.New("centro fuera de rango")
+			return errors.New(i18n.Source("text.2d11652243f2"))
 		}
 	case "step":
 		if command.Steps != -1 && command.Steps != 1 {
-			return errors.New("paso inválido")
+			return errors.New(i18n.Source("text.947fccf72dad"))
 		}
 	case "mode":
-		allowed := map[string]bool{"AM": true, "NFM": true, "WFM": true, "USB": true, "LSB": true, "CW": true, "DMR BETA": true, "ADS-B": true, "UAT": true, "TETRA": true}
+		allowed := map[string]bool{"AM": true, i18n.Source("text.0896d612d497"): true, i18n.Source("text.6b742bac3eb4"): true, i18n.Source("text.61f0acff1735"): true, i18n.Source("text.6323db4948ad"): true, "CW": true, i18n.Source("text.2604864ce4d3"): true, i18n.Source("text.7866f9f32e66"): true, i18n.Source("text.72c048cb5100"): true, i18n.Source("text.f69d86a86926"): true}
 		if !allowed[command.Mode] {
-			return errors.New("modo inválido")
+			return errors.New(i18n.Source("text.546540304080"))
 		}
 	case "tool":
-		if command.Tool != "DMR_MONITOR" && command.Tool != "TETRA" {
-			return errors.New("herramienta no permitida")
+		if command.Tool != i18n.Source("text.93239b223632") && command.Tool != i18n.Source("text.f69d86a86926") {
+			return errors.New(i18n.Source("text.aea1f5575a08"))
 		}
 	case "dmrAudioSlot":
-		if command.AudioSlot != "AUTO" && command.AudioSlot != "TS1" && command.AudioSlot != "TS2" {
-			return errors.New("time slot DMR inválido")
+		if command.AudioSlot != i18n.Source("text.6ea56fae9eac") && command.AudioSlot != "TS1" && command.AudioSlot != "TS2" {
+			return errors.New(i18n.Source("text.37e347e1574e"))
 		}
 	case "tetraRunning":
 		if command.TetraEnabled == nil {
-			return errors.New("estado TETRA inválido")
+			return errors.New(i18n.Source("text.898041b7efaf"))
 		}
 	case "tetraBand":
 		if command.TetraBand == nil || *command.TetraBand < 0 || *command.TetraBand > 2 {
-			return errors.New("banda TETRA inválida")
+			return errors.New(i18n.Source("text.7fc4689651b3"))
 		}
 	case "tetraAutoCenter":
 		if command.TetraAutoCenter == nil {
-			return errors.New("auto centro TETRA inválido")
+			return errors.New(i18n.Source("text.1886a6138cb7"))
 		}
 	case "tetraClearOnly":
 		if command.TetraClearOnly == nil {
-			return errors.New("audio TETRA inválido")
+			return errors.New(i18n.Source("text.7bb60680d0f6"))
 		}
 	case "filter":
 		if command.FilterIndex < 0 || command.FilterIndex > 3 {
-			return errors.New("filtro inválido")
+			return errors.New(i18n.Source("text.e2b0b1aae913"))
 		}
 	case "customFilter":
 		if command.BandwidthHz < 300 || command.BandwidthHz > 2_048_000 {
-			return errors.New("ancho de filtro inválido")
+			return errors.New(i18n.Source("text.59eabd522589"))
 		}
 	case "span":
 		allowed := map[int64]bool{50_000: true, 100_000: true, 250_000: true, 500_000: true, 1_000_000: true, 2_000_000: true}
 		if !allowed[command.SpanHz] {
-			return errors.New("span inválido")
+			return errors.New(i18n.Source("text.1d5b966b62ab"))
 		}
 	case "stepSize":
 		valid := false
@@ -114,61 +116,61 @@ func (command webControlCommand) validate() error {
 			}
 		}
 		if !valid {
-			return errors.New("paso inválido")
+			return errors.New(i18n.Source("text.947fccf72dad"))
 		}
 	case "fixed":
 		if command.Fixed == nil {
-			return errors.New("modo de sintonía inválido")
+			return errors.New(i18n.Source("text.82e96755034e"))
 		}
 	case "memoryTune", "memoryDelete":
 		if command.MemoryIndex < 0 || command.MemoryName == "" {
-			return errors.New("memoria inválida")
+			return errors.New(i18n.Source("text.08c6e503c144"))
 		}
 	case "memorySave":
 		if command.Memory == nil || errInvalidMemory(*command.Memory) {
-			return errors.New("datos de memoria inválidos")
+			return errors.New(i18n.Source("text.7d17e159a71c"))
 		}
 		if command.MemoryIndex < -1 {
-			return errors.New("índice de memoria inválido")
+			return errors.New(i18n.Source("text.2792ba0996a1"))
 		}
 		if command.MemoryIndex >= 0 && command.MemoryName == "" {
-			return errors.New("memoria original inválida")
+			return errors.New(i18n.Source("text.210e8644c2ae"))
 		}
 	case "groupAdd":
 		if !validMemoryGroup(command.Group) {
-			return errors.New("grupo inválido")
+			return errors.New(i18n.Source("text.a0682da0dcbb"))
 		}
 	case "groupRename":
 		if !validMemoryGroup(command.Group) || !validMemoryGroup(command.NewGroup) {
-			return errors.New("grupo inválido")
+			return errors.New(i18n.Source("text.a0682da0dcbb"))
 		}
 	case "squelch":
 		if command.SquelchEnabled == nil {
-			return errors.New("estado SQL inválido")
+			return errors.New(i18n.Source("text.0adaa883f442"))
 		}
 	case "squelchLevel":
 		if command.SquelchDBm == nil || *command.SquelchDBm < -160 || *command.SquelchDBm > 20 {
-			return errors.New("nivel SQL inválido")
+			return errors.New(i18n.Source("text.762c40a296d7"))
 		}
 	case "scannerRunning":
 		if command.ScannerEnabled == nil {
-			return errors.New("estado del escáner inválido")
+			return errors.New(i18n.Source("text.559cd8513fdb"))
 		}
 	case "scannerOverlay":
 		if command.ScannerVisible == nil {
-			return errors.New("visibilidad del escáner inválida")
+			return errors.New(i18n.Source("text.42f7d9b27bc6"))
 		}
 	case "scannerMemory":
 		if command.ScannerMemory == nil {
-			return errors.New("ajuste a memoria inválido")
+			return errors.New(i18n.Source("text.da098328cbcb"))
 		}
 	case "scannerResume":
-		if command.ScannerResume != "AUTO" && command.ScannerResume != "DELAY" && command.ScannerResume != "HOLD" {
-			return errors.New("reanudar escáner inválido")
+		if command.ScannerResume != i18n.Source("text.6ea56fae9eac") && command.ScannerResume != i18n.Source("text.85135a165905") && command.ScannerResume != i18n.Source("text.aacf94b7be62") {
+			return errors.New(i18n.Source("text.0dcd158b4183"))
 		}
 	case "scannerRangeFFT":
 	default:
-		return errors.New("acción no permitida")
+		return errors.New(i18n.Source("text.92fbf44e348c"))
 	}
 	return nil
 }
@@ -182,30 +184,30 @@ func (service *WebServer) RemoteActive() bool {
 
 func (service *WebServer) controlAction(w http.ResponseWriter, r *http.Request) {
 	if service.controlCommands == nil {
-		http.Error(w, "Control remoto no disponible", http.StatusServiceUnavailable)
+		http.Error(w, i18n.Source("text.6c2af67d4e70"), http.StatusServiceUnavailable)
 		return
 	}
 	if origin := r.Header.Get("Origin"); origin != "" {
 		parsed, err := url.Parse(origin)
 		if err != nil || parsed.Host != r.Host || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-			http.Error(w, "Origen no permitido", http.StatusForbidden)
+			http.Error(w, i18n.Source("text.876893a4e122"), http.StatusForbidden)
 			return
 		}
 	}
 	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
-		http.Error(w, "Se requiere JSON", http.StatusUnsupportedMediaType)
+		http.Error(w, i18n.Source("text.51bd4ca71ea4"), http.StatusUnsupportedMediaType)
 		return
 	}
 	cookie, err := r.Cookie("icsdr_control")
 	if err != nil {
-		http.Error(w, "Control remoto no autorizado", http.StatusForbidden)
+		http.Error(w, i18n.Source("text.9f56a34a4830"), http.StatusForbidden)
 		return
 	}
 	service.mu.RLock()
 	valid := service.controlToken != "" && time.Now().Before(service.controlUntil) && subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(service.controlToken)) == 1
 	service.mu.RUnlock()
 	if !valid {
-		http.Error(w, "Control remoto no autorizado", http.StatusForbidden)
+		http.Error(w, i18n.Source("text.9f56a34a4830"), http.StatusForbidden)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 2048)
@@ -213,7 +215,7 @@ func (service *WebServer) controlAction(w http.ResponseWriter, r *http.Request) 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&command) != nil || command.validate() != nil {
-		http.Error(w, "Orden remota inválida", http.StatusBadRequest)
+		http.Error(w, i18n.Source("text.0b507f3bbc7e"), http.StatusBadRequest)
 		return
 	}
 	command.token = cookie.Value
@@ -221,7 +223,7 @@ func (service *WebServer) controlAction(w http.ResponseWriter, r *http.Request) 
 	case service.controlCommands <- command:
 		w.WriteHeader(http.StatusAccepted)
 	default:
-		http.Error(w, "Control ocupado; inténtalo de nuevo", http.StatusServiceUnavailable)
+		http.Error(w, i18n.Source("text.c19841c89b88"), http.StatusServiceUnavailable)
 	}
 }
 
@@ -266,10 +268,10 @@ func (screen *MainScreen) applyWebControl(command webControlCommand) {
 		screen.resetTETRAAfterManualSpectrumTune(previousFrequency)
 	case "mode":
 		screen.selectMode(command.Mode)
-		if command.Mode == "DMR BETA" && screen.activeTool != "SCAN" {
-			screen.selectTool("DMR_MONITOR")
-		} else if command.Mode != "DMR BETA" && screen.activeTool == "DMR_MONITOR" {
-			screen.selectTool("PBT_AUDIO")
+		if command.Mode == i18n.Source("text.2604864ce4d3") && screen.activeTool != i18n.Source("text.7a1580c49e45") {
+			screen.selectTool(i18n.Source("text.93239b223632"))
+		} else if command.Mode != i18n.Source("text.2604864ce4d3") && screen.activeTool == i18n.Source("text.93239b223632") {
+			screen.selectTool(i18n.Source("text.a42c60257b01"))
 		}
 	case "tool":
 		if screen.scanPanel != nil && screen.scanPanel.running {
@@ -279,16 +281,16 @@ func (screen *MainScreen) applyWebControl(command webControlCommand) {
 			screen.selectTool(command.Tool)
 		}
 		if screen.mode != nil {
-			expected := "TETRA"
-			if command.Tool == "DMR_MONITOR" {
-				expected = "DMR BETA"
+			expected := i18n.Source("text.f69d86a86926")
+			if command.Tool == i18n.Source("text.93239b223632") {
+				expected = i18n.Source("text.2604864ce4d3")
 			}
 			if screen.mode.SelectedText() != expected {
 				screen.selectMode(expected)
 			}
 		}
 	case "dmrAudioSlot":
-		if screen.activeTool != "DMR_MONITOR" {
+		if screen.activeTool != i18n.Source("text.93239b223632") {
 			return
 		}
 		if screen.dmrPanel != nil {
@@ -301,7 +303,7 @@ func (screen *MainScreen) applyWebControl(command webControlCommand) {
 			screen.markSettingsDirty()
 		}
 	case "tetraRunning", "tetraBand", "tetraAutoCenter", "tetraClearOnly":
-		if screen.activeTool != "TETRA" || screen.tetraPanel == nil {
+		if screen.activeTool != i18n.Source("text.f69d86a86926") || screen.tetraPanel == nil {
 			return
 		}
 		panel := screen.tetraPanel
@@ -385,7 +387,7 @@ func (screen *MainScreen) applyWebControl(command webControlCommand) {
 			screen.squelchSlider.SetValue(float32(level))
 		}
 		if screen.squelchLabel != nil {
-			screen.squelchLabel.SetText("LEVEL " + strconv.Itoa(level) + " dBm")
+			screen.squelchLabel.SetText(i18n.Source("text.6466f20e2210") + strconv.Itoa(level) + i18n.Source("text.7d97ab01faba"))
 		}
 		screen.applySquelch()
 		screen.markSettingsDirty()
@@ -443,7 +445,7 @@ func (screen *MainScreen) tuneRemoteAt(hz int64) {
 	if step := screen.activeTuningStepHz(); step > 0 {
 		hz = int64(math.Round(float64(hz)/float64(step))) * step
 	}
-	if screen.centerMode || screen.spanHz <= 0 || screen.activeTool == "RTL_433" {
+	if screen.centerMode || screen.spanHz <= 0 || screen.activeTool == i18n.Source("text.8be70e7cb2c4") {
 		screen.setRemoteFrequency(hz)
 		return
 	}
@@ -454,7 +456,7 @@ func (screen *MainScreen) tuneRemoteAt(hz int64) {
 	screen.frequencyHz = hz
 	halfSpan := screen.spanHz / 2
 	guard := max(int64(math.Round(float64(screen.spanHz)*.05)), int64(screen.demodBandwidthHz/2))
-	if screen.mode != nil && (screen.mode.SelectedText() == "USB" || screen.mode.SelectedText() == "LSB") {
+	if screen.mode != nil && (screen.mode.SelectedText() == i18n.Source("text.61f0acff1735") || screen.mode.SelectedText() == i18n.Source("text.6323db4948ad")) {
 		guard = max(guard, int64(screen.demodBandwidthHz))
 	}
 	guard = min(guard, int64(math.Round(float64(screen.spanHz)*.40)))
@@ -482,7 +484,7 @@ func (screen *MainScreen) setRemoteFrequency(hz int64) {
 	if hz < 100_000 || hz > 6_000_000_000 {
 		return
 	}
-	if screen.activeTool == "RTL_433" && screen.rtl433Panel != nil {
+	if screen.activeTool == i18n.Source("text.8be70e7cb2c4") && screen.rtl433Panel != nil {
 		screen.rtl433Panel.selectFrequency(hz)
 		return
 	}

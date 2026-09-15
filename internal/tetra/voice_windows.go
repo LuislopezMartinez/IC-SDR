@@ -1,6 +1,8 @@
 package tetra
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"syscall"
 	"unsafe"
@@ -14,26 +16,26 @@ type voiceDecoder struct {
 }
 
 func newVoiceDecoder(path string) *voiceDecoder {
-	v := &voiceDecoder{errText: "DLL AUSENTE", firstPass: 1}
+	v := &voiceDecoder{errText: i18n.Source("text.85a835b4fee4"), firstPass: 1}
 	if path == "" {
 		return v
 	}
 	dll := syscall.NewLazyDLL(path)
 	if err := dll.Load(); err != nil {
-		v.errText = fmt.Sprintf("NO CARGA (%v)", err)
+		v.errText = fmt.Sprintf(i18n.Source("text.acd49dd016f6"), err)
 		return v
 	}
 	v.init, v.cdec, v.sdec = dll.NewProc("tetra_decode_init"), dll.NewProc("tetra_cdec"), dll.NewProc("tetra_sdec")
 	if err := v.init.Find(); err != nil {
-		v.errText = "INIT NO DISPONIBLE"
+		v.errText = i18n.Source("text.2b2bd3ae40cb")
 		return v
 	}
 	if err := v.cdec.Find(); err != nil {
-		v.errText = "CDEC NO DISPONIBLE"
+		v.errText = i18n.Source("text.eacd3226af8f")
 		return v
 	}
 	if err := v.sdec.Find(); err != nil {
-		v.errText = "SDEC NO DISPONIBLE"
+		v.errText = i18n.Source("text.dd1c3496eb2a")
 		return v
 	}
 	v.init.Call()

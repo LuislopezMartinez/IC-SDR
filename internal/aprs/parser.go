@@ -1,6 +1,8 @@
 package aprs
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"math"
 	"regexp"
@@ -67,7 +69,7 @@ func DecodeAX25(frame []byte, level int) (Packet, bool) {
 		raw += "," + path
 	}
 	raw += ":" + info
-	p := Packet{Received: time.Now(), Source: addresses[1], Destination: addresses[0], Path: path, Information: info, Raw: raw, Type: "OTHER", Symbol: "—", Coordinates: "—", Locator: "—", Summary: clean(info), Course: "—", Speed: "—", Altitude: "—", MessageTarget: "—", MessageID: "—", Temperature: "—", Humidity: "—", Pressure: "—", Wind: "—", Rain: "—", Telemetry: "—", PHG: "—", ReceiveLevel: level}
+	p := Packet{Received: time.Now(), Source: addresses[1], Destination: addresses[0], Path: path, Information: info, Raw: raw, Type: i18n.Source("text.1c55d9b826e8"), Symbol: "—", Coordinates: "—", Locator: "—", Summary: clean(info), Course: "—", Speed: "—", Altitude: "—", MessageTarget: "—", MessageID: "—", Temperature: "—", Humidity: "—", Pressure: "—", Wind: "—", Rain: "—", Telemetry: "—", PHG: "—", ReceiveLevel: level}
 	parseAPRS(&p)
 	return p, true
 }
@@ -97,10 +99,10 @@ func parseAPRS(p *Packet) {
 	offset := -1
 	switch kind {
 	case '!', '=':
-		p.Type = "POSITION"
+		p.Type = i18n.Source("text.aad6faa6418d")
 		offset = 1
 	case '/', '@':
-		p.Type = "POSITION"
+		p.Type = i18n.Source("text.aad6faa6418d")
 		if len(d) >= 8 {
 			offset = 8
 		}
@@ -108,30 +110,30 @@ func parseAPRS(p *Packet) {
 		parseMessage(p, d)
 		return
 	case '>':
-		p.Type = "STATUS"
+		p.Type = i18n.Source("text.8c2e4a035f5f")
 		p.Summary = clean(d[1:])
 		return
 	case '_':
-		p.Type = "WEATHER"
+		p.Type = i18n.Source("text.0a244108837b")
 		parseWeather(p, d)
 		return
 	case ';':
-		p.Type = "OBJECT"
+		p.Type = i18n.Source("text.afdc96fa07e7")
 		if len(d) >= 18 {
 			offset = 18
 		}
 	case ')':
-		p.Type = "ITEM"
+		p.Type = i18n.Source("text.8550f3405394")
 		if i := strings.IndexAny(d, "!_"); i >= 0 {
 			offset = i + 1
 		}
 	case '`', '\'':
-		p.Type = "MIC-E"
-		p.Summary = "Mic-E · " + clean(d[1:])
+		p.Type = i18n.Source("text.005ebc34fe5e")
+		p.Summary = i18n.Source("text.db63f329de5f") + clean(d[1:])
 		return
 	default:
 		if strings.HasPrefix(d, "T#") {
-			p.Type = "TELEMETRY"
+			p.Type = i18n.Source("text.deb116486d9f")
 			p.Telemetry = clean(d)
 			p.Summary = p.Telemetry
 			return
@@ -183,7 +185,7 @@ func parsePosition(p *Packet, d string, o int) bool {
 	return true
 }
 func parseMessage(p *Packet, d string) {
-	p.Type = "MESSAGE"
+	p.Type = i18n.Source("text.b194d92018d6")
 	if len(d) < 11 {
 		p.Summary = clean(d[1:])
 		return
@@ -198,16 +200,16 @@ func parseMessage(p *Packet, d string) {
 		message = message[:i]
 	}
 	if strings.HasPrefix(message, "ack") {
-		p.Type = "ACK"
+		p.Type = i18n.Source("text.a2f1a6d79bfb")
 	} else if strings.HasPrefix(message, "rej") {
-		p.Type = "REJ"
+		p.Type = i18n.Source("text.0a8e61fbc428")
 	}
 	p.Summary = "→ " + p.MessageTarget + "  " + clean(message)
 }
 
 var movementRE = regexp.MustCompile(`(?:^|[^0-9])(\d{3})/(\d{3})(?:[^0-9]|$)`)
 var altitudeRE = regexp.MustCompile(`/A=(\d{6})`)
-var phgRE = regexp.MustCompile(`PHG[0-9]{4}`)
+var phgRE = regexp.MustCompile(i18n.Source("text.6e6e9d521e89"))
 var tempRE = regexp.MustCompile(`t(-?\d{3})`)
 var humidRE = regexp.MustCompile(`h(\d{2})`)
 var pressureRE = regexp.MustCompile(`b(\d{5})`)
@@ -217,7 +219,7 @@ func parseExtras(p *Packet, s string) {
 	if m := movementRE.FindStringSubmatch(s); m != nil {
 		knots, _ := strconv.Atoi(m[2])
 		p.Course = m[1] + "°"
-		p.Speed = fmt.Sprintf("%d km/h", int(math.Round(float64(knots)*1.852)))
+		p.Speed = fmt.Sprintf(i18n.Source("text.dba783d6751c"), int(math.Round(float64(knots)*1.852)))
 	}
 	if m := altitudeRE.FindStringSubmatch(s); m != nil {
 		feet, _ := strconv.Atoi(m[1])
@@ -230,7 +232,7 @@ func parseExtras(p *Packet, s string) {
 func parseWeather(p *Packet, s string) {
 	if m := movementRE.FindStringSubmatch(s); m != nil {
 		knots, _ := strconv.Atoi(m[2])
-		p.Wind = fmt.Sprintf("%s° %d km/h", m[1], int(math.Round(float64(knots)*1.852)))
+		p.Wind = fmt.Sprintf(i18n.Source("text.ba050b56d77f"), m[1], int(math.Round(float64(knots)*1.852)))
 	}
 	if m := tempRE.FindStringSubmatch(s); m != nil {
 		f, _ := strconv.Atoi(m[1])
@@ -244,14 +246,14 @@ func parseWeather(p *Packet, s string) {
 	}
 	if m := pressureRE.FindStringSubmatch(s); m != nil {
 		n, _ := strconv.Atoi(m[1])
-		p.Pressure = fmt.Sprintf("%.1f hPa", float64(n)/10)
+		p.Pressure = fmt.Sprintf(i18n.Source("text.efe95347f7ba"), float64(n)/10)
 	}
 	if m := rainRE.FindStringSubmatch(s); m != nil {
 		n, _ := strconv.Atoi(m[1])
-		p.Rain = fmt.Sprintf("%.1f mm/h", float64(n)*.254)
+		p.Rain = fmt.Sprintf(i18n.Source("text.fb023bf80ffb"), float64(n)*.254)
 	}
 	if p.Temperature != "—" || p.Humidity != "—" || p.Pressure != "—" {
-		p.Type = "WEATHER"
+		p.Type = i18n.Source("text.0a244108837b")
 	}
 }
 func maidenhead(lat, lon float64) string {

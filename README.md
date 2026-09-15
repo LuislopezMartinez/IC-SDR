@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.6.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.6.0)**
+**Versión actual: [v0.7.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.7.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -44,6 +44,16 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.7.0
+
+- Interfaz en español e inglés y traducciones ampliables sin recompilar.
+- Mapa APRS independiente con símbolos y detalles de estaciones.
+- Herramienta Distancias con ubicaciones guardadas, locators, rumbos, perfil del terreno y análisis aproximado de enlace y Fresnel.
+- Selector de receptores conectados, dispositivo preferido, integración de HackRF Pro y antenas de SDRplay RSP-Dx según el controlador.
+- Mapas con cartografía por teselas, proyección Mercator, caché y respaldo local.
+- Catálogo ampliado de frecuencias de satélites con actualización desde SatNOGS.
+- Correcciones de posiciones ADS-B, cobertura multicanal y optimización IQ en RTL_433, controles de audio/PBT y selección de filas.
 
 ## Novedades de v0.6.0
 
@@ -119,12 +129,15 @@ IC-SDR integra herramientas para recibir y visualizar:
 IC-SDR está pensado para ejecutarse en Windows. La carpeta local `dist/IC-SDR-Go` contiene el binario distribuible `IC-SDR-Go.exe`, sus runtimes y las herramientas auxiliares necesarias. El directorio `DATA` debe permanecer junto al ejecutable.
 
 La carpeta `dist/` se genera localmente y no forma parte del código fuente versionado. Para reconstruirla se utiliza `build-release.ps1`.
+Los runtimes y herramientas auxiliares se conservan localmente en `DATA/runtime`, `DATA/tools` y `DATA/data`. El script los copia desde ahí y ya no necesita `ORIGEN`. Estos binarios no se incluyen en Git; un clon nuevo debe disponer de ellos antes de generar una release.
 
 ## Requisitos
 
 - Windows.
 - Go 1.27 o posterior para compilar desde el código fuente.
-- Un receptor compatible con RTL-SDR o SoapySDR/SDRplay.
+- Un receptor compatible con RTL-SDR, SDRplay (incluido RSP-Dx) o HackRF Pro.
+
+El selector SDR detecta los equipos conectados. En RSP-Dx muestra las antenas que expone el controlador y permite cambiar entre ellas durante la recepción. En Windows, HackRF Pro requiere que el dispositivo tenga instalado un controlador USB compatible con libusb/WinUSB. La distribución portable incluye `hackrf.dll`, `pthreadVC3.dll` y `HackRFSupport.dll` junto al runtime SoapySDR.
 
 ## Compilación
 
@@ -149,3 +162,11 @@ Los ajustes, memorias, grabaciones, capturas, exportaciones y registros se almac
 ## Estado del proyecto
 
 IC-SDR se encuentra en desarrollo activo. Las funciones disponibles pueden variar según el receptor, los controladores y las herramientas de decodificación instaladas.
+
+El menú permite elegir Español o English. Los archivos de traducción se distribuyen en `contenidos` junto al ejecutable y se descubren al arrancar. Para añadir idiomas o corregir textos, consulte [contenidos/LEEME.md](contenidos/LEEME.md).
+
+El menú incluye **Distancias**, que abre un mapa independiente con dos pins arrastrables, un panel movible y una lista de ubicaciones que permite añadir, editar, eliminar y asignar lugares a A o B. La lista se guarda en `DATA/config/distance-locations.json`.
+
+El panel muestra distancia aproximada sobre una Tierra esférica, coordenadas, locator Maidenhead, rumbos en ambos sentidos y elevaciones del terreno. **Perfil y enlace** permite introducir frecuencia en MHz y alturas de antenas sobre el terreno en metros; muestra pérdida en espacio libre, línea de vista y despeje del 60% de la primera zona de Fresnel. La gráfica usa verde para el relieve, naranja para la línea de vista y azul para el límite inferior del 60% de Fresnel, con curvatura terrestre y radio efectivo k=4/3.
+
+Las elevaciones proceden de [Mapzen mediante Open Topo Data](https://www.opentopodata.org/), con 81 muestras por recorrido y consulta en segundo plano al terminar de arrastrar un pin. La resolución efectiva del perfil depende de la distancia entre muestras y del modelo de elevaciones; no garantiza detectar todos los obstáculos y no incluye edificios ni árboles. Sin conexión, distancia, coordenadas, rumbos, locators y pérdida en espacio libre siguen funcionando; las elevaciones no disponibles se identifican explícitamente. Los mapas utilizan el cargador compartido de tiles y su respaldo local.

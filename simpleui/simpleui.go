@@ -1,5 +1,7 @@
 package simpleui
 
+import "go-zero/internal/i18n"
+
 import rl "github.com/gen2brain/raylib-go/raylib"
 
 type runtimeConfig struct {
@@ -61,7 +63,7 @@ func PlayActivationFeedback() {
 func SetMode(width, height int32, mode ScaleMode) {
 	ensureNotStarted("SetMode")
 	if width <= 0 || height <= 0 {
-		panic("simpleui: SetMode requires a positive width and height")
+		panic(i18n.Source("text.66630e462059"))
 	}
 	runtime.width, runtime.height, runtime.mode = width, height, mode
 }
@@ -73,7 +75,7 @@ func SetMode(width, height int32, mode ScaleMode) {
 func SetInitialWindowSize(width, height int32) {
 	ensureNotStarted("SetInitialWindowSize")
 	if width <= 0 || height <= 0 {
-		panic("simpleui: SetInitialWindowSize requires a positive width and height")
+		panic(i18n.Source("text.f33544ed9154"))
 	}
 	runtime.initialWidth, runtime.initialHeight = width, height
 }
@@ -81,14 +83,14 @@ func SetInitialWindowSize(width, height int32) {
 // SetTitle configures the host window title.
 func SetTitle(title string) {
 	ensureNotStarted("SetTitle")
-	runtime.title = title
+	runtime.title = translateTitle(title)
 }
 
 // SetMinimumSize configures the smallest allowed host window size.
 func SetMinimumSize(width, height int32) {
 	ensureNotStarted("SetMinimumSize")
 	if width <= 0 || height <= 0 {
-		panic("simpleui: SetMinimumSize requires a positive width and height")
+		panic(i18n.Source("text.3a66e1494342"))
 	}
 	runtime.minWidth, runtime.minHeight = width, height
 }
@@ -102,7 +104,7 @@ func SetColors(background, letterbox rl.Color) {
 func SetTargetFPS(fps int32) {
 	ensureNotStarted("SetTargetFPS")
 	if fps < 0 {
-		panic("simpleui: SetTargetFPS cannot be negative")
+		panic(i18n.Source("text.a12bda9bec94"))
 	}
 	runtime.targetFPS = fps
 }
@@ -110,28 +112,28 @@ func SetTargetFPS(fps int32) {
 // Run owns the window and calls draw once per frame in logical coordinates.
 func Run(draw func()) {
 	if draw == nil {
-		panic("simpleui: Run requires a draw function")
+		panic(i18n.Source("text.0e40579c6e6d"))
 	}
 	ensureNotStarted("Run")
 	runtime.started = true
 
-	traceLifecycle("Raylib: configurando flags de ventana")
+	traceLifecycle(i18n.Source("text.8f7d1a989b96"))
 	rl.SetConfigFlags(runtime.windowFlags)
-	traceLifecycle("Raylib: llamando a InitWindow (%dx%d)", runtime.width, runtime.height)
+	traceLifecycle(i18n.Source("text.eb0d363a93a6"), runtime.width, runtime.height)
 	windowWidth, windowHeight := runtime.width, runtime.height
 	if runtime.initialWidth > 0 && runtime.initialHeight > 0 {
 		windowWidth, windowHeight = runtime.initialWidth, runtime.initialHeight
 	}
 	rl.InitWindow(windowWidth, windowHeight, runtime.title)
-	traceLifecycle("Raylib: InitWindow finalizado · monitor=%d · pantalla=%dx%d", rl.GetCurrentMonitor(), rl.GetScreenWidth(), rl.GetScreenHeight())
+	traceLifecycle(i18n.Source("text.8aff8158085b"), rl.GetCurrentMonitor(), rl.GetScreenWidth(), rl.GetScreenHeight())
 	placeWindowOnPrimaryMonitor(windowWidth, windowHeight)
 	rl.SetWindowMinSize(int(runtime.minWidth), int(runtime.minHeight))
 	if runtime.targetFPS > 0 {
 		rl.SetTargetFPS(runtime.targetFPS)
 	}
-	traceLifecycle("Raylib: creando render texture principal")
+	traceLifecycle(i18n.Source("text.497e49d6569f"))
 	runtime.canvas = NewCanvas(runtime.width, runtime.height, runtime.mode)
-	traceLifecycle("Raylib: render texture creada · id=%d", runtime.canvas.target.Texture.ID)
+	traceLifecycle(i18n.Source("text.d1284adc6ad0"), runtime.canvas.target.Texture.ID)
 
 	defer func() {
 		unloadFonts()
@@ -141,7 +143,7 @@ func Run(draw func()) {
 		runtime.started = false
 	}()
 
-	traceLifecycle("Raylib: entrando en el bucle de interfaz")
+	traceLifecycle(i18n.Source("text.a75cdd388bc1"))
 	for !rl.WindowShouldClose() {
 		handleWindowShortcuts()
 		runtime.canvas.Begin(runtime.background)
@@ -162,11 +164,11 @@ func placeWindowOnPrimaryMonitor(wantedWidth, wantedHeight int32) {
 		int(wantedWidth), int(wantedHeight), monitorWidth, monitorHeight,
 		int(monitorPosition.X), int(monitorPosition.Y),
 	)
-	traceLifecycle("Raylib: monitores=%d · principal=%dx%d en (%d,%d)", monitorCount, monitorWidth, monitorHeight, int(monitorPosition.X), int(monitorPosition.Y))
+	traceLifecycle(i18n.Source("text.510403441580"), monitorCount, monitorWidth, monitorHeight, int(monitorPosition.X), int(monitorPosition.Y))
 	rl.SetWindowMonitor(primaryMonitor)
 	rl.SetWindowSize(width, height)
 	rl.SetWindowPosition(x, y)
-	traceLifecycle("Raylib: ventana colocada en monitor principal · posición=(%d,%d) · tamaño=%dx%d", x, y, width, height)
+	traceLifecycle(i18n.Source("text.d448f1eda6ce"), x, y, width, height)
 }
 
 func safeWindowBounds(wantedWidth, wantedHeight, monitorWidth, monitorHeight, monitorX, monitorY int) (width, height, x, y int) {
@@ -214,6 +216,6 @@ func handleWindowShortcuts() {
 
 func ensureNotStarted(operation string) {
 	if runtime.started {
-		panic("simpleui: " + operation + " must be called before Run")
+		panic(i18n.Source("text.563076055ae9") + operation + i18n.Source("text.3c52e64cf72a"))
 	}
 }

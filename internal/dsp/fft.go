@@ -1,6 +1,8 @@
 package dsp
 
 import (
+	"go-zero/internal/i18n"
+
 	"math"
 	"sync"
 )
@@ -19,7 +21,7 @@ type FFT struct {
 
 func NewFFT(size int) *FFT {
 	if size < 2 || size&(size-1) != 0 {
-		panic("dsp: FFT size must be a power of two")
+		panic(i18n.Source("text.b61ed9896340"))
 	}
 	levels := 0
 	for value := size; value > 1; value >>= 1 {
@@ -30,7 +32,7 @@ func NewFFT(size int) *FFT {
 		window:     make([]float64, size),
 		real:       make([]float64, size),
 		imag:       make([]float64, size),
-		windowType: "HANN",
+		windowType: i18n.Source("text.26701b540b4b"),
 	}
 	for index := range fft.window {
 		fft.window[index] = .5 - .5*math.Cos(2*math.Pi*float64(index)/float64(size-1))

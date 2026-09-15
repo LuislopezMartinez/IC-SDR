@@ -1,6 +1,8 @@
 package simpleui
 
 import (
+	"go-zero/internal/i18n"
+
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -15,10 +17,10 @@ const (
 
 func normalizeRange(minimum, maximum, step float32) (float32, float32, float32) {
 	if maximum <= minimum {
-		panic("simpleui: slider maximum must be greater than minimum")
+		panic(i18n.Source("text.644767ec8f1f"))
 	}
 	if step <= 0 {
-		panic("simpleui: slider step must be greater than zero")
+		panic(i18n.Source("text.8ad45dc83078"))
 	}
 	return minimum, maximum, step
 }

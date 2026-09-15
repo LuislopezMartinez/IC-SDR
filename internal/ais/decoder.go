@@ -1,6 +1,8 @@
 package ais
 
 import (
+	"go-zero/internal/i18n"
+
 	"bufio"
 	"encoding/binary"
 	"encoding/json"
@@ -83,7 +85,7 @@ type Decoder struct {
 }
 
 func New(rate float64, executable string) *Decoder {
-	return &Decoder{rate: rate, executable: executable, state: "DETENIDO", vessels: make(map[uint32]Vessel)}
+	return &Decoder{rate: rate, executable: executable, state: i18n.Source("text.7dc7253c376a"), vessels: make(map[uint32]Vessel)}
 }
 func (d *Decoder) Configure(enabled bool) {
 	d.lifecycle.Lock()
@@ -93,13 +95,13 @@ func (d *Decoder) Configure(enabled bool) {
 		return
 	}
 	if d.executable == "" {
-		d.fail(errors.New("AIS-catcher no configurado"))
+		d.fail(errors.New(i18n.Source("text.dc1932b0199c")))
 		return
 	}
 	d.queue = make(chan []float32, 16)
 	d.stop = make(chan struct{})
 	d.done = make(chan struct{})
-	d.cmd = exec.Command(d.executable, "-r", "CF32", ".", "-s", strconv.Itoa(int(math.Round(d.rate))), "-o", "5", "-G", "LEVEL", "ERROR")
+	d.cmd = exec.Command(d.executable, "-r", "CF32", ".", "-s", strconv.Itoa(int(math.Round(d.rate))), "-o", "5", "-G", i18n.Source("text.d81674b2bdd5"), i18n.Source("text.d98ee0e5f939"))
 	d.cmd.SysProcAttr = hiddenProcessAttributes()
 	stdin, err := d.cmd.StdinPipe()
 	if err != nil {
@@ -123,7 +125,7 @@ func (d *Decoder) Configure(enabled bool) {
 	session := d.session
 	d.stdin = stdin
 	d.running = true
-	d.state = "ESPERANDO BARCOS"
+	d.state = i18n.Source("text.2565ad5076f8")
 	d.lastError = ""
 	d.detail = ""
 	d.mu.Unlock()
@@ -136,10 +138,10 @@ func (d *Decoder) Configure(enabled bool) {
 		if d.cmd == cmd {
 			d.running = false
 			if err != nil {
-				d.state = "ERROR"
+				d.state = i18n.Source("text.d98ee0e5f939")
 				d.lastError = err.Error()
 			} else {
-				d.state = "FINALIZADO"
+				d.state = i18n.Source("text.97efa5c193f3")
 			}
 		}
 		d.mu.Unlock()
@@ -235,7 +237,7 @@ func (d *Decoder) mergeLocked(m message) {
 	v.Messages++
 	d.vessels[m.MMSI] = v
 	d.messages++
-	d.state = "RECIBIENDO"
+	d.state = i18n.Source("text.3ec713946605")
 }
 func (d *Decoder) ProcessIQ(iq []float32) {
 	d.mu.Lock()
@@ -274,7 +276,7 @@ func (d *Decoder) Close() { d.lifecycle.Lock(); defer d.lifecycle.Unlock(); d.st
 func (d *Decoder) stopProcess() {
 	d.mu.Lock()
 	if !d.running {
-		d.state = "DETENIDO"
+		d.state = i18n.Source("text.7dc7253c376a")
 		d.mu.Unlock()
 		return
 	}
@@ -290,13 +292,13 @@ func (d *Decoder) stopProcess() {
 	}
 	<-done
 	d.mu.Lock()
-	d.state = "DETENIDO"
+	d.state = i18n.Source("text.7dc7253c376a")
 	d.mu.Unlock()
 }
 func (d *Decoder) fail(err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.running = false
-	d.state = "ERROR"
+	d.state = i18n.Source("text.d98ee0e5f939")
 	d.lastError = err.Error()
 }

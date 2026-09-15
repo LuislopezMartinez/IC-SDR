@@ -1,6 +1,8 @@
 package tetra
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"math"
 	"strings"
@@ -22,15 +24,15 @@ func parseSDS(bits []byte, ssi uint32, now time.Time) (Message, *Position, bool)
 		if !ok {
 			return Message{}, nil, false
 		}
-		message.Kind, message.Text, message.Recognized = "SDS TEXTO", text, true
+		message.Kind, message.Text, message.Recognized = i18n.Source("text.f1e94935313e"), text, true
 		return message, nil, true
 	case 10: // Location Information Protocol
 		position, ok := parseShortLIP(payload, ssi, now)
 		if !ok {
 			return Message{}, nil, false
 		}
-		text := fmt.Sprintf("%.6f, %.6f · %.1f km/h · rumbo %.1f° · precisión %.0f m", position.Latitude, position.Longitude, position.SpeedKmh, position.Heading, position.AccuracyM)
-		message.Kind, message.Text, message.Recognized = "GPS / LIP", text, true
+		text := fmt.Sprintf(i18n.Source("text.2d71493983ac"), position.Latitude, position.Longitude, position.SpeedKmh, position.Heading, position.AccuracyM)
+		message.Kind, message.Text, message.Recognized = i18n.Source("text.d1647141cb62"), text, true
 		return message, &position, true
 	}
 	return Message{}, nil, false
@@ -39,13 +41,13 @@ func parseSDS(bits []byte, ssi uint32, now time.Time) (Message, *Position, bool)
 func sdsProtocolName(protocol uint8) string {
 	switch protocol {
 	case 2:
-		return "TEXTO SIMPLE"
+		return i18n.Source("text.6c359eec4e84")
 	case 9:
-		return "TEXTO INMEDIATO"
+		return i18n.Source("text.c25f8e9628b6")
 	case 10:
-		return "SIMPLE LOCATION SYSTEM / LIP"
+		return i18n.Source("text.8ccbbd4a7262")
 	default:
-		return fmt.Sprintf("PROTOCOLO %d", protocol)
+		return fmt.Sprintf(i18n.Source("text.1e5cd4a3ec58"), protocol)
 	}
 }
 

@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"math"
 	"strconv"
@@ -16,14 +18,14 @@ type FilterPreset struct {
 }
 
 var filterCatalog = map[string][]FilterPreset{
-	"SSB":      {{"FIL1", "ANCHO", 3000}, {"FIL2", "MEDIO", 2400}, {"FIL3", "ESTRECHO", 1800}, {"CUSTOM", "PERSONALIZADO", 2700}},
-	"AM":       {{"FIL1", "ANCHO", 10000}, {"FIL2", "MEDIO", 6000}, {"FIL3", "ESTRECHO", 4000}, {"CUSTOM", "PERSONALIZADO", 7500}},
-	"NFM":      {{"FIL1", "ANCHO", 15000}, {"FIL2", "MEDIO", 12500}, {"FIL3", "ESTRECHO", 8500}, {"CUSTOM", "PERSONALIZADO", 11500}},
-	"WFM":      {{"FIL1", "ANCHO", 220000}, {"FIL2", "MEDIO", 180000}, {"FIL3", "ESTRECHO", 150000}, {"CUSTOM", "PERSONALIZADO", 200000}},
-	"DMR BETA": {{"FIL1", "ANCHO", 15000}, {"FIL2", "DMR 12,5", 12500}, {"FIL3", "ESTRECHO", 10000}, {"CUSTOM", "PERSONALIZADO", 12500}},
-	"ADS-B":    {{"FIL1", "AMPLIO", 1800000}, {"FIL2", "COMPLETO", 2000000}, {"FIL3", "REDUCIDO", 1500000}, {"CUSTOM", "PERSONALIZADO", 2000000}},
-	"UAT":      {{"FIL1", "AMPLIO", 1800000}, {"FIL2", "COMPLETO", 2000000}, {"FIL3", "REDUCIDO", 1500000}, {"CUSTOM", "PERSONALIZADO", 2000000}},
-	"TETRA":    {{"FIL1", "TETRA 25", 25000}, {"FIL2", "MEDIO", 22000}, {"FIL3", "ESTRECHO", 18000}, {"CUSTOM", "PERSONALIZADO", 25000}},
+	i18n.Source("text.3b84edd06b03"): {{i18n.Source("text.c4006a8004b9"), i18n.Source("text.32c5fd24567a"), 3000}, {i18n.Source("text.eaef6ac938cc"), i18n.Source("text.e3b19dc5779f"), 2400}, {i18n.Source("text.5e6f400c402d"), i18n.Source("text.754a0dc3b606"), 1800}, {i18n.Source("text.7cd5885327fd"), i18n.Source("text.4fd9b0cb33bf"), 2700}},
+	"AM":                             {{i18n.Source("text.c4006a8004b9"), i18n.Source("text.32c5fd24567a"), 10000}, {i18n.Source("text.eaef6ac938cc"), i18n.Source("text.e3b19dc5779f"), 6000}, {i18n.Source("text.5e6f400c402d"), i18n.Source("text.754a0dc3b606"), 4000}, {i18n.Source("text.7cd5885327fd"), i18n.Source("text.4fd9b0cb33bf"), 7500}},
+	i18n.Source("text.0896d612d497"): {{i18n.Source("text.c4006a8004b9"), i18n.Source("text.32c5fd24567a"), 15000}, {i18n.Source("text.eaef6ac938cc"), i18n.Source("text.e3b19dc5779f"), 12500}, {i18n.Source("text.5e6f400c402d"), i18n.Source("text.754a0dc3b606"), 8500}, {i18n.Source("text.7cd5885327fd"), i18n.Source("text.4fd9b0cb33bf"), 11500}},
+	i18n.Source("text.6b742bac3eb4"): {{i18n.Source("text.c4006a8004b9"), i18n.Source("text.32c5fd24567a"), 220000}, {i18n.Source("text.eaef6ac938cc"), i18n.Source("text.e3b19dc5779f"), 180000}, {i18n.Source("text.5e6f400c402d"), i18n.Source("text.754a0dc3b606"), 150000}, {i18n.Source("text.7cd5885327fd"), i18n.Source("text.4fd9b0cb33bf"), 200000}},
+	i18n.Source("text.2604864ce4d3"): {{i18n.Source("text.c4006a8004b9"), i18n.Source("text.32c5fd24567a"), 15000}, {i18n.Source("text.eaef6ac938cc"), i18n.Source("text.e630ba82d84a"), 12500}, {i18n.Source("text.5e6f400c402d"), i18n.Source("text.754a0dc3b606"), 10000}, {i18n.Source("text.7cd5885327fd"), i18n.Source("text.4fd9b0cb33bf"), 12500}},
+	i18n.Source("text.7866f9f32e66"): {{i18n.Source("text.c4006a8004b9"), i18n.Source("text.fc09f45c8252"), 1800000}, {i18n.Source("text.eaef6ac938cc"), i18n.Source("text.780cd5dd50e5"), 2000000}, {i18n.Source("text.5e6f400c402d"), i18n.Source("text.22c9628a35db"), 1500000}, {i18n.Source("text.7cd5885327fd"), i18n.Source("text.4fd9b0cb33bf"), 2000000}},
+	i18n.Source("text.72c048cb5100"): {{i18n.Source("text.c4006a8004b9"), i18n.Source("text.fc09f45c8252"), 1800000}, {i18n.Source("text.eaef6ac938cc"), i18n.Source("text.780cd5dd50e5"), 2000000}, {i18n.Source("text.5e6f400c402d"), i18n.Source("text.22c9628a35db"), 1500000}, {i18n.Source("text.7cd5885327fd"), i18n.Source("text.4fd9b0cb33bf"), 2000000}},
+	i18n.Source("text.f69d86a86926"): {{i18n.Source("text.c4006a8004b9"), i18n.Source("text.a334ab1b51eb"), 25000}, {i18n.Source("text.eaef6ac938cc"), i18n.Source("text.e3b19dc5779f"), 22000}, {i18n.Source("text.5e6f400c402d"), i18n.Source("text.754a0dc3b606"), 18000}, {i18n.Source("text.7cd5885327fd"), i18n.Source("text.4fd9b0cb33bf"), 25000}},
 }
 
 type FilterSelector struct {
@@ -45,16 +47,16 @@ func NewFilterSelector(onSelect func(FilterPreset)) *FilterSelector {
 	selector.custom = simpleui.NewSlider("filterCustom", 510, 500, 580, 34, 0, 1, .5)
 	selector.custom.SetStep(.001)
 	selector.custom.OnChange(func(value float32) { selector.setCustomNormalized(value) })
-	selector.cancel = simpleui.NewButton("filterCancel", 564, 590, 216, 50, "CANCELAR", 17)
-	selector.apply = simpleui.NewButton("filterApply", 820, 590, 216, 50, "APLICAR", 17)
+	selector.cancel = simpleui.NewButton("filterCancel", 564, 590, 216, 50, i18n.Source("text.b1a5fe65d180"), 17)
+	selector.apply = simpleui.NewButton("filterApply", 820, 590, 216, 50, i18n.Source("text.3db550736ade"), 17)
 	selector.cancel.OnClick(selector.cancelChanges)
 	selector.apply.OnClick(func() { selector.emit(); selector.open = false })
 	return selector
 }
 
 func filterMode(mode string) string {
-	if mode == "USB" || mode == "LSB" || mode == "CW" {
-		return "SSB"
+	if mode == i18n.Source("text.61f0acff1735") || mode == i18n.Source("text.6323db4948ad") || mode == "CW" {
+		return i18n.Source("text.3b84edd06b03")
 	}
 	return mode
 }
@@ -129,7 +131,7 @@ func (selector *FilterSelector) DrawOverlay() {
 	rl.DrawRectangleRounded(panel, .025, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(panel, .025, 8, 2, colors.blue)
 	rl.DrawRectangleRounded(rl.Rectangle{X: 410, Y: 150, Width: 10, Height: 530}, .5, 8, colors.blue)
-	drawCentered("FILTRO "+selector.mode, rl.Rectangle{X: 450, Y: 180, Width: 700, Height: 45}, 27, colors.text)
+	drawCentered(i18n.Source("text.f69b30034a3f")+selector.mode, rl.Rectangle{X: 450, Y: 180, Width: 700, Height: 45}, 27, colors.text)
 	for index, preset := range filterCatalog[selector.mode] {
 		bounds := selector.presetBounds(index)
 		fill := colors.panelAlt
@@ -140,7 +142,7 @@ func (selector *FilterSelector) DrawOverlay() {
 		rl.DrawRectangleRoundedLinesEx(bounds, .1, 8, 2, colors.border)
 		name := preset.ID
 		if index == 3 {
-			name = "FIL 4"
+			name = i18n.Source("text.3eab586ddfc8")
 		}
 		labelColor := simpleui.EnsureTextContrast(colors.text, fill)
 		bandwidthColor := simpleui.EnsureTextContrast(colors.cyan, fill)
@@ -148,11 +150,11 @@ func (selector *FilterSelector) DrawOverlay() {
 		drawCentered(preset.Description, rl.Rectangle{X: bounds.X, Y: bounds.Y + 36, Width: bounds.Width, Height: 18}, 11, labelColor)
 		drawCentered(formatFilterBandwidth(preset.BandwidthHz), rl.Rectangle{X: bounds.X, Y: bounds.Y + 58, Width: bounds.Width, Height: 18}, 14, bandwidthColor)
 	}
-	drawCentered("CUSTOM permite ajustar y recordar un ancho para cada modo.", rl.Rectangle{X: 460, Y: 420, Width: 680, Height: 36}, 15, colors.text)
+	drawCentered(i18n.Source("text.f285438f7395"), rl.Rectangle{X: 460, Y: 420, Width: 680, Height: 36}, 15, colors.text)
 	if selector.selected[selector.mode] == 3 {
 		selector.custom.Draw()
 		minimum, maximum, _ := customFilterRange(selector.mode)
-		drawCentered(fmt.Sprintf("CUSTOM  %s    (%s - %s)", formatFilterBandwidth(filterCatalog[selector.mode][3].BandwidthHz), formatFilterBandwidth(minimum), formatFilterBandwidth(maximum)), rl.Rectangle{X: 510, Y: 540, Width: 580, Height: 30}, 16, colors.text)
+		drawCentered(fmt.Sprintf(i18n.Source("text.98f9e875bcdc"), formatFilterBandwidth(filterCatalog[selector.mode][3].BandwidthHz), formatFilterBandwidth(minimum), formatFilterBandwidth(maximum)), rl.Rectangle{X: 510, Y: 540, Width: 580, Height: 30}, 16, colors.text)
 		selector.apply.Draw()
 	}
 	selector.cancel.Draw()
@@ -199,13 +201,13 @@ func customFilterRange(mode string) (int, int, int) {
 }
 func formatFilterBandwidth(hz int) string {
 	if hz >= 1_000_000 && hz%1_000_000 == 0 {
-		return fmt.Sprintf("%d MHz", hz/1_000_000)
+		return fmt.Sprintf(i18n.Source("text.b350b6c0de6c"), hz/1_000_000)
 	}
 	if hz%1000 == 0 {
-		return fmt.Sprintf("%d kHz", hz/1000)
+		return fmt.Sprintf(i18n.Source("text.a47fa5c4f793"), hz/1000)
 	}
 	if hz >= 1000 {
-		return strconv.FormatFloat(float64(hz)/1000, 'f', -1, 64) + " kHz"
+		return strconv.FormatFloat(float64(hz)/1000, 'f', -1, 64) + i18n.Source("text.acaf5a32d70a")
 	}
-	return fmt.Sprintf("%d Hz", hz)
+	return fmt.Sprintf(i18n.Source("text.3999a0ad05ce"), hz)
 }

@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -19,26 +21,30 @@ import (
 )
 
 type APRSPanel struct {
-	screen           *MainScreen
-	controls         []simpleui.Element
-	view             string
-	buttons          map[string]*simpleui.Button
-	scroll, selected int
-	feedback         string
-	feedbackUntil    time.Time
-	snapshotPath     string
-	lastSnapshot     string
-	viewer           *exec.Cmd
-	viewerDone       chan struct{}
+	screen                   *MainScreen
+	controls                 []simpleui.Element
+	view                     string
+	buttons                  map[string]*simpleui.Button
+	scroll, selected         int
+	feedback                 string
+	feedbackUntil            time.Time
+	snapshotPath             string
+	lastSnapshot             string
+	viewer                   *exec.Cmd
+	viewerDone               chan struct{}
+	mapViewer                *exec.Cmd
+	mapDone                  chan struct{}
+	mapPath, lastMapSnapshot string
+	stations                 map[string]aprs.MapStation
 }
 
 func NewAPRSPanel(screen *MainScreen) *APRSPanel {
-	p := &APRSPanel{screen: screen, view: "PAQUETES", buttons: map[string]*simpleui.Button{}, selected: -1, snapshotPath: resources.WritablePath("cache", "aprs-captures.json")}
+	p := &APRSPanel{screen: screen, view: i18n.Source("text.74b8a8ece330"), buttons: map[string]*simpleui.Button{}, selected: -1, snapshotPath: resources.WritablePath("cache", "aprs-captures.json")}
 	items := []struct {
 		id, label string
 		w         float32
 		color     rl.Color
-	}{{"PAQUETES", "PAQUETES", 120, colors.blue}, {"ESTACIONES", "ESTACIONES", 130, colors.panelAlt}, {"MENSAJES", "MENSAJES", 120, colors.panelAlt}, {"RADAR", "RADAR", 100, colors.panelAlt}, {"RAW", "RAW", 85, colors.panelAlt}}
+	}{{i18n.Source("text.74b8a8ece330"), i18n.Source("text.74b8a8ece330"), 120, colors.blue}, {i18n.Source("text.87073e5d8db0"), i18n.Source("text.87073e5d8db0"), 130, colors.panelAlt}, {i18n.Source("text.fe86cd5572c0"), i18n.Source("text.fe86cd5572c0"), 120, colors.panelAlt}, {i18n.Source("text.ddadd1fb4789"), i18n.Source("text.ddadd1fb4789"), 100, colors.panelAlt}, {i18n.Source("text.ac0562bba4a5"), i18n.Source("text.ac0562bba4a5"), 85, colors.panelAlt}}
 	x := float32(40)
 	for _, item := range items {
 		b := simpleui.NewButton("aprs"+item.id, x, 660, item.w, 40, item.label, uiControlFontSize)
@@ -56,45 +62,52 @@ func NewAPRSPanel(screen *MainScreen) *APRSPanel {
 		p.controls = append(p.controls, b)
 		x += item.w + 10
 	}
-	europe := simpleui.NewButton("aprsEurope", 650, 660, 185, 40, "APRS EU 144.800", uiControlFontSize)
+	europe := simpleui.NewButton("aprsEurope", 650, 660, 185, 40, i18n.Source("text.6e4f4d0bfe82"), uiControlFontSize)
 	europe.SetColors(rl.Color{R: 68, G: 49, B: 92, A: 255}, rl.Color{R: 175, G: 145, B: 245, A: 255}, colors.text)
 	europe.OnClick(func() { p.tune(144_800_000) })
-	popout := simpleui.NewButton("aprsPopout", 845, 660, 170, 40, "ABRIR TABLA", uiControlFontSize)
+	popout := simpleui.NewButton("aprsPopout", 845, 660, 170, 40, i18n.Source("text.a5b86d91647b"), uiControlFontSize)
 	popout.SetColors(colors.blue, colors.border, colors.text)
 	popout.OnClick(p.openViewer)
-	export := simpleui.NewButton("aprsExport", 1025, 660, 180, 40, "EXPORTAR CSV", uiControlFontSize)
+	export := simpleui.NewButton("aprsExport", 1025, 660, 180, 40, i18n.Source("text.a15e7868d6b8"), uiControlFontSize)
 	export.SetColors(colors.green, colors.border, colors.background)
 	export.OnClick(p.export)
-	clearButton := simpleui.NewButton("aprsClear", 1215, 660, 125, 40, "LIMPIAR", uiControlFontSize)
+	clearButton := simpleui.NewButton("aprsClear", 1215, 660, 125, 40, i18n.Source("text.2aded7edd569"), uiControlFontSize)
 	clearButton.SetColors(actionClearFill, colors.red, colors.text)
 	clearButton.OnClick(func() {
 		if screen.receiver != nil {
 			screen.receiver.ClearAPRSPackets()
 		}
 		p.scroll, p.selected = 0, -1
-		p.say("HISTORIAL LIMPIADO")
+		p.stations = make(map[string]aprs.MapStation)
+		p.writeMapSnapshot(nil)
+		p.say(i18n.Source("text.381b60f9a630"))
 	})
-	p.controls = append(p.controls, europe, popout, export, clearButton)
+	p.mapPath = resources.WritablePath("cache", "aprs-map.json")
+	p.stations = make(map[string]aprs.MapStation)
+	mapButton := simpleui.NewButton("aprsMap", 1350, 660, 200, 40, i18n.Source("text.19bc47933e09"), uiControlFontSize)
+	mapButton.SetColors(colors.blue, colors.border, colors.text)
+	mapButton.OnClick(p.openMap)
+	p.controls = append(p.controls, europe, popout, export, clearButton, mapButton)
 	p.SetVisible(false)
 	return p
 }
 func (p *APRSPanel) tune(hz int64) {
 	p.screen.frequencyHz, p.screen.centerFrequencyHz, p.screen.centerMode = hz, hz, true
-	p.screen.bandCategory, p.screen.bandName = "HAM", "2 m"
+	p.screen.bandCategory, p.screen.bandName = i18n.Source("text.4fae663ae96a"), "2 m"
 	if p.screen.band != nil {
-		p.screen.band.SetLabel("BAND  2 m")
+		p.screen.band.SetLabel(i18n.Source("text.d7cf93445b12"))
 	}
 	if p.screen.vfoModeSwitch != nil {
 		p.screen.vfoModeSwitch.SetActive(false)
 	}
 	if p.screen.receiver != nil {
 		p.screen.receiver.SetCenterFrequency(hz)
-		p.screen.receiver.SetDemodulator("NFM", hz, p.screen.demodBandwidthHz)
+		p.screen.receiver.SetDemodulator(i18n.Source("text.0896d612d497"), hz, p.screen.demodBandwidthHz)
 		p.screen.receiver.ConfigureAPRS(true, hz, p.screen.demodBandwidthHz)
 	}
 	p.screen.waterfall.Reset()
 	p.screen.markSettingsDirty()
-	p.say("SINTONIZADO EN APRS EUROPA")
+	p.say(i18n.Source("text.8b44cacab9a7"))
 }
 func (p *APRSPanel) style() {
 	for id, b := range p.buttons {
@@ -114,7 +127,7 @@ func (p *APRSPanel) SetVisible(v bool) {
 	}
 }
 func (p *APRSPanel) Enter() {
-	p.screen.selectMode("NFM")
+	p.screen.selectMode(i18n.Source("text.0896d612d497"))
 	if p.screen.receiver != nil {
 		p.screen.receiver.ConfigureAPRS(true, p.screen.frequencyHz, p.screen.demodBandwidthHz)
 	}
@@ -125,6 +138,9 @@ func (p *APRSPanel) Leave() {
 	}
 }
 func (p *APRSPanel) Close() {
+	if p.mapViewer != nil && p.mapViewer.Process != nil {
+		_ = p.mapViewer.Process.Kill()
+	}
 	p.Leave()
 	if p.viewer != nil && p.viewer.Process != nil {
 		_ = p.viewer.Process.Kill()
@@ -137,6 +153,16 @@ func (p *APRSPanel) packets() []aprs.Packet {
 	return p.screen.receiver.APRSPackets()
 }
 func (p *APRSPanel) Tick() {
+	if p.mapDone != nil {
+		select {
+		case <-p.mapDone:
+			p.mapViewer, p.mapDone = nil, nil
+		default:
+		}
+	}
+	if p.screen.activeTool == i18n.Source("text.4c4310fd27fd") {
+		p.writeMapSnapshot(p.packets())
+	}
 	if p.viewerDone != nil {
 		select {
 		case <-p.viewerDone:
@@ -144,7 +170,7 @@ func (p *APRSPanel) Tick() {
 		default:
 		}
 	}
-	if p.screen.activeTool != "APRS" || p.screen.viewMode != 1 || p.screen.overlayOpen() {
+	if p.screen.activeTool != i18n.Source("text.4c4310fd27fd") || p.screen.viewMode != 1 || p.screen.overlayOpen() {
 		return
 	}
 	p.writeSnapshot(p.packets())
@@ -153,7 +179,7 @@ func (p *APRSPanel) Tick() {
 	}
 	packets := p.filtered()
 	visible := 5
-	if p.view == "RADAR" {
+	if p.view == i18n.Source("text.ddadd1fb4789") {
 		return
 	}
 	wheel := rl.GetMouseWheelMove()
@@ -169,7 +195,7 @@ func (p *APRSPanel) Tick() {
 	if rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
 		m := simpleui.MousePosition()
 		for row := 0; row < visible && p.scroll+row < len(packets); row++ {
-			if rl.CheckCollisionPointRec(m, rl.Rectangle{X: 280, Y: 724 + float32(row)*17, Width: 900, Height: 17}) {
+			if rl.CheckCollisionPointRec(m, rl.Rectangle{X: 282, Y: 742 + float32(row)*24, Width: 1258, Height: 24}) {
 				p.selected = p.scroll + row
 				simpleui.PlayActivationFeedback()
 			}
@@ -180,7 +206,7 @@ func (p *APRSPanel) writeSnapshot(packets []aprs.Packet) {
 	data, err := json.Marshal(packets)
 	if err != nil {
 		p.lastSnapshot = ""
-		p.say("ERROR AL PREPARAR LA TABLA")
+		p.say(i18n.Source("text.f992375c8e2d"))
 		return
 	}
 	value := string(data)
@@ -196,38 +222,38 @@ func (p *APRSPanel) openViewer() {
 	p.writeSnapshot(p.packets())
 	if p.viewer != nil && p.viewer.Process != nil {
 		focusRTL433Viewer(p.viewer.Process.Pid)
-		p.say("TABLA YA ABIERTA")
+		p.say(i18n.Source("text.df8ed2b55cc5"))
 		return
 	}
 	executable, err := os.Executable()
 	if err != nil {
-		p.say("ERROR AL ABRIR TABLA")
+		p.say(i18n.Source("text.21deef5a70b9"))
 		return
 	}
 	cmd := exec.Command(executable, "--aprs-viewer", p.snapshotPath)
 	cmd.SysProcAttr = rtl433ViewerProcessAttributes()
 	if err = cmd.Start(); err != nil {
-		p.say("ERROR AL ABRIR TABLA")
+		p.say(i18n.Source("text.21deef5a70b9"))
 		return
 	}
 	p.viewer = cmd
 	p.viewerDone = make(chan struct{})
 	done := p.viewerDone
 	go func() { _ = cmd.Wait(); close(done) }()
-	p.say("TABLA ABIERTA")
+	p.say(i18n.Source("text.f2d48920d980"))
 }
 func (p *APRSPanel) filtered() []aprs.Packet {
 	packets := p.packets()
-	if p.view == "MENSAJES" {
+	if p.view == i18n.Source("text.fe86cd5572c0") {
 		out := packets[:0]
 		for _, packet := range packets {
-			if packet.Type == "MESSAGE" || packet.Type == "ACK" || packet.Type == "REJ" {
+			if packet.Type == i18n.Source("text.b194d92018d6") || packet.Type == i18n.Source("text.a2f1a6d79bfb") || packet.Type == i18n.Source("text.0a8e61fbc428") {
 				out = append(out, packet)
 			}
 		}
 		return out
 	}
-	if p.view == "ESTACIONES" {
+	if p.view == i18n.Source("text.87073e5d8db0") {
 		seen := map[string]bool{}
 		out := []aprs.Packet{}
 		for _, packet := range packets {
@@ -241,25 +267,25 @@ func (p *APRSPanel) filtered() []aprs.Packet {
 	return packets
 }
 func (p *APRSPanel) DrawPanel() {
-	status := aprs.Status{State: "NO DISPONIBLE", AudioLevel: -1}
+	status := aprs.Status{State: i18n.Source("text.67b9e10a1cbd"), AudioLevel: -1}
 	if p.screen.receiver != nil {
 		status = p.screen.receiver.APRSStatus()
 	}
-	simpleui.DrawTextStyled("APRS RX · AFSK 1200 / AX.25", 40, 638, 16, simpleui.FontSemiBold, rl.Color{R: 55, G: 215, B: 195, A: 255})
+	simpleui.DrawTextStyled(i18n.Source("text.89563b490222"), 40, 638, 16, simpleui.FontSemiBold, rl.Color{R: 55, G: 215, B: 195, A: 255})
 	stateColor := colors.orange
-	if status.State == "RECIBIENDO" {
+	if status.State == i18n.Source("text.3ec713946605") {
 		stateColor = colors.green
-	} else if status.State == "ERROR" {
+	} else if status.State == i18n.Source("text.d98ee0e5f939") {
 		stateColor = colors.red
 	}
 	rl.DrawCircle(720, 646, 6, stateColor)
-	simpleui.DrawTextStyled(fmt.Sprintf("%s · %.3f MHz · NIVEL %s · RX %d · ERR %+.0f Hz", status.State, float64(p.screen.frequencyHz)/1e6, levelText(status.AudioLevel), status.PacketCount, status.FrequencyErrorHz), 735, 638, 12, simpleui.FontSemiBold, colors.muted)
-	drawPanel(40, 712, 220, 94)
-	simpleui.DrawTextStyled("RECEPTOR", 52, 721, 12, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawText(fmt.Sprintf("KISS  %s", map[bool]string{true: "CONECTADO", false: "ESPERANDO"}[status.KISS]), 52, 745, 13, colors.text)
-	simpleui.DrawText(fmt.Sprintf("COLA %d/16 · DROP %d", status.Queued, status.Dropped), 52, 766, 12, colors.text)
+	simpleui.DrawTextStyled(fmt.Sprintf(i18n.Source("text.7d895cae283e"), status.State, float64(p.screen.frequencyHz)/1e6, levelText(status.AudioLevel), status.PacketCount, status.FrequencyErrorHz), 735, 638, 12, simpleui.FontSemiBold, colors.muted)
+	drawPanel(40, 712, 220, 168)
+	simpleui.DrawTextStyled(i18n.Source("text.92a8de300175"), 52, 721, 12, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.c84551016365"), map[bool]string{true: i18n.Source("text.5d2bd518ab17"), false: i18n.Source("text.761bca5bfba7")}[status.KISS]), 52, 745, 13, colors.text)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.78e70e4a8076"), status.Queued, status.Dropped), 52, 766, 12, colors.text)
 	simpleui.DrawText(short(status.Detail, 28), 52, 787, 12, colors.muted)
-	if p.view == "RADAR" {
+	if p.view == i18n.Source("text.ddadd1fb4789") {
 		p.drawRadar()
 		return
 	}
@@ -275,32 +301,32 @@ func levelText(v int) string {
 	return strconv.Itoa(v)
 }
 func (p *APRSPanel) drawTable(packets []aprs.Packet) {
-	drawPanel(275, 712, 1275, 94)
+	drawPanel(275, 712, 1275, 168)
 	headers := []struct {
 		x float32
 		s string
-	}{{288, "HORA"}, {365, "INDICATIVO"}, {485, "TIPO"}, {590, "DESTINO"}, {700, "RUTA"}, {900, "POSICIÓN / MENSAJE"}, {1230, "NIVEL"}}
+	}{{288, i18n.Source("text.e7563517a678")}, {365, i18n.Source("text.16d535b5d63f")}, {485, i18n.Source("text.cd4c8ecf7e4b")}, {590, i18n.Source("text.2adab83f1039")}, {700, i18n.Source("text.963552275d93")}, {900, i18n.Source("text.1f6b0a131de2")}, {1470, i18n.Source("text.ad2e66181fd9")}}
 	for _, h := range headers {
 		simpleui.DrawTextStyled(h.s, h.x, 718, 12, simpleui.FontSemiBold, colors.cyan)
 	}
 	if len(packets) == 0 {
-		simpleui.DrawText("ESPERANDO TRAMAS APRS", 730, 760, 14, colors.muted)
+		simpleui.DrawText(i18n.Source("text.f1f616d2befd"), 730, 760, 14, colors.muted)
 		return
 	}
 	p.scroll = min(p.scroll, max(0, len(packets)-5))
 	for row := 0; row < 5 && p.scroll+row < len(packets); row++ {
 		index := p.scroll + row
 		packet := packets[index]
-		y := 744 + float32(row)*13
+		y := 746 + float32(row)*24
 		if index == p.selected {
-			rl.DrawRectangle(282, int32(y-2), 1258, 15, rl.Color{R: 25, G: 83, B: 116, A: 220})
+			rl.DrawRectangle(282, int32(y-4), 1258, 24, rl.Color{R: 25, G: 83, B: 116, A: 220})
 		}
 		typeColor := rl.Color{R: 190, G: 145, B: 235, A: 255}
-		if packet.Type == "POSITION" {
+		if packet.Type == i18n.Source("text.aad6faa6418d") {
 			typeColor = colors.green
-		} else if packet.Type == "WEATHER" {
+		} else if packet.Type == i18n.Source("text.0a244108837b") {
 			typeColor = rl.Color{R: 75, G: 145, B: 255, A: 255}
-		} else if packet.Type == "MESSAGE" {
+		} else if packet.Type == i18n.Source("text.b194d92018d6") {
 			typeColor = colors.orange
 		}
 		simpleui.DrawTextStyled(packet.Received.Format("15:04:05"), 288, y, 12, simpleui.FontMono, colors.text)
@@ -309,28 +335,34 @@ func (p *APRSPanel) drawTable(packets []aprs.Packet) {
 		simpleui.DrawText(short(packet.Destination, 12), 590, y, 12, colors.text)
 		path := packet.Path
 		if path == "" {
-			path = "DIRECTO"
+			path = i18n.Source("text.3d46b2eae4e5")
 		}
-		simpleui.DrawText(short(path, 25), 700, y, 12, colors.text)
+		drawAPRSCell(path, 700, y, 190, colors.text)
 		info := packet.Summary
-		if p.view == "RAW" {
+		if p.view == i18n.Source("text.ac0562bba4a5") {
 			info = packet.Raw
-		} else if p.view == "ESTACIONES" && packet.Coordinates != "—" {
+		} else if p.view == i18n.Source("text.87073e5d8db0") && packet.Coordinates != "—" {
 			info = packet.Coordinates + " · " + packet.Summary
 		}
-		simpleui.DrawText(short(info, 43), 900, y, 12, colors.text)
-		simpleui.DrawText(levelText(packet.ReceiveLevel), 1230, y, 12, colors.text)
+		drawAPRSCell(info, 900, y, 555, colors.text)
+		simpleui.DrawText(levelText(packet.ReceiveLevel), 1470, y, 12, colors.text)
 	}
 	if p.selected >= 0 && p.selected < len(packets) {
 		packet := packets[p.selected]
-		simpleui.DrawText(short(packet.Raw, 42), 1290, 744, 12, colors.muted)
+		drawAPRSCell(packet.Raw, 288, 861, 1250, colors.muted)
 	}
+}
+
+func drawAPRSCell(text string, x, y, width float32, color rl.Color) {
+	rl.BeginScissorMode(int32(x), int32(y), int32(width), 20)
+	simpleui.DrawText(text, x, y, 12, color)
+	rl.EndScissorMode()
 }
 func (p *APRSPanel) drawRadar() {
 	drawPanel(275, 712, 1275, 94)
 	packets := p.filteredPositions()
 	if len(packets) == 0 {
-		simpleui.DrawText("RADAR OFFLINE · ESPERANDO POSICIONES", 680, 758, 14, colors.muted)
+		simpleui.DrawText(i18n.Source("text.ae39dbc196dd"), 680, 758, 14, colors.muted)
 		return
 	}
 	minLat, maxLat, minLon, maxLon := packets[0].Latitude, packets[0].Latitude, packets[0].Longitude, packets[0].Longitude
@@ -353,9 +385,9 @@ func (p *APRSPanel) drawRadar() {
 		rl.DrawCircle(int32(x), int32(y), 4, colors.green)
 		simpleui.DrawText(v.Source, x+7, y-6, 12, colors.text)
 	}
-	simpleui.DrawText("VISTA RELATIVA OFFLINE", 290, 725, 12, colors.cyan)
-	simpleui.DrawText(fmt.Sprintf("%d estaciones con posición", len(packets)), 290, 748, 13, colors.text)
-	simpleui.DrawText("Sin conexión a Internet", 290, 772, 12, colors.muted)
+	simpleui.DrawText(i18n.Source("text.919fe96f83a4"), 290, 725, 12, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.13ffc5803aa0"), len(packets)), 290, 748, 13, colors.text)
+	simpleui.DrawText(i18n.Source("text.c2f24debc283"), 290, 772, 12, colors.muted)
 }
 func (p *APRSPanel) filteredPositions() []aprs.Packet {
 	seen := map[string]bool{}
@@ -373,9 +405,9 @@ func (p *APRSPanel) say(s string) { p.feedback = s; p.feedbackUntil = time.Now()
 func (p *APRSPanel) export() {
 	path, err := exportAPRSCSV(p.filtered())
 	if err != nil {
-		p.say("ERROR AL EXPORTAR")
+		p.say(i18n.Source("text.f020b3a6a762"))
 	} else {
-		p.say("CSV: " + filepath.Base(path))
+		p.say(i18n.Source("text.50e2734c33d7") + filepath.Base(path))
 	}
 }
 func exportAPRSCSV(packets []aprs.Packet) (string, error) {

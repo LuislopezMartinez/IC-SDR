@@ -34,7 +34,8 @@ func TestDecodeADSBIdentificationAndPosition(t *testing.T) {
 	if pos == nil || pos.Latitude == nil || pos.Longitude == nil {
 		t.Fatalf("position not decoded: %+v", pos)
 	}
-	if math.Abs(*pos.Latitude-52.2572) > .001 || math.Abs(*pos.Longitude-3.91937) > .001 {
+	// The odd frame is the most recent one in this pair.
+	if math.Abs(*pos.Latitude-52.26578) > .001 || math.Abs(*pos.Longitude-3.93891) > .001 {
 		t.Fatalf("wrong CPR position %.5f %.5f", *pos.Latitude, *pos.Longitude)
 	}
 	var id *Aircraft

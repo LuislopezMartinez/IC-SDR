@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
@@ -158,14 +160,14 @@ type WebServer struct {
 // StartWebServer enables LAN access only with an explicitly configured password.
 func StartWebServer(screen *MainScreen, address, password string) (*WebServer, error) {
 	if password == "" {
-		return nil, errors.New("la contraseña web está vacía")
+		return nil, errors.New(i18n.Source("text.e4faa502f6e3"))
 	}
 	return startWebServer(screen, address, password, nil, nil)
 }
 
 func StartWebServerWithHash(screen *MainScreen, address string, salt, hash []byte) (*WebServer, error) {
 	if len(salt) < 16 || len(hash) != 32 {
-		return nil, errors.New("contraseña web no configurada")
+		return nil, errors.New(i18n.Source("text.69680b9bf1d5"))
 	}
 	return startWebServer(screen, address, "", salt, hash)
 }
@@ -184,7 +186,7 @@ func startWebServer(screen *MainScreen, address, password string, salt, hash []b
 		service.opusDone = make(chan struct{})
 		go service.encodeAudio()
 	} else {
-		log.Printf("servidor web: Opus no disponible; usando PCM: %v", encodeErr)
+		log.Printf(i18n.Source("text.ec483ce096d2"), encodeErr)
 	}
 	token := make([]byte, 32)
 	if _, err := rand.Read(token); err != nil {
@@ -193,22 +195,22 @@ func startWebServer(screen *MainScreen, address, password string, salt, hash []b
 	}
 	service.sessionToken = hex.EncodeToString(token)
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /", service.page)
-	mux.HandleFunc("GET /api/state", service.state)
-	mux.HandleFunc("GET /api/memories", service.memories)
-	mux.HandleFunc("GET /api/audio", service.audio)
-	mux.HandleFunc("GET /api/audio/opus", service.audioOpus)
-	mux.HandleFunc("GET /api/audio/formats", service.audioFormats)
-	mux.HandleFunc("POST /api/control/login", service.controlLogin)
-	mux.HandleFunc("POST /api/control/logout", service.controlLogout)
-	mux.HandleFunc("GET /api/control/status", service.controlStatus)
-	mux.HandleFunc("POST /api/control/action", service.controlAction)
+	mux.HandleFunc(i18n.Source("text.c767025d0edc"), service.page)
+	mux.HandleFunc(i18n.Source("text.f4f696b992f6"), service.state)
+	mux.HandleFunc(i18n.Source("text.7c707f47507f"), service.memories)
+	mux.HandleFunc(i18n.Source("text.a4ceb9bda2e9"), service.audio)
+	mux.HandleFunc(i18n.Source("text.94f6ebc47392"), service.audioOpus)
+	mux.HandleFunc(i18n.Source("text.35a9ff7068f0"), service.audioFormats)
+	mux.HandleFunc(i18n.Source("text.df5124adde68"), service.controlLogin)
+	mux.HandleFunc(i18n.Source("text.49563974a835"), service.controlLogout)
+	mux.HandleFunc(i18n.Source("text.ce296ffe10dd"), service.controlStatus)
+	mux.HandleFunc(i18n.Source("text.2aafbcf56910"), service.controlAction)
 	service.server = &http.Server{Handler: service.authorize(mux), ReadHeaderTimeout: 5 * time.Second}
 	screen.webServer = service
 	screen.audioPlayer.SetWebAudioSink(service.PublishAudio)
 	go func() {
 		if err := service.server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("servidor web: %v", err)
+			log.Printf(i18n.Source("text.5fa445bb718b"), err)
 		}
 	}()
 	return service, nil
@@ -253,8 +255,8 @@ func (service *WebServer) authorize(next http.Handler) http.Handler {
 			}
 		}
 		if !valid {
-			w.Header().Set("WWW-Authenticate", `Basic realm="GO-Zero LAN"`)
-			http.Error(w, "Acceso restringido", http.StatusUnauthorized)
+			w.Header().Set("WWW-Authenticate", i18n.Source("text.7c43ac9473a2"))
+			http.Error(w, i18n.Source("text.7c0d7d7d6042"), http.StatusUnauthorized)
 			return
 		}
 		if service.sessionToken != "" {
@@ -268,12 +270,12 @@ func (service *WebServer) authorize(next http.Handler) http.Handler {
 func (service *WebServer) writeSecurityHeaders(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; media-src 'self' blob: mediastream:")
+	w.Header().Set("Content-Security-Policy", i18n.Source("text.342caa2dcca5"))
 }
 
 func (service *WebServer) controlLogin(w http.ResponseWriter, r *http.Request) {
 	if len(service.controlHash) != 32 {
-		http.Error(w, "Contraseña de control no configurada", http.StatusConflict)
+		http.Error(w, i18n.Source("text.acfc6ba6127a"), http.StatusConflict)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1024)
@@ -281,23 +283,23 @@ func (service *WebServer) controlLogin(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if json.NewDecoder(r.Body).Decode(&request) != nil {
-		http.Error(w, "Solicitud inválida", http.StatusBadRequest)
+		http.Error(w, i18n.Source("text.34585d6f2f81"), http.StatusBadRequest)
 		return
 	}
 	derived, err := pbkdf2.Key(sha256.New, request.Password, service.controlSalt, 60000, 32)
 	if err != nil || subtle.ConstantTimeCompare(derived, service.controlHash) != 1 {
-		http.Error(w, "Contraseña de control incorrecta", http.StatusUnauthorized)
+		http.Error(w, i18n.Source("text.306486a14e83"), http.StatusUnauthorized)
 		return
 	}
 	token := make([]byte, 32)
 	if _, err := rand.Read(token); err != nil {
-		http.Error(w, "No se pudo iniciar la sesión", http.StatusInternalServerError)
+		http.Error(w, i18n.Source("text.190877e714b2"), http.StatusInternalServerError)
 		return
 	}
 	service.mu.Lock()
 	if service.controlToken != "" && time.Now().Before(service.controlUntil) {
 		service.mu.Unlock()
-		http.Error(w, "Otro dispositivo tiene el control", http.StatusConflict)
+		http.Error(w, i18n.Source("text.b7869df40e79"), http.StatusConflict)
 		return
 	}
 	service.controlToken = hex.EncodeToString(token)
@@ -342,10 +344,10 @@ func (service *WebServer) page(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := webFiles.ReadFile("web/index.html")
 	if err != nil {
-		http.Error(w, "Interfaz no disponible", 500)
+		http.Error(w, i18n.Source("text.0e64c0bd03c3"), 500)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Type", i18n.Source("text.5e30ae15588f"))
 	_, _ = w.Write(data)
 }
 
@@ -375,11 +377,11 @@ func (service *WebServer) publishMemories(screen *MainScreen) {
 	if time.Since(service.lastMemorySnapshot) < 500*time.Millisecond {
 		return
 	}
-	list := webMemoryList{Groups: []string{"TODAS"}, SelectedGroup: "TODAS", Selected: -1, Memories: []webMemory{}}
+	list := webMemoryList{Groups: []string{i18n.Source("text.201f15dab8b3")}, SelectedGroup: i18n.Source("text.201f15dab8b3"), Selected: -1, Memories: []webMemory{}}
 	if panel := screen.memoryPanel; panel != nil {
 		list.Groups = append([]string(nil), panel.groups...)
 		if len(list.Groups) == 0 {
-			list.Groups = []string{"TODAS"}
+			list.Groups = []string{i18n.Source("text.201f15dab8b3")}
 		}
 		list.SelectedGroup, list.Selected, list.OnlyActive = panel.selectedGroup, panel.selected, panel.onlyActive
 		for _, memory := range panel.memories {
@@ -489,12 +491,12 @@ func (service *WebServer) audioFormats(w http.ResponseWriter, _ *http.Request) {
 
 func (service *WebServer) audioOpus(w http.ResponseWriter, r *http.Request) {
 	if service.opus == nil {
-		http.Error(w, "Opus no disponible", http.StatusServiceUnavailable)
+		http.Error(w, i18n.Source("text.0446c422e054"), http.StatusServiceUnavailable)
 		return
 	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "Streaming no disponible", 500)
+		http.Error(w, i18n.Source("text.3953068f2132"), 500)
 		return
 	}
 	channel := make(chan []byte, 24)
@@ -504,11 +506,11 @@ func (service *WebServer) audioOpus(w http.ResponseWriter, r *http.Request) {
 	defer func() { service.mu.Lock(); delete(service.opusListeners, channel); service.mu.Unlock() }()
 	serialBytes := make([]byte, 4)
 	if _, err := rand.Read(serialBytes); err != nil {
-		http.Error(w, "Error de audio", 500)
+		http.Error(w, i18n.Source("text.9f0dd7c0e3aa"), 500)
 		return
 	}
 	stream := oggOpusStream{serial: binary.LittleEndian.Uint32(serialBytes), preSkip: service.opus.preSkip}
-	w.Header().Set("Content-Type", `audio/ogg; codecs="opus"`)
+	w.Header().Set("Content-Type", i18n.Source("text.2b7cf730cdeb"))
 	w.Header().Set("X-Accel-Buffering", "no")
 	head, tags := stream.headers()
 	if _, err := w.Write(head); err != nil {
@@ -534,7 +536,7 @@ func (service *WebServer) audioOpus(w http.ResponseWriter, r *http.Request) {
 func (service *WebServer) audio(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "Streaming no disponible", 500)
+		http.Error(w, i18n.Source("text.3953068f2132"), 500)
 		return
 	}
 	// Twenty-four 25 ms device frames absorb brief Wi-Fi/HTTP scheduling pauses.
@@ -569,7 +571,7 @@ func (service *WebServer) PublishScreen(screen *MainScreen) {
 		mode = screen.mode.SelectedText()
 	}
 	state := webSnapshot{
-		Online:      screen.stats.FFTBlocks > 0 && screen.stats.Status != "ERROR",
+		Online:      screen.stats.FFTBlocks > 0 && screen.stats.Status != i18n.Source("text.d98ee0e5f939"),
 		FrequencyHz: screen.frequencyHz, CenterHz: screen.centerFrequencyHz,
 		SpanHz: screen.spanHz, StepHz: screen.tuningStepHz,
 		Mode: mode, BandwidthHz: screen.demodBandwidthHz, Fixed: !screen.centerMode,
@@ -604,7 +606,7 @@ func (service *WebServer) PublishScreen(screen *MainScreen) {
 			Resume: p.resume, DwellMs: p.dwellMs, Policy: p.policy,
 		}
 	}
-	if screen.activeTool == "TETRA" && screen.receiver != nil {
+	if screen.activeTool == i18n.Source("text.f69d86a86926") && screen.receiver != nil {
 		status := screen.receiver.TETRAStatus()
 		state.TETRA = &webTETRA{State: status.State, Quality: status.Quality, LevelDBFS: status.LevelDBFS, FrequencyErrorHz: status.FrequencyErrorHz, CMCEEvents: status.CMCEEvents, AudioFrames: status.AudioFrames, SlotTraffic: status.SlotTraffic, SlotEncrypted: status.SlotEncrypted}
 		if screen.tetraPanel != nil {
@@ -613,7 +615,7 @@ func (service *WebServer) PublishScreen(screen *MainScreen) {
 			state.TETRA.ClearOnly = screen.tetraPanel.clearOnly
 		}
 	}
-	if screen.activeTool == "DMR_MONITOR" && screen.receiver != nil {
+	if screen.activeTool == i18n.Source("text.93239b223632") && screen.receiver != nil {
 		status := screen.receiver.DMRStatus()
 		state.DMR = &webDMR{State: status.State, Detail: status.Detail, Slot1: status.Slot1, Slot2: status.Slot2, AudioSlot: screen.dmrAudioSlot, ColorCode: status.ColorCode, PLLLocked: status.PLLLocked, SyncQuality: status.SyncQuality}
 	}

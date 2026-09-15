@@ -1,5 +1,7 @@
 package sdr
 
+import "go-zero/internal/i18n"
+
 import "go-zero/internal/radiosonde"
 
 func (r *Receiver) ConfigureRadiosonde(enabled bool, family string, frequency int64) {
@@ -9,7 +11,7 @@ func (r *Receiver) ConfigureRadiosonde(enabled bool, family string, frequency in
 }
 func (r *Receiver) RadiosondeStatus() radiosonde.Status {
 	if r.radiosonde == nil {
-		return radiosonde.Status{State: "NO DISPONIBLE"}
+		return radiosonde.Status{State: i18n.Source("text.67b9e10a1cbd")}
 	}
 	return r.radiosonde.Snapshot()
 }

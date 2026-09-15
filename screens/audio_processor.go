@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"math"
 	"sync"
 )
@@ -38,7 +40,7 @@ type AudioProcessor struct {
 }
 
 func NewAudioProcessor() *AudioProcessor {
-	p := &AudioProcessor{lowCut: 100, highCut: 4000, eqEnabled: true, profile: "NORMAL"}
+	p := &AudioProcessor{lowCut: 100, highCut: 4000, eqEnabled: true, profile: i18n.Source("text.db2cb3fe28e2")}
 	p.configureEQ()
 	return p
 }

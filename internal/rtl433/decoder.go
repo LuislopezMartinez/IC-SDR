@@ -1,6 +1,8 @@
 package rtl433
 
 import (
+	"go-zero/internal/i18n"
+
 	"bufio"
 	"encoding/json"
 	"errors"
@@ -62,7 +64,7 @@ type Decoder struct {
 }
 
 func New(inputRate float64, executable string) *Decoder {
-	return &Decoder{inputRate: inputRate, executable: executable, state: "DETENIDO"}
+	return &Decoder{inputRate: inputRate, executable: executable, state: i18n.Source("text.7dc7253c376a")}
 }
 
 func (d *Decoder) Configure(enabled bool, frequencyHz, centerHz int64, bandwidthHz int) {
@@ -77,7 +79,7 @@ func (d *Decoder) Configure(enabled bool, frequencyHz, centerHz int64, bandwidth
 		return
 	}
 	d.Stop()
-	if bandwidthHz >= 1_000_000 {
+	if bandwidthHz > 250_000 {
 		d.configureMultichannel(frequencyHz, centerHz, bandwidthHz)
 		return
 	}
@@ -110,25 +112,33 @@ func (d *Decoder) configureMultichannel(frequencyHz, centerHz int64, bandwidthHz
 	d.children = children
 	d.frequencyHz, d.centerHz, d.bandwidthHz = frequencyHz, centerHz, bandwidthHz
 	d.outputRate = 256_000
-	d.state = fmt.Sprintf("MULTICANAL %d×250 kHz", len(centers))
+	d.state = fmt.Sprintf(i18n.Source("text.d42c0f2a8709"), len(centers))
 	d.lastError = ""
 	d.mu.Unlock()
 	d.running.Store(true)
 }
 
 func multichannelCenters(frequencyHz int64, bandwidthHz int) []int64 {
-	channels := max(bandwidthHz/250_000, 1)
+	// Keep a receiver at the selected frequency and overlap adjacent filters.
+	// A contiguous grid puts common signals on a filter edge.
+	if bandwidthHz <= 250_000 {
+		return []int64{frequencyHz}
+	}
+	channels := (bandwidthHz-250_000+199_999)/200_000 + 1
+	if channels%2 == 0 {
+		channels++
+	}
 	centers := make([]int64, channels)
-	low := frequencyHz - int64(bandwidthHz)/2
+	span := int64(bandwidthHz - 250_000)
 	for index := range centers {
-		centers[index] = low + 125_000 + int64(index)*250_000
+		centers[index] = frequencyHz - span/2 + int64(index)*span/int64(channels-1)
 	}
 	return centers
 }
 
 func (d *Decoder) start() {
 	if d.executable == "" {
-		d.setError(errors.New("rtl_433 no configurado"))
+		d.setError(errors.New(i18n.Source("text.8f646e34ff03")))
 		return
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -154,7 +164,7 @@ func (d *Decoder) start() {
 	}
 	d.running.Store(true)
 	d.mu.Lock()
-	d.state, d.lastError = "ESPERANDO SEÑAL", ""
+	d.state, d.lastError = i18n.Source("text.d274cad88fc7"), ""
 	d.mu.Unlock()
 	go d.transport(listener)
 	go d.readEvents(stdout)
@@ -176,7 +186,7 @@ func (d *Decoder) transport(listener net.Listener) {
 	defer connection.Close()
 	_, _ = connection.Write([]byte{'R', 'T', 'L', '0', 0, 0, 0, 5, 0, 0, 0, 0})
 	d.mu.Lock()
-	d.state = "DECODIFICANDO"
+	d.state = i18n.Source("text.c6d93a7e3862")
 	d.mu.Unlock()
 	for {
 		select {
@@ -197,20 +207,36 @@ func (d *Decoder) transport(listener net.Listener) {
 }
 
 func (d *Decoder) ProcessIQ(iq []float32) {
-	if !d.running.Load() || d.queue == nil {
-		d.mu.RLock()
-		manager, children := d.manager, append([]*Decoder(nil), d.children...)
-		d.mu.RUnlock()
-		if manager {
-			for _, child := range children {
-				child.ProcessIQ(iq)
-			}
+	if !d.running.Load() {
+		return
+	}
+	d.mu.RLock()
+	manager, children, queue := d.manager, d.children, d.queue
+	d.mu.RUnlock()
+	if manager {
+		// All frontends read IQ without modifying it. Copy the capture buffer once.
+		copyIQ := append([]float32(nil), iq...)
+		for _, child := range children {
+			child.enqueueIQ(copyIQ)
 		}
 		return
 	}
+	if queue == nil {
+		return
+	}
 	copyIQ := append([]float32(nil), iq...)
+	d.enqueueIQ(copyIQ)
+}
+
+func (d *Decoder) enqueueIQ(iq []float32) {
+	if !d.running.Load() {
+		return
+	}
+	d.mu.RLock()
+	queue := d.queue
+	d.mu.RUnlock()
 	select {
-	case d.queue <- copyIQ:
+	case queue <- iq:
 	default:
 		d.dropped.Add(1)
 	}
@@ -314,7 +340,7 @@ func (d *Decoder) Snapshot() Status {
 func (d *Decoder) setError(err error) {
 	d.mu.Lock()
 	d.lastError = err.Error()
-	d.state = "ERROR"
+	d.state = i18n.Source("text.d98ee0e5f939")
 	d.mu.Unlock()
 }
 
@@ -327,7 +353,7 @@ func (d *Decoder) Stop() {
 		children := d.children
 		d.children = nil
 		d.manager = false
-		d.state = "DETENIDO"
+		d.state = i18n.Source("text.7dc7253c376a")
 		d.mu.Unlock()
 		for _, child := range children {
 			child.Stop()
@@ -348,6 +374,6 @@ func (d *Decoder) Stop() {
 	case <-time.After(time.Second):
 	}
 	d.mu.Lock()
-	d.state = "DETENIDO"
+	d.state = i18n.Source("text.7dc7253c376a")
 	d.mu.Unlock()
 }

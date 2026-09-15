@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"math"
 
@@ -102,7 +104,7 @@ func (meter *SMeter) Draw(x, y, w, h float32) {
 	peakColor := colors.text
 	peakColor.A = 190
 	rl.DrawLineEx(rl.Vector2{X: peakX, Y: barY - 2}, rl.Vector2{X: peakX, Y: barY + 15}, 1, peakColor)
-	text := fmt.Sprintf("%s   %d dBm", sMeterLabel(db), db)
+	text := fmt.Sprintf(i18n.Source("text.68f5654c0b30"), sMeterLabel(db), db)
 	tw := simpleui.MeasureTextStyled(text, 12, simpleui.FontMono).X
 	simpleui.DrawTextStyled(text, right-tw, y+h-22, 12, simpleui.FontMono, colors.text)
 }

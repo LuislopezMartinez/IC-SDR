@@ -1,6 +1,6 @@
 // Package resources locates files shipped with IC-SDR independently of the
 // process working directory. Release builds place them in DATA beside the exe;
-// development builds transparently fall back to ORIGEN/IC_SDR in the checkout.
+// development builds use the checkout's DATA directory.
 package resources
 
 import (
@@ -25,7 +25,7 @@ func dataRoot() string {
 	}
 	for _, start := range []string{workingDir(), base} {
 		for dir := start; dir != ""; dir = filepath.Dir(dir) {
-			if exists(filepath.Join(dir, "go.mod")) && exists(filepath.Join(dir, "ORIGEN", "IC_SDR")) {
+			if exists(filepath.Join(dir, "go.mod")) && exists(filepath.Join(dir, "DATA")) {
 				return filepath.Join(dir, "DATA")
 			}
 			parent := filepath.Dir(dir)
@@ -37,7 +37,7 @@ func dataRoot() string {
 	return release
 }
 
-// Path returns an absolute path for a resource relative to IC_SDR's data root.
+// Path returns an absolute path for a resource relative to DATA.
 // The returned release path is useful in error messages even when it is absent.
 func Path(parts ...string) string {
 	base := executableDir()
@@ -48,13 +48,11 @@ func Path(parts ...string) string {
 
 	for _, start := range []string{workingDir(), base} {
 		for dir := start; dir != ""; dir = filepath.Dir(dir) {
-			candidate := filepath.Join(append([]string{dir, "ORIGEN", "IC_SDR"}, parts...)...)
-			if exists(candidate) {
-				absolute, err := filepath.Abs(candidate)
-				if err == nil {
-					return absolute
+			if exists(filepath.Join(dir, "go.mod")) {
+				candidate := filepath.Join(append([]string{dir, "DATA"}, parts...)...)
+				if exists(candidate) {
+					return candidate
 				}
-				return candidate
 			}
 			parent := filepath.Dir(dir)
 			if parent == dir {

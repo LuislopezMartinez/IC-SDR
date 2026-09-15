@@ -1,5 +1,7 @@
 package radiosonde
 
+import "go-zero/internal/i18n"
+
 import "time"
 
 type autoDetection struct {
@@ -13,7 +15,7 @@ type autoDetection struct {
 // restarting or cycling away while a short transmission is being received.
 func (d *Decoder) startAutomatic(frequency, center int64) {
 	d.mu.Lock()
-	d.status = Status{Family: "AUTO", FrequencyHz: frequency, State: "AUTO · BUSCANDO"}
+	d.status = Status{Family: i18n.Source("text.6ea56fae9eac"), FrequencyHz: frequency, State: i18n.Source("text.f8bd2e05139c")}
 	d.center = center
 	d.detections = make(map[string]autoDetection)
 	generation := d.generation
@@ -38,7 +40,7 @@ func matchesFamily(family, typ string) bool {
 	case "RS41":
 		return typ == "RS41"
 	case "DFM":
-		return typ == "DFM" || typ == "DFM06" || typ == "DFM09" || typ == "DFM17"
+		return typ == i18n.Source("text.5945e8331ba7") || typ == i18n.Source("text.29ac0a15a8af") || typ == i18n.Source("text.7c83dc03fd40") || typ == i18n.Source("text.3b5b0b106f1c")
 	case "M10/M20":
 		return typ == "M10" || typ == "M20"
 	}

@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"encoding/json"
 	"fmt"
 	"os"
@@ -21,17 +23,17 @@ func RunRTL433Viewer(snapshotPath string) {
 	// complete text canvas from being bilinearly blurred during enlargement.
 	simpleui.SetCanvasFilter(rl.FilterPoint)
 	simpleui.SetTextScale(1.35)
-	simpleui.SetTitle("IC-SDR · Capturas RTL_433")
+	simpleui.SetTitle(i18n.Source("text.1258ba9c9981"))
 	simpleui.SetMinimumSize(900, 520)
 	v := &rtl433Viewer{path: snapshotPath, selected: -1}
-	export := simpleui.NewButton("viewerExport", 1160, 18, 210, 44, "EXPORTAR CSV", 15)
+	export := simpleui.NewButton("viewerExport", 1160, 18, 210, 44, i18n.Source("text.a15e7868d6b8"), 15)
 	export.SetColors(colors.green, colors.border, colors.text)
 	export.OnClick(func() {
 		path, err := ExportRTL433CSV(v.events)
 		if err != nil {
-			v.feedback = "ERROR AL EXPORTAR"
+			v.feedback = i18n.Source("text.f020b3a6a762")
 		} else {
-			v.feedback = "GUARDADO: " + filepath.Base(path)
+			v.feedback = i18n.Source("text.886058f9cc30") + filepath.Base(path)
 		}
 		v.feedbackUntil = time.Now().Add(3 * time.Second)
 	})
@@ -68,19 +70,19 @@ func (v *rtl433Viewer) draw() {
 	v.read()
 	if controlCopyPressed() && v.selected >= 0 && v.selected < len(v.events) {
 		rl.SetClipboardText(rtl433ClipboardText(v.events[v.selected]))
-		v.feedback = "TRAMA COMPLETA COPIADA"
+		v.feedback = i18n.Source("text.9ea4cb382871")
 		v.feedbackUntil = time.Now().Add(2 * time.Second)
 	}
 	rl.DrawRectangle(0, 0, 1400, 760, colors.background)
-	simpleui.DrawTextStyled("CAPTURAS RTL_433", 28, 24, 22, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawText(fmt.Sprintf("%d dispositivos · actualización en tiempo real", len(v.events)), 28, 54, 13, colors.muted)
+	simpleui.DrawTextStyled(i18n.Source("text.c1ec9bc79275"), 28, 24, 22, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.bf82f4a219a8"), len(v.events)), 28, 54, 13, colors.muted)
 	if time.Now().Before(v.feedbackUntil) {
 		simpleui.DrawTextStyled(v.feedback, 850, 34, 13, simpleui.FontSemiBold, colors.green)
 	}
 	columns := []struct {
 		x     float32
 		title string
-	}{{28, "FECHA / HORA"}, {195, "FREC. MHz"}, {300, "PROTOCOLO"}, {405, "MODELO"}, {585, "TIPO"}, {705, "ID"}, {820, "CANAL"}, {915, "MOD"}, {980, "RSSI"}, {1050, "SNR"}, {1120, "DATOS"}}
+	}{{28, i18n.Source("text.f7c6c10fbcc4")}, {195, i18n.Source("text.d94e697e01c6")}, {300, i18n.Source("text.5cf99be8ab9b")}, {405, i18n.Source("text.a80919f103aa")}, {585, i18n.Source("text.cd4c8ecf7e4b")}, {705, "ID"}, {820, i18n.Source("text.4e89bb9f11b4")}, {915, i18n.Source("text.a4d1abed0b2b")}, {980, i18n.Source("text.3f3c5df3dada")}, {1050, i18n.Source("text.33663bd5c0bf")}, {1120, i18n.Source("text.50d30c134163")}}
 	rl.DrawRectangle(20, 82, 1360, 34, colors.panelAlt)
 	for _, c := range columns {
 		simpleui.DrawTextStyled(c.title, c.x, 89, 14, simpleui.FontSemiBold, colors.cyan)
@@ -128,10 +130,10 @@ func (v *rtl433Viewer) draw() {
 		simpleui.DrawText(short(e.Summary, 27), 1120, y-1, 13, colors.text)
 	}
 	drawPanel(20, 610, 1360, 125)
-	simpleui.DrawTextStyled("DETALLE JSON", 32, 620, 13, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(i18n.Source("text.768cdd422d3c"), 32, 620, 13, simpleui.FontSemiBold, colors.cyan)
 	if v.selected >= 0 && v.selected < len(v.events) {
 		drawWrapped(v.events[v.selected].Raw, 32, 647, 1335, 15, colors.text)
 	} else {
-		simpleui.DrawText("Selecciona una captura para consultar todos sus campos.", 32, 650, 13, colors.muted)
+		simpleui.DrawText(i18n.Source("text.f78b1f5b5196"), 32, 650, 13, colors.muted)
 	}
 }

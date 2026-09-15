@@ -4,10 +4,11 @@ import (
 	"encoding/binary"
 	"math"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"go-zero/internal/resources"
 )
 
 func TestDecodeKnownPosition(t *testing.T) {
@@ -52,17 +53,19 @@ func TestFrontendRate(t *testing.T) {
 }
 
 func TestBundledDireWolfKISSTransport(t *testing.T) {
-	root := filepath.Join("..", "..", "ORIGEN", "IC_SDR", "tools", "aprs")
-	executable := filepath.Join(root, "runtime", "bin", "direwolf.exe")
-	pcmPath := filepath.Join(root, "results", "self-test", "known-packet.s16le")
+	executable := resources.Path("tools", "aprs", "runtime", "bin", "direwolf.exe")
+	pcmPath := resources.Path("tools", "aprs", "results", "self-test", "known-packet.s16le")
 	if _, err := os.Stat(executable); err != nil {
 		t.Skip("bundled Dire Wolf unavailable")
 	}
 	data, err := os.ReadFile(pcmPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			t.Skip("APRS self-test sample unavailable")
+		}
 		t.Fatal(err)
 	}
-	decoder := New(2_048_000, executable, filepath.Join(root, "config", "direwolf-rx.conf"), filepath.Join(root, "runtime"))
+	decoder := New(2_048_000, executable, resources.Path("tools", "aprs", "config", "direwolf-rx.conf"), resources.Path("tools", "aprs", "runtime"))
 	decoder.Configure(true, 144_800_000, 144_800_000, 12_500)
 	defer decoder.Stop()
 	deadline := time.Now().Add(4 * time.Second)

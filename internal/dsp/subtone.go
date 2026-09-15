@@ -1,6 +1,8 @@
 package dsp
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"math"
 	"sort"
@@ -29,15 +31,15 @@ type SubtoneDetector struct {
 }
 
 func NewSubtoneDetector() *SubtoneDetector {
-	d := &SubtoneDetector{mode: "AUTO", ctcss: make([]float32, 0, 1800)}
-	d.status.Mode = "AUTO"
+	d := &SubtoneDetector{mode: i18n.Source("text.6ea56fae9eac"), ctcss: make([]float32, 0, 1800)}
+	d.status.Mode = i18n.Source("text.6ea56fae9eac")
 	d.dcs.init()
 	return d
 }
 
 func (d *SubtoneDetector) SetMode(mode string) {
-	if mode != "AUTO" && mode != "CTCSS" && mode != "DCS" && mode != "OFF" {
-		mode = "AUTO"
+	if mode != i18n.Source("text.6ea56fae9eac") && mode != i18n.Source("text.74108b47eb26") && mode != i18n.Source("text.fb09c8f399c7") && mode != i18n.Source("text.38cca6bea010") {
+		mode = i18n.Source("text.6ea56fae9eac")
 	}
 	d.mu.Lock()
 	d.mode = mode
@@ -55,7 +57,7 @@ func (d *SubtoneDetector) Snapshot() SubtoneStatus {
 func (d *SubtoneDetector) Process(samples []float32) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.mode == "OFF" {
+	if d.mode == i18n.Source("text.38cca6bea010") {
 		return
 	}
 	alpha := float32(1 - math.Exp(-2*math.Pi*250/48000))
@@ -67,22 +69,22 @@ func (d *SubtoneDetector) Process(samples []float32) {
 		}
 		d.decimation = 0
 		v := d.lowpass
-		if d.mode == "AUTO" || d.mode == "DCS" {
+		if d.mode == i18n.Source("text.6ea56fae9eac") || d.mode == i18n.Source("text.fb09c8f399c7") {
 			if code, inverted, confidence, ok := d.dcs.process(v); ok {
 				suffix := "N"
 				if inverted {
 					suffix = "I"
 				}
-				d.confirm("DCS", fmt.Sprintf("%03o%s", code, suffix), confidence)
+				d.confirm(i18n.Source("text.fb09c8f399c7"), fmt.Sprintf("%03o%s", code, suffix), confidence)
 			}
 		}
-		if d.mode == "AUTO" || d.mode == "CTCSS" {
+		if d.mode == i18n.Source("text.6ea56fae9eac") || d.mode == i18n.Source("text.74108b47eb26") {
 			d.ctcss = append(d.ctcss, v)
 		}
 		if len(d.ctcss) >= 1800 {
 			if tone, confidence, ok := detectCTCSS(d.ctcss); ok {
-				d.confirm("CTCSS", fmt.Sprintf("%.1f Hz", tone), confidence)
-			} else if d.status.Kind == "CTCSS" {
+				d.confirm(i18n.Source("text.74108b47eb26"), fmt.Sprintf(i18n.Source("text.8157dbd8ea72"), tone), confidence)
+			} else if d.status.Kind == i18n.Source("text.74108b47eb26") {
 				d.fade()
 			}
 			d.ctcss = d.ctcss[:0]
@@ -97,7 +99,7 @@ func (d *SubtoneDetector) confirm(kind, value string, confidence float32) {
 	} else {
 		d.candidate, d.confirmations = key, 1
 	}
-	if d.confirmations >= 2 || kind == "DCS" {
+	if d.confirmations >= 2 || kind == i18n.Source("text.fb09c8f399c7") {
 		d.status = SubtoneStatus{Mode: d.mode, Kind: kind, Value: value, Confidence: confidence, Detected: true}
 	}
 }

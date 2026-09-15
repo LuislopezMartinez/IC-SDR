@@ -1,5 +1,7 @@
 package sdr
 
+import "go-zero/internal/i18n"
+
 import "go-zero/internal/ais"
 
 func (r *Receiver) ConfigureAIS(enabled bool) {
@@ -9,7 +11,7 @@ func (r *Receiver) ConfigureAIS(enabled bool) {
 }
 func (r *Receiver) AISStatus() ais.Status {
 	if r.ais == nil {
-		return ais.Status{State: "NO DISPONIBLE"}
+		return ais.Status{State: i18n.Source("text.67b9e10a1cbd")}
 	}
 	return r.ais.Snapshot()
 }

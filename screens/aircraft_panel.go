@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +11,7 @@ import (
 
 	"go-zero/internal/aircraft"
 	"go-zero/internal/resources"
+	"go-zero/internal/satellite"
 	"go-zero/simpleui"
 )
 
@@ -33,16 +36,16 @@ func NewAircraftPanel(screen *MainScreen) *AircraftPanel {
 		p.controls = append(p.controls, b)
 		return b
 	}
-	p.mode1090 = button("air1090", "1090 ADS-B", 40, 160, func() { p.selectMode(aircraft.Mode1090) })
-	p.mode978 = button("air978", "978 UAT", 215, 140, func() { p.selectMode(aircraft.Mode978) })
-	p.start = button("airStart", "INICIAR", 375, 140, func() { p.enabled = !p.enabled; p.apply() })
-	mapButton := button("airMap", "ABRIR MAPA", 535, 175, p.openMap)
+	p.mode1090 = button("air1090", i18n.Source("text.edcb1e8e7a35"), 40, 160, func() { p.selectMode(aircraft.Mode1090) })
+	p.mode978 = button("air978", i18n.Source("text.5779a6ff204c"), 215, 140, func() { p.selectMode(aircraft.Mode978) })
+	p.start = button("airStart", i18n.Source("text.7f23d98fbc9a"), 375, 140, func() { p.enabled = !p.enabled; p.apply() })
+	mapButton := button("airMap", i18n.Source("text.19bc47933e09"), 535, 175, p.openMap)
 	mapButton.SetColors(colors.blue, colors.border, colors.text)
-	clearButton := button("airClear", "LIMPIAR", 730, 130, func() {
+	clearButton := button("airClear", i18n.Source("text.2aded7edd569"), 730, 130, func() {
 		if screen.receiver != nil {
 			screen.receiver.ClearAircraft()
 		}
-		p.feedback = "Lista limpiada"
+		p.feedback = i18n.Source("text.1a7e9d00cb45")
 	})
 	clearButton.SetColors(actionClearFill, colors.red, colors.text)
 	p.SetVisible(false)
@@ -62,6 +65,7 @@ func (p *AircraftPanel) frequency() int64 {
 }
 func (p *AircraftPanel) selectMode(mode string) {
 	if p.mode == mode {
+		p.tune()
 		return
 	}
 	was := p.enabled
@@ -76,18 +80,37 @@ func (p *AircraftPanel) selectMode(mode string) {
 func (p *AircraftPanel) Enter() {
 	// The 1090/978 buttons are the explicit tuning controls. Merely opening
 	// this tool keeps the current band and frequency untouched.
-	demodMode := "ADS-B"
+	demodMode := i18n.Source("text.7866f9f32e66")
 	if p.mode == aircraft.Mode978 {
-		demodMode = "UAT"
+		demodMode = i18n.Source("text.72c048cb5100")
 	}
 	p.screen.selectMode(demodMode)
+	p.setReceiverReference()
+}
+
+func (p *AircraftPanel) setReceiverReference() {
+	if p.screen.receiver == nil {
+		return
+	}
+	path := resources.WritablePath("config", "satellite-station.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		p.screen.receiver.SetAircraftReference(0, 0, false)
+		return
+	}
+	var station satellite.Station
+	if json.Unmarshal(data, &station) != nil || station.Latitude < -90 || station.Latitude > 90 || station.Longitude < -180 || station.Longitude > 180 || (station.Latitude == 0 && station.Longitude == 0) {
+		p.screen.receiver.SetAircraftReference(0, 0, false)
+		return
+	}
+	p.screen.receiver.SetAircraftReference(station.Latitude, station.Longitude, true)
 }
 func (p *AircraftPanel) tune() {
 	s := p.screen
 	hz := p.frequency()
-	demodMode := "ADS-B"
+	demodMode := i18n.Source("text.7866f9f32e66")
 	if p.mode == aircraft.Mode978 {
-		demodMode = "UAT"
+		demodMode = i18n.Source("text.72c048cb5100")
 	}
 	s.selectMode(demodMode)
 	s.draggingSpectrum = false
@@ -112,6 +135,7 @@ func (p *AircraftPanel) Leave() {
 }
 func (p *AircraftPanel) apply() {
 	if p.screen.receiver != nil {
+		p.setReceiverReference()
 		p.screen.receiver.ConfigureAircraft(p.enabled, p.mode)
 		if p.enabled && !p.screen.receiver.AircraftStatus().Running {
 			p.enabled = false
@@ -128,10 +152,10 @@ func (p *AircraftPanel) style() {
 		p.mode978.SetColors(colors.blue, colors.border, colors.text)
 	}
 	if p.enabled {
-		p.start.SetLabel("DETENER")
+		p.start.SetLabel(i18n.Source("text.42a572b1399e"))
 		p.start.SetColors(actionStopFill, colors.red, colors.text)
 	} else {
-		p.start.SetLabel("INICIAR")
+		p.start.SetLabel(i18n.Source("text.7f23d98fbc9a"))
 		p.start.SetColors(actionStartFill, colors.green, colors.text)
 	}
 }
@@ -172,25 +196,25 @@ func (p *AircraftPanel) openMap() {
 	}
 	if p.viewer != nil && p.viewer.Process != nil {
 		focusRTL433Viewer(p.viewer.Process.Pid)
-		p.feedback = "MAPA YA ABIERTO"
+		p.feedback = i18n.Source("text.d45ae247faf6")
 		return
 	}
 	exe, err := os.Executable()
 	if err != nil {
-		p.feedback = "ERROR AL ABRIR MAPA"
+		p.feedback = i18n.Source("text.590655f681fb")
 		return
 	}
 	cmd := exec.Command(exe, "--aircraft-map", p.snapshotPath)
 	cmd.SysProcAttr = rtl433ViewerProcessAttributes()
 	if err = cmd.Start(); err != nil {
-		p.feedback = "ERROR AL ABRIR MAPA"
+		p.feedback = i18n.Source("text.590655f681fb")
 		return
 	}
 	p.viewer = cmd
 	p.viewerDone = make(chan struct{})
 	done := p.viewerDone
 	go func() { _ = cmd.Wait(); close(done) }()
-	p.feedback = "MAPA ABIERTO"
+	p.feedback = i18n.Source("text.60ac967b38ed")
 }
 func (p *AircraftPanel) Close() {
 	p.enabled = false
@@ -200,22 +224,22 @@ func (p *AircraftPanel) Close() {
 	}
 }
 func (p *AircraftPanel) DrawPanel() {
-	status := aircraft.Status{State: "SIN RECEPTOR"}
+	status := aircraft.Status{State: i18n.Source("text.810e0d52136b")}
 	var list []aircraft.Aircraft
 	if p.screen.receiver != nil {
 		status = p.screen.receiver.AircraftStatus()
 		list = p.screen.receiver.Aircraft()
 	}
-	simpleui.DrawText(fmt.Sprintf("VIGILANCIA AÉREA · %s · %.3f MHz · %s · %d aeronaves · %d mensajes", p.mode, float64(p.frequency())/1e6, status.State, len(list), status.Messages), 40, toolY+7, 12, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.b8b3f8c0bf9d"), p.mode, float64(p.frequency())/1e6, status.State, len(list), status.Messages), 40, toolY+7, 12, colors.cyan)
 	if status.Error != "" {
 		simpleui.DrawText(sondeClip(status.Error, 72), 880, toolY+38, 12, colors.red)
 	} else {
-		simpleui.DrawText("1090: ADS-B/Mode S mundial · 978 UAT: principalmente EE. UU.", 880, toolY+38, 12, colors.muted)
+		simpleui.DrawText(i18n.Source("text.20ef88737e26"), 880, toolY+38, 12, colors.muted)
 	}
 	cols := []struct {
 		x    float32
 		name string
-	}{{40, "VUELO / ICAO"}, {260, "FUENTE"}, {375, "ÚLTIMA"}, {480, "ALT ft"}, {590, "VEL kt"}, {700, "RUMBO"}, {810, "V/S fpm"}, {950, "LATITUD"}, {1080, "LONGITUD"}}
+	}{{40, i18n.Source("text.ab556fe26885")}, {260, i18n.Source("text.f0417f5218f5")}, {375, i18n.Source("text.a1f6986b3cd0")}, {480, i18n.Source("text.5743f7dd78c6")}, {590, i18n.Source("text.48b9f0f98bd8")}, {700, i18n.Source("text.6cbb45c7f467")}, {810, i18n.Source("text.a87d437284ec")}, {950, i18n.Source("text.5b99241b86d1")}, {1080, i18n.Source("text.b0ddd4ea3459")}}
 	for _, c := range cols {
 		simpleui.DrawText(c.name, c.x, toolY+78, 12, colors.muted)
 	}
@@ -243,7 +267,7 @@ func (p *AircraftPanel) DrawPanel() {
 		}
 	}
 	if len(list) == 0 {
-		simpleui.DrawText("Selecciona banda y pulsa INICIAR. ABRIR MAPA muestra posiciones, altitud y estelas en otra ventana.", 40, toolY+110, 13, colors.muted)
+		simpleui.DrawText(i18n.Source("text.c9ee8539ff8d"), 40, toolY+110, 13, colors.muted)
 	}
-	simpleui.DrawText(sondeClip(p.feedback+"  Recepción local desde el SDR · sin servicios de seguimiento externos", 150), 40, toolY+174, 12, colors.muted)
+	simpleui.DrawText(sondeClip(p.feedback+i18n.Source("text.72bc437f7de7"), 150), 40, toolY+174, 12, colors.muted)
 }

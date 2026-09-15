@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"strings"
 
@@ -17,45 +19,45 @@ type BandDefinition struct {
 }
 
 var bandsByCategory = map[string][]BandDefinition{
-	"HAM": {
-		{Category: "HAM", Name: "160 m", FrequencyHz: 1_900_000, SpanHz: 25_000},
-		{Category: "HAM", Name: "80 m", FrequencyHz: 3_650_000, SpanHz: 50_000},
-		{Category: "HAM", Name: "60 m", FrequencyHz: 5_354_000, SpanHz: 25_000},
-		{Category: "HAM", Name: "40 m", FrequencyHz: 7_100_000, SpanHz: 50_000},
-		{Category: "HAM", Name: "30 m", FrequencyHz: 10_125_000, SpanHz: 25_000},
-		{Category: "HAM", Name: "20 m", FrequencyHz: 14_200_000, SpanHz: 100_000},
-		{Category: "HAM", Name: "17 m", FrequencyHz: 18_100_000, SpanHz: 50_000},
-		{Category: "HAM", Name: "15 m", FrequencyHz: 21_200_000, SpanHz: 100_000},
-		{Category: "HAM", Name: "12 m", FrequencyHz: 24_950_000, SpanHz: 50_000},
-		{Category: "HAM", Name: "10 m", FrequencyHz: 28_500_000, SpanHz: 200_000},
-		{Category: "HAM", Name: "6 m", FrequencyHz: 50_150_000, SpanHz: 200_000},
-		{Category: "HAM", Name: "4 m", FrequencyHz: 70_200_000, SpanHz: 200_000},
-		{Category: "HAM", Name: "2 m", FrequencyHz: 145_000_000, SpanHz: 500_000},
-		{Category: "HAM", Name: "70 cm", FrequencyHz: 433_500_000, SpanHz: 500_000},
-		{Category: "HAM", Name: "23 cm", FrequencyHz: 1_296_000_000, SpanHz: 1_000_000},
+	i18n.Source("text.4fae663ae96a"): {
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "160 m", FrequencyHz: 1_900_000, SpanHz: 25_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "80 m", FrequencyHz: 3_650_000, SpanHz: 50_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "60 m", FrequencyHz: 5_354_000, SpanHz: 25_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "40 m", FrequencyHz: 7_100_000, SpanHz: 50_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "30 m", FrequencyHz: 10_125_000, SpanHz: 25_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "20 m", FrequencyHz: 14_200_000, SpanHz: 100_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "17 m", FrequencyHz: 18_100_000, SpanHz: 50_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "15 m", FrequencyHz: 21_200_000, SpanHz: 100_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "12 m", FrequencyHz: 24_950_000, SpanHz: 50_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "10 m", FrequencyHz: 28_500_000, SpanHz: 200_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "6 m", FrequencyHz: 50_150_000, SpanHz: 200_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "4 m", FrequencyHz: 70_200_000, SpanHz: 200_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "2 m", FrequencyHz: 145_000_000, SpanHz: 500_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "70 cm", FrequencyHz: 433_500_000, SpanHz: 500_000},
+		{Category: i18n.Source("text.4fae663ae96a"), Name: "23 cm", FrequencyHz: 1_296_000_000, SpanHz: 1_000_000},
 	},
-	"COMMERCIAL": {
-		{Category: "COMMERCIAL", Name: "LW", FrequencyHz: 198_000, SpanHz: 100_000},
-		{Category: "COMMERCIAL", Name: "MW / AM", FrequencyHz: 1_000_000, SpanHz: 500_000},
-		{Category: "COMMERCIAL", Name: "SW 49 m", FrequencyHz: 6_100_000, SpanHz: 200_000},
-		{Category: "COMMERCIAL", Name: "SW 41 m", FrequencyHz: 7_300_000, SpanHz: 200_000},
-		{Category: "COMMERCIAL", Name: "SW 31 m", FrequencyHz: 9_600_000, SpanHz: 200_000},
-		{Category: "COMMERCIAL", Name: "FM", FrequencyHz: 100_000_000, SpanHz: 2_000_000},
-		{Category: "COMMERCIAL", Name: "AIR", FrequencyHz: 125_000_000, SpanHz: 1_000_000},
-		{Category: "COMMERCIAL", Name: "MARINE", FrequencyHz: 156_800_000, SpanHz: 1_000_000},
-		{Category: "COMMERCIAL", Name: "MARINE AIS", FrequencyHz: 162_000_000, SpanHz: 250_000},
-		{Category: "COMMERCIAL", Name: "DAB", FrequencyHz: 220_352_000, SpanHz: 2_000_000},
-		{Category: "COMMERCIAL", Name: "SONDAS", FrequencyHz: 403_000_000, SpanHz: 250_000},
-		{Category: "COMMERCIAL", Name: "UAT 978", FrequencyHz: 978_000_000, SpanHz: 2_000_000},
-		{Category: "COMMERCIAL", Name: "ADS-B 1090", FrequencyHz: 1_090_000_000, SpanHz: 2_000_000},
+	i18n.Source("text.00c2ae96f694"): {
+		{Category: i18n.Source("text.00c2ae96f694"), Name: "LW", FrequencyHz: 198_000, SpanHz: 100_000},
+		{Category: i18n.Source("text.00c2ae96f694"), Name: i18n.Source("text.f27f69c7bee0"), FrequencyHz: 1_000_000, SpanHz: 500_000},
+		{Category: i18n.Source("text.00c2ae96f694"), Name: i18n.Source("text.422aa045ffdc"), FrequencyHz: 6_100_000, SpanHz: 200_000},
+		{Category: i18n.Source("text.00c2ae96f694"), Name: i18n.Source("text.fd43177cd5c7"), FrequencyHz: 7_300_000, SpanHz: 200_000},
+		{Category: i18n.Source("text.00c2ae96f694"), Name: i18n.Source("text.ee734a42f240"), FrequencyHz: 9_600_000, SpanHz: 200_000},
+		{Category: i18n.Source("text.00c2ae96f694"), Name: "FM", FrequencyHz: 100_000_000, SpanHz: 2_000_000},
+		{Category: i18n.Source("text.00c2ae96f694"), Name: i18n.Source("text.9e0d5d5acc31"), FrequencyHz: 125_000_000, SpanHz: 1_000_000},
+		{Category: i18n.Source("text.00c2ae96f694"), Name: i18n.Source("text.4137a9ef7e64"), FrequencyHz: 156_800_000, SpanHz: 1_000_000},
+		{Category: i18n.Source("text.00c2ae96f694"), Name: i18n.Source("text.9fbabbb6fe61"), FrequencyHz: 162_000_000, SpanHz: 250_000},
+		{Category: i18n.Source("text.00c2ae96f694"), Name: i18n.Source("text.bbcc8ec46f07"), FrequencyHz: 220_352_000, SpanHz: 2_000_000},
+		{Category: i18n.Source("text.00c2ae96f694"), Name: i18n.Source("text.493b20493ea1"), FrequencyHz: 403_000_000, SpanHz: 250_000},
+		{Category: i18n.Source("text.00c2ae96f694"), Name: i18n.Source("text.5de9168480ce"), FrequencyHz: 978_000_000, SpanHz: 2_000_000},
+		{Category: i18n.Source("text.00c2ae96f694"), Name: i18n.Source("text.2bfb0a95d742"), FrequencyHz: 1_090_000_000, SpanHz: 2_000_000},
 	},
-	"ISM": {
-		{Category: "ISM", Name: "CB 27", FrequencyHz: 27_205_000, SpanHz: 500_000},
-		{Category: "ISM", Name: "PMR446", FrequencyHz: 446_006_250, SpanHz: 500_000},
-		{Category: "ISM", Name: "433 MHz", FrequencyHz: 433_920_000, SpanHz: 1_000_000},
-		{Category: "ISM", Name: "868 MHz", FrequencyHz: 868_300_000, SpanHz: 2_000_000},
-		{Category: "ISM", Name: "915 MHz", FrequencyHz: 915_000_000, SpanHz: 2_000_000},
-		{Category: "ISM", Name: "2.4 GHz", FrequencyHz: 2_440_000_000, SpanHz: 2_000_000},
+	i18n.Source("text.3e250a199e99"): {
+		{Category: i18n.Source("text.3e250a199e99"), Name: "CB 27", FrequencyHz: 27_205_000, SpanHz: 500_000},
+		{Category: i18n.Source("text.3e250a199e99"), Name: i18n.Source("text.9565c4e7fc84"), FrequencyHz: 446_006_250, SpanHz: 500_000},
+		{Category: i18n.Source("text.3e250a199e99"), Name: i18n.Source("text.b76fd1fc7152"), FrequencyHz: 433_920_000, SpanHz: 1_000_000},
+		{Category: i18n.Source("text.3e250a199e99"), Name: i18n.Source("text.b22302813a6c"), FrequencyHz: 868_300_000, SpanHz: 2_000_000},
+		{Category: i18n.Source("text.3e250a199e99"), Name: i18n.Source("text.116e50259e29"), FrequencyHz: 915_000_000, SpanHz: 2_000_000},
+		{Category: i18n.Source("text.3e250a199e99"), Name: i18n.Source("text.9ce5ecb522a9"), FrequencyHz: 2_440_000_000, SpanHz: 2_000_000},
 	},
 }
 
@@ -73,7 +75,7 @@ type BandSelector struct {
 
 func NewBandSelector(category, name string, onSelect func(BandDefinition)) *BandSelector {
 	if _, exists := bandsByCategory[category]; !exists {
-		category = "HAM"
+		category = i18n.Source("text.4fae663ae96a")
 	}
 	return &BandSelector{
 		BaseElement: simpleui.NewBaseElement("bandSelectorOverlay", 0, 0, designWidth, designHeight),
@@ -117,7 +119,7 @@ func (selector *BandSelector) UpdateOverlay(input simpleui.Input) bool {
 		if rl.CheckCollisionPointRec(input.Pointer, selector.cancelBounds()) {
 			selector.Close()
 		} else if category >= 0 {
-			selector.category = []string{"HAM", "COMMERCIAL", "ISM"}[category]
+			selector.category = []string{i18n.Source("text.4fae663ae96a"), i18n.Source("text.00c2ae96f694"), i18n.Source("text.3e250a199e99")}[category]
 		} else if bandIndex >= 0 {
 			band := bandsByCategory[selector.category][bandIndex]
 			selector.selectedCategory, selector.selectedName = band.Category, band.Name
@@ -142,12 +144,12 @@ func (selector *BandSelector) DrawOverlay() {
 	rl.DrawRectangleRounded(modal, .022, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(modal, .022, 8, 2, colors.border)
 	rl.DrawRectangleRounded(rl.Rectangle{X: 130, Y: 70, Width: 10, Height: 530}, .5, 8, accent)
-	simpleui.DrawTextStyled("SELECCIÓN DE BANDA", 170, 91, 27, simpleui.FontRegular, colors.text)
+	simpleui.DrawTextStyled(i18n.Source("text.63955630f3d8"), 170, 91, 27, simpleui.FontRegular, colors.text)
 
-	labels := []string{"RADIOAFICIONADO / HAM", "COMERCIALES", "ISM / LIBRE"}
+	labels := []string{i18n.Source("text.4d6d3d18b060"), i18n.Source("text.8d85ede58085"), i18n.Source("text.75de1f15f7ee")}
 	for index, label := range labels {
 		bounds := selector.categoryBounds(index)
-		active := []string{"HAM", "COMMERCIAL", "ISM"}[index] == selector.category
+		active := []string{i18n.Source("text.4fae663ae96a"), i18n.Source("text.00c2ae96f694"), i18n.Source("text.3e250a199e99")}[index] == selector.category
 		categoryAccent := selector.categoryAccent(index)
 		fill := blendRGBA(colors.panelAlt, categoryAccent, .24)
 		if active {
@@ -173,12 +175,12 @@ func (selector *BandSelector) DrawOverlay() {
 		drawCentered(formatBandFrequency(band.FrequencyHz), rl.Rectangle{X: bounds.X, Y: bounds.Y + 28, Width: bounds.Width, Height: 20}, 14, labelColor)
 	}
 
-	simpleui.DrawText("Selecciona una banda para cambiar la frecuencia y el span.", 170, 540, 15, colors.text)
+	simpleui.DrawText(i18n.Source("text.bd1e9b6c9b71"), 170, 540, 15, colors.text)
 	cancel := selector.cancelBounds()
 	cancelFill := colors.panelAlt
 	rl.DrawRectangleRounded(cancel, .16, 8, cancelFill)
 	rl.DrawRectangleRoundedLinesEx(cancel, .16, 8, 2, rl.Color{R: 135, G: 140, B: 145, A: 255})
-	drawCentered("CANCELAR", cancel, 16, simpleui.EnsureTextContrast(colors.text, cancelFill))
+	drawCentered(i18n.Source("text.b1a5fe65d180"), cancel, 16, simpleui.EnsureTextContrast(colors.text, cancelFill))
 }
 
 func (selector *BandSelector) categoryAt(point rl.Vector2) int {
@@ -224,10 +226,10 @@ func (selector *BandSelector) categoryAccent(index int) rl.Color {
 }
 
 func (selector *BandSelector) accent() rl.Color {
-	if selector.category == "COMMERCIAL" {
+	if selector.category == i18n.Source("text.00c2ae96f694") {
 		return selector.categoryAccent(1)
 	}
-	if selector.category == "ISM" {
+	if selector.category == i18n.Source("text.3e250a199e99") {
 		return selector.categoryAccent(2)
 	}
 	return selector.categoryAccent(0)
@@ -236,13 +238,13 @@ func (selector *BandSelector) accent() rl.Color {
 func formatBandFrequency(frequencyHz int64) string {
 	var formatted string
 	if frequencyHz >= 1_000_000_000 {
-		formatted = fmt.Sprintf("%.3f GHz", float64(frequencyHz)/1e9)
+		formatted = fmt.Sprintf(i18n.Source("text.51020b68758d"), float64(frequencyHz)/1e9)
 	} else if frequencyHz >= 1_000_000 {
-		formatted = fmt.Sprintf("%.5f MHz", float64(frequencyHz)/1e6)
+		formatted = fmt.Sprintf(i18n.Source("text.4d983ee4ca80"), float64(frequencyHz)/1e6)
 	} else if frequencyHz >= 1_000 {
-		formatted = fmt.Sprintf("%.3f kHz", float64(frequencyHz)/1e3)
+		formatted = fmt.Sprintf(i18n.Source("text.474f3123592c"), float64(frequencyHz)/1e3)
 	} else {
-		return fmt.Sprintf("%d Hz", frequencyHz)
+		return fmt.Sprintf(i18n.Source("text.3999a0ad05ce"), frequencyHz)
 	}
 	formatted = strings.TrimRight(strings.TrimRight(strings.Split(formatted, " ")[0], "0"), ".") + " " + strings.Split(formatted, " ")[1]
 	return strings.Replace(formatted, ".", ",", 1)

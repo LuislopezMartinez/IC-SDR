@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"math"
 
@@ -34,7 +36,7 @@ type AudioPanel struct {
 }
 
 func NewAudioPanel(screen *MainScreen) *AudioPanel {
-	p := &AudioPanel{screen: screen, lowCut: 100, highCut: 4000, eqEnabled: true, profile: "NORMAL", deemphasisUs: 50, pbtLow: 100, pbtHigh: 3250}
+	p := &AudioPanel{screen: screen, lowCut: 100, highCut: 4000, eqEnabled: true, profile: i18n.Source("text.db2cb3fe28e2"), deemphasisUs: 50, pbtLow: 100, pbtHigh: 3250}
 	for i := range p.spectrum {
 		p.spectrum[i] = -80
 	}
@@ -43,27 +45,27 @@ func NewAudioPanel(screen *MainScreen) *AudioPanel {
 	p.pbtRange.SetMinimumGap(200)
 	p.pbtRange.SetRangeDragging(false)
 	p.pbtRange.OnChange(func(low, high float32) { p.pbtLow, p.pbtHigh = int(low), int(high); p.applyPBT() })
-	p.pbtLock = simpleui.NewSwitch("pbtLock", 42, 782, 104, 26, "LOCK", false, 11)
+	p.pbtLock = simpleui.NewSwitch("pbtLock", 42, 782, 104, 26, i18n.Source("text.74c4812d040a"), false, 11)
 	p.pbtLock.OnChange(func(active bool) {
 		p.pbtLocked = active
 		if active {
-			p.pbtLock.SetLabel("LOCK ON")
+			p.pbtLock.SetLabel(i18n.Source("text.fd1a9a18ddbb"))
 		} else {
-			p.pbtLock.SetLabel("LOCK OFF")
+			p.pbtLock.SetLabel(i18n.Source("text.216e7fea416a"))
 		}
 	})
-	p.pbtClear = simpleui.NewButton("pbtClear", 154, 782, 92, 26, "CLEAR", 11)
+	p.pbtClear = simpleui.NewButton("pbtClear", 154, 782, 92, 26, i18n.Source("text.9cc3a043b6a9"), 11)
 	p.pbtClear.OnClick(func() {
 		p.pbtLow, p.pbtHigh = 100, min(max(p.screen.demodBandwidthHz, 300), 5000)
 		p.applyPBT()
 	})
-	p.pbtBypass = simpleui.NewButton("pbtBypass", 254, 782, 118, 26, "BYPASS", 11)
+	p.pbtBypass = simpleui.NewButton("pbtBypass", 254, 782, 118, 26, i18n.Source("text.7f84c8c9be1e"), 11)
 	p.pbtBypass.OnClick(func() {
 		p.pbtBypassed = !p.pbtBypassed
 		if p.pbtBypassed {
-			p.pbtBypass.SetLabel("BYPASS ON")
+			p.pbtBypass.SetLabel(i18n.Source("text.e68c10ac725c"))
 		} else {
-			p.pbtBypass.SetLabel("BYPASS OFF")
+			p.pbtBypass.SetLabel(i18n.Source("text.16e473bccb0b"))
 		}
 		p.applyPBT()
 	})
@@ -71,10 +73,10 @@ func NewAudioPanel(screen *MainScreen) *AudioPanel {
 	p.eqSwitch = simpleui.NewSwitch("audioEQ", 676, 649, 66, 24, "EQ", true, 11)
 	p.eqSwitch.OnChange(func(active bool) {
 		p.eqEnabled = active
-		p.eqSwitch.SetLabel(map[bool]string{true: "EQ ON", false: "EQ OFF"}[active])
+		p.eqSwitch.SetLabel(map[bool]string{true: i18n.Source("text.f82743605b47"), false: i18n.Source("text.b9958b5b0d93")}[active])
 		p.apply()
 	})
-	flat := simpleui.NewButton("audioEQFlat", 744, 649, 48, 24, "FLAT", 10)
+	flat := simpleui.NewButton("audioEQFlat", 744, 649, 48, 24, i18n.Source("text.988ca3f92f1a"), 10)
 	flat.OnClick(func() {
 		for i := range p.eqGains {
 			p.eqGains[i] = 0
@@ -96,9 +98,9 @@ func NewAudioPanel(screen *MainScreen) *AudioPanel {
 	p.cutoffs.SetMinimumGap(200)
 	p.cutoffs.SetRangeDragging(false)
 	p.cutoffs.OnChange(func(low, high float32) { p.lowCut, p.highCut = max(int(low), 20), min(int(high), 16000); p.apply() })
-	p.profileButton = simpleui.NewButton("audioProfile", 818, 778, 176, 30, "COMP. NORMAL", 11)
+	p.profileButton = simpleui.NewButton("audioProfile", 818, 778, 176, 30, i18n.Source("text.6562bc0daf89"), 11)
 	p.profileButton.OnClick(p.cycleProfile)
-	p.deemphasisButton = simpleui.NewButton("audioDeemphasis", 1004, 778, 156, 30, "DE-EMPH 50 us", 11)
+	p.deemphasisButton = simpleui.NewButton("audioDeemphasis", 1004, 778, 156, 30, i18n.Source("text.bd8a9dc191f1"), 11)
 	p.deemphasisButton.OnClick(func() {
 		if p.deemphasisUs == 50 {
 			p.deemphasisUs = 75
@@ -107,7 +109,7 @@ func NewAudioPanel(screen *MainScreen) *AudioPanel {
 		}
 		p.apply()
 	})
-	reset := simpleui.NewButton("audioReset", 1458, 648, 94, 25, "RESET", 10)
+	reset := simpleui.NewButton("audioReset", 1458, 648, 94, 25, i18n.Source("text.7ef2fad58d1f"), 10)
 	reset.OnClick(func() { p.lowCut, p.highCut = 100, 4000; p.cutoffs.SetValues(100, 4000); p.apply() })
 	p.controls = []simpleui.Element{p.pbtLock, p.pbtClear, p.pbtBypass, p.eqSwitch, flat, p.profileButton, p.deemphasisButton, reset}
 	for _, slider := range p.eqSliders {
@@ -145,33 +147,33 @@ func (p *AudioPanel) apply() {
 	if p.screen.receiver != nil {
 		p.screen.receiver.SetFMDeemphasis(p.deemphasisUs)
 	}
-	p.profileButton.SetLabel("COMP. " + p.profile)
-	p.deemphasisButton.SetLabel(fmt.Sprintf("DE-EMPH %d us", p.deemphasisUs))
+	p.profileButton.SetLabel(i18n.Source("text.373f005e130f") + p.profile)
+	p.deemphasisButton.SetLabel(fmt.Sprintf(i18n.Source("text.427ce15ba57b"), p.deemphasisUs))
 }
 
 func (p *AudioPanel) cycleProfile() {
 	switch p.profile {
 	case "SUAVE":
-		p.profile = "NORMAL"
+		p.profile = i18n.Source("text.db2cb3fe28e2")
 	case "NORMAL":
-		p.profile = "FUERTE"
+		p.profile = i18n.Source("text.e5ccf011d642")
 	default:
-		p.profile = "SUAVE"
+		p.profile = i18n.Source("text.692233b9c713")
 	}
 	p.apply()
 }
 
 func (p *AudioPanel) DrawPanel() {
 	mode := p.screen.mode.SelectedText()
-	ssb := mode == "USB" || mode == "LSB"
+	ssb := mode == i18n.Source("text.61f0acff1735") || mode == i18n.Source("text.6323db4948ad")
 	p.pbtLock.SetEnabled(ssb && !p.pbtBypassed)
 	p.pbtClear.SetEnabled(ssb)
 	p.pbtBypass.SetEnabled(ssb)
-	drawCentered("TWIN PBT", rl.Rectangle{X: 30, Y: 634, Width: 410, Height: 24}, 13, colors.text)
+	drawCentered(i18n.Source("text.cdc6bff8f509"), rl.Rectangle{X: 30, Y: 634, Width: 410, Height: 24}, 13, colors.text)
 	drawPanel(470, 642, 326, 174)
 	drawPanel(808, 642, 756, 174)
-	drawSmallText("5-BAND EQ", 482, 650, colors.text)
-	drawSmallText("AUDIO SPECTRUM", 818, 650, colors.text)
+	drawSmallText(i18n.Source("text.ab5f31a11801"), 482, 650, colors.text)
+	drawSmallText(i18n.Source("text.08701518bfdd"), 818, 650, colors.text)
 	p.drawPBT(ssb, mode)
 	for i, hz := range audioEQFrequencies {
 		x := float32(514 + i*53)
@@ -186,11 +188,11 @@ func (p *AudioPanel) DrawPanel() {
 	drawSmallText("0", 480, 733, colors.muted)
 	drawSmallText("-12", 476, 762, colors.muted)
 	p.drawSpectrum(818, 690, 736, 74, 12000)
-	drawSmallText(fmt.Sprintf("LOW %s", formatAudioHz(p.lowCut)), 822, 670, colors.cyan)
-	drawSmallText(fmt.Sprintf("HIGH %s", formatAudioHz(p.highCut)), 952, 670, colors.orange)
-	drawSmallText(fmt.Sprintf("BUFFER %d ms · %.0f%%", p.screen.stats.AudioBuffered*1000/audioSampleRate, float32(p.screen.stats.AudioBuffered)*100/48000), 1045, 650, colors.muted)
-	drawSmallText(fmt.Sprintf("OVERRUNS %d", p.screen.stats.AudioOverruns), 1260, 650, colors.muted)
-	drawSmallText(fmt.Sprintf("AF BW  %s", formatAudioHz(p.highCut-p.lowCut)), 1422, 786, colors.text)
+	drawSmallText(fmt.Sprintf(i18n.Source("text.148eb8b51395"), formatAudioHz(p.lowCut)), 822, 670, colors.cyan)
+	drawSmallText(fmt.Sprintf(i18n.Source("text.d96b30c0b24d"), formatAudioHz(p.highCut)), 952, 670, colors.orange)
+	drawSmallText(fmt.Sprintf(i18n.Source("text.68c6f1d43d10"), p.screen.stats.AudioBuffered*1000/audioSampleRate, float32(p.screen.stats.AudioBuffered)*100/48000), 1045, 650, colors.muted)
+	drawSmallText(fmt.Sprintf(i18n.Source("text.0429bae138cb"), p.screen.stats.AudioOverruns), 1260, 650, colors.muted)
+	drawSmallText(fmt.Sprintf(i18n.Source("text.1197ea4c2f46"), formatAudioHz(p.highCut-p.lowCut)), 1422, 786, colors.text)
 }
 
 func (p *AudioPanel) drawPBT(enabled bool, mode string) {
@@ -200,11 +202,11 @@ func (p *AudioPanel) drawPBT(enabled bool, mode string) {
 	center := x + w/2
 	rl.DrawLineEx(rl.Vector2{X: center, Y: y}, rl.Vector2{X: center, Y: y + h}, 1.5, colors.green)
 	if !enabled {
-		drawCentered("DISPONIBLE EN USB / LSB", rl.Rectangle{X: x, Y: y, Width: w, Height: h}, 10, colors.muted)
+		drawCentered(i18n.Source("text.85c3be5255f8"), rl.Rectangle{X: x, Y: y, Width: w, Height: h}, 10, colors.muted)
 		return
 	}
 	sign := float32(1)
-	if mode == "LSB" {
+	if mode == i18n.Source("text.6323db4948ad") {
 		sign = -1
 	}
 	lowX := center + sign*w*.5*float32(p.pbtLow)/5000
@@ -216,11 +218,13 @@ func (p *AudioPanel) drawPBT(enabled bool, mode string) {
 	p.drawPBTResponse(x, y, w, h, mode, 50, p.pbtHigh, colors.orange)
 	rl.DrawLineEx(rl.Vector2{X: lowX, Y: y}, rl.Vector2{X: lowX, Y: y + h}, 2, colors.cyan)
 	rl.DrawLineEx(rl.Vector2{X: highX, Y: y}, rl.Vector2{X: highX, Y: y + h}, 2, colors.orange)
-	drawSmallText(fmt.Sprintf("PBT1 %d Hz", p.pbtLow), 208, 650, colors.cyan)
-	drawSmallText(fmt.Sprintf("PBT2 %d Hz", p.pbtHigh), 330, 650, colors.orange)
-	drawSmallText("-5 kHz", x, y+h+2, colors.muted)
+	drawAudioDragHandle(lowX, y+8, colors.cyan)
+	drawAudioDragHandle(highX, y+8, colors.orange)
+	drawSmallText(fmt.Sprintf(i18n.Source("text.6d2a1f73e4b4"), p.pbtLow), 208, 650, colors.cyan)
+	drawSmallText(fmt.Sprintf(i18n.Source("text.08ff963b2962"), p.pbtHigh), 330, 650, colors.orange)
+	drawSmallText(i18n.Source("text.5b915f321d92"), x, y+h+2, colors.muted)
 	drawSmallText("0", center-3, y+h+2, colors.muted)
-	drawSmallText("+5 kHz", x+w-34, y+h+2, colors.muted)
+	drawSmallText(i18n.Source("text.c1c18594305f"), x+w-34, y+h+2, colors.muted)
 }
 
 func (p *AudioPanel) drawPBTResponse(x, y, w, h float32, mode string, low, high int, color rl.Color) {
@@ -234,7 +238,7 @@ func (p *AudioPanel) drawPBTResponse(x, y, w, h float32, mode string, low, high 
 	for i := 0; i <= 160; i++ {
 		rf := -5000 + 10000*float32(i)/160
 		audio := rf
-		if mode == "LSB" {
+		if mode == i18n.Source("text.6323db4948ad") {
 			audio = -rf
 		}
 		current := rl.Vector2{X: x + w*float32(i)/160, Y: y + h - response(audio)*(h-13)}
@@ -246,11 +250,14 @@ func (p *AudioPanel) drawPBTResponse(x, y, w, h float32, mode string, low, high 
 }
 
 func (p *AudioPanel) handleGraphInput() {
-	if p.screen.activeTool != "PBT_AUDIO" || p.screen.overlayOpen() {
+	if p.screen.activeTool != i18n.Source("text.a42c60257b01") || p.screen.viewMode != 1 || p.screen.overlayOpen() {
 		p.pbtDrag, p.audioDrag = 0, 0
 		return
 	}
 	mouse := simpleui.MousePosition()
+	// The graphs are drawn through drawCompactedTool's horizontal transform;
+	// hit testing must use the same legacy coordinates as their drawing code.
+	mouse.X = legacyToolPointerX(mouse.X)
 	pressed := rl.IsMouseButtonPressed(rl.MouseButtonLeft)
 	down := rl.IsMouseButtonDown(rl.MouseButtonLeft)
 	released := rl.IsMouseButtonReleased(rl.MouseButtonLeft)
@@ -258,11 +265,11 @@ func (p *AudioPanel) handleGraphInput() {
 	if p.screen.mode != nil {
 		mode = p.screen.mode.SelectedText()
 	}
-	ssb := mode == "USB" || mode == "LSB"
+	ssb := mode == i18n.Source("text.61f0acff1735") || mode == i18n.Source("text.6323db4948ad")
 	if pressed && ssb && !p.pbtBypassed && mouse.X >= 42 && mouse.X <= 432 && mouse.Y >= 650 && mouse.Y <= 750 {
 		center := float32(237)
 		sign := float32(1)
-		if mode == "LSB" {
+		if mode == i18n.Source("text.6323db4948ad") {
 			sign = -1
 		}
 		lowX := center + sign*195*float32(p.pbtLow)/5000
@@ -279,7 +286,7 @@ func (p *AudioPanel) handleGraphInput() {
 	if p.pbtDrag != 0 && down {
 		if p.pbtLocked {
 			sign := float32(1)
-			if mode == "LSB" {
+			if mode == i18n.Source("text.6323db4948ad") {
 				sign = -1
 			}
 			delta := int(math.Round(float64((mouse.X-p.dragStartX)*5000/195*sign/10))) * 10
@@ -340,11 +347,27 @@ func (p *AudioPanel) drawSpectrum(x, y, w, h float32, maximumHz int) {
 	}
 	rl.DrawLineEx(rl.Vector2{X: lowX, Y: y}, rl.Vector2{X: lowX, Y: y + h}, 1.5, colors.cyan)
 	rl.DrawLineEx(rl.Vector2{X: highX, Y: y}, rl.Vector2{X: highX, Y: y + h}, 1.5, colors.orange)
+	drawAudioDragHandle(lowX, y+8, colors.cyan)
+	drawAudioDragHandle(highX, y+8, colors.orange)
+}
+
+func legacyToolPointerX(x float32) float32 {
+	return legacyToolX + (x-toolContentX)/toolContentScaleX
+}
+
+func drawAudioDragHandle(x, y float32, accent rl.Color) {
+	const width, height = float32(16), float32(20)
+	bounds := rl.Rectangle{X: x - width/2, Y: y, Width: width, Height: height}
+	rl.DrawRectangleRounded(bounds, .3, 4, colors.panelAlt)
+	rl.DrawRectangleRoundedLinesEx(bounds, .3, 4, 1.5, accent)
+	for _, offset := range []float32{7, 12} {
+		rl.DrawLineEx(rl.Vector2{X: x - 3, Y: y + offset}, rl.Vector2{X: x + 3, Y: y + offset}, 1.5, accent)
+	}
 }
 
 func formatAudioHz(hz int) string {
 	if hz >= 1000 {
-		return fmt.Sprintf("%.1f kHz", float64(hz)/1000)
+		return fmt.Sprintf(i18n.Source("text.c3e70ea0286a"), float64(hz)/1000)
 	}
-	return fmt.Sprintf("%d Hz", hz)
+	return fmt.Sprintf(i18n.Source("text.3999a0ad05ce"), hz)
 }

@@ -1,5 +1,7 @@
 package tetra
 
+import "go-zero/internal/i18n"
+
 import "time"
 
 func scramblingInit(si SystemInfo) uint32 {
@@ -183,7 +185,7 @@ func parseMACResource(bits []byte) (resourceAddress, bool) {
 
 func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 	if len(bits) < 40 || bitsToUint(bits, 0, 2) != 0 {
-		return resourceAddress{}, "TIPO", false
+		return resourceAddress{}, i18n.Source("text.cd4c8ecf7e4b"), false
 	}
 	encryption := bitsToUint(bits, 4, 2)
 	lengthField := bitsToUint(bits, 7, 6)
@@ -195,7 +197,7 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 	lengths := [8]int{0, 24, 10, 24, 24, 34, 30, 34}
 	need := 16 + lengths[addrType]
 	if len(bits) < need || addrType == 0 {
-		return resourceAddress{}, "DIRECCION", false
+		return resourceAddress{}, i18n.Source("text.78492b19b9e0"), false
 	}
 	var ssi uint32
 	var usageMarker uint8
@@ -204,18 +206,18 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 	case 1, 3, 4, 5, 6, 7:
 		ssi = bitsToUint(bits, 16, 24)
 	default:
-		return resourceAddress{}, "DIRECCION", false
+		return resourceAddress{}, i18n.Source("text.78492b19b9e0"), false
 	}
 	if addrType == 6 {
 		usageMarker = uint8(bitsToUint(bits, 40, 6))
 		hasUsageMarker = true
 	}
 	if ssi == 0 {
-		return resourceAddress{}, "SSI", false
+		return resourceAddress{}, i18n.Source("text.b5e4bb23195e"), false
 	}
 	cur := need
 	if cur >= len(bits) {
-		return resourceAddress{}, "CABECERA", false
+		return resourceAddress{}, i18n.Source("text.1d4574e7be32"), false
 	}
 	if bits[cur] != 0 {
 		cur += 5
@@ -223,7 +225,7 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 		cur++
 	}
 	if cur >= len(bits) {
-		return resourceAddress{}, "CABECERA", false
+		return resourceAddress{}, i18n.Source("text.1d4574e7be32"), false
 	}
 	if bits[cur] != 0 {
 		cur += 9
@@ -231,7 +233,7 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 		cur++
 	}
 	if cur >= len(bits) {
-		return resourceAddress{}, "CABECERA", false
+		return resourceAddress{}, i18n.Source("text.1d4574e7be32"), false
 	}
 	hasAllocation := bits[cur] != 0
 	cur++
@@ -245,11 +247,11 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 		var ok bool
 		cur, ok = skipChannelAllocation(bits, cur)
 		if !ok {
-			return resourceAddress{}, "ASIGNACION", false
+			return resourceAddress{}, i18n.Source("text.344f209b92e2"), false
 		}
 	}
 	if cur > len(bits) {
-		return resourceAddress{}, "CABECERA", false
+		return resourceAddress{}, i18n.Source("text.1d4574e7be32"), false
 	}
 	return resourceAddress{Type: addrType, SSI: ssi, Encrypted: encryption > 0, UsageMarker: usageMarker, HasUsageMarker: hasUsageMarker, HeaderBits: cur, LengthBits: lengthBits, ChannelAllocation: hasAllocation}, "", true
 }
@@ -488,7 +490,7 @@ func parseTLSDU(tl []byte) (cmceInfo, uint8, bool) {
 		return cmceInfo{}, pdisc, false
 	}
 	code := uint8(bitsToUint(tl, 3, 5))
-	names := map[uint8]string{0: "D-ALERT", 1: "D-CALL PROCEEDING", 2: "D-CONNECT", 3: "D-CONNECT ACK", 4: "D-DISCONNECT", 5: "D-INFO", 6: "D-RELEASE", 7: "D-SETUP", 8: "D-STATUS", 9: "D-TX CEASED", 10: "D-TX CONTINUE", 11: "D-TX GRANTED", 12: "D-TX WAIT", 13: "D-TX INTERRUPT", 14: "D-CALL RESTORE", 15: "D-SDS DATA", 16: "D-FACILITY"}
+	names := map[uint8]string{0: i18n.Source("text.6c57e39a3370"), 1: i18n.Source("text.ae019413b285"), 2: i18n.Source("text.b75675860915"), 3: i18n.Source("text.7ed6117fcdec"), 4: i18n.Source("text.17727e4df0b2"), 5: i18n.Source("text.fd1b34647473"), 6: i18n.Source("text.26a1d7b39a19"), 7: i18n.Source("text.bfa24fabc582"), 8: i18n.Source("text.55ff61757ab7"), 9: i18n.Source("text.2349aedf5e8e"), 10: i18n.Source("text.9767bce0705b"), 11: i18n.Source("text.6e7b2abea196"), 12: i18n.Source("text.3176f822d271"), 13: i18n.Source("text.11a5ada39468"), 14: i18n.Source("text.3a3fd35785f1"), 15: i18n.Source("text.08de89c36b2f"), 16: i18n.Source("text.b46e7c501f5e")}
 	name, ok := names[code]
 	if !ok {
 		return cmceInfo{}, pdisc, false

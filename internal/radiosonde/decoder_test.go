@@ -61,7 +61,7 @@ func TestMissingRuntime(t *testing.T) {
 }
 
 // Enable against the shipped upstream recording and native executables with
-// RADIOSONDE_INTEGRATION_ROOT pointing to ORIGEN/IC_SDR/tools/radiosonde.
+// RADIOSONDE_INTEGRATION_ROOT pointing to DATA/tools/radiosonde.
 // This validates the real stdin float32 transport, channel offsets and process
 // shutdown/restart, not a mocked JSON producer.
 func TestNativeDFMIQ(t *testing.T) {

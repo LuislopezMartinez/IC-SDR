@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"go-zero/simpleui"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -32,5 +34,5 @@ func (overlay *RemoteLockOverlay) DrawOverlay() {
 	box := rl.Rectangle{X: 585, Y: 210, Width: 430, Height: 51}
 	rl.DrawRectangleRounded(box, .18, 8, rl.Color{R: 13, G: 47, B: 69, A: 245})
 	rl.DrawRectangleRoundedLinesEx(box, .18, 8, 2, colors.orange)
-	drawCenteredStyled("CONEXIÓN REMOTA · PC BLOQUEADO", box, 18, simpleui.FontSemiBold, rl.White)
+	drawCenteredStyled(i18n.Source("text.a0f65167727c"), box, 18, simpleui.FontSemiBold, rl.White)
 }

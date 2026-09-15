@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"encoding/json"
 	"fmt"
 	"os"
@@ -33,20 +35,20 @@ func NewAISPanel(screen *MainScreen) *AISPanel {
 		p.controls = append(p.controls, b)
 		return b
 	}
-	p.start = button("aisStart", "INICIAR", 40, 145, func() {
+	p.start = button("aisStart", i18n.Source("text.7f23d98fbc9a"), 40, 145, func() {
 		if !p.enabled {
 			p.tuneAIS()
 		}
 		p.enabled = !p.enabled
 		p.apply()
 	})
-	mapButton := button("aisMap", "ABRIR MAPA", 205, 180, p.openMap)
+	mapButton := button("aisMap", i18n.Source("text.19bc47933e09"), 205, 180, p.openMap)
 	mapButton.SetColors(colors.blue, colors.border, colors.text)
-	clearButton := button("aisClear", "LIMPIAR", 405, 135, func() {
+	clearButton := button("aisClear", i18n.Source("text.2aded7edd569"), 405, 135, func() {
 		if screen.receiver != nil {
 			screen.receiver.ClearAIS()
 		}
-		p.feedback = "Lista limpiada"
+		p.feedback = i18n.Source("text.1a7e9d00cb45")
 	})
 	clearButton.SetColors(actionClearFill, colors.red, colors.text)
 	p.apply()
@@ -77,7 +79,7 @@ func (p *AISPanel) tuneAIS() {
 	}
 	if s.receiver != nil {
 		s.receiver.SetCenterFrequency(ais.CenterFrequencyHz)
-		s.receiver.SetDemodulator("NFM", ais.CenterFrequencyHz, 50_000)
+		s.receiver.SetDemodulator(i18n.Source("text.0896d612d497"), ais.CenterFrequencyHz, 50_000)
 	}
 	s.waterfall.Reset()
 }
@@ -93,10 +95,10 @@ func (p *AISPanel) apply() {
 		}
 	}
 	if p.enabled {
-		p.start.SetLabel("DETENER")
+		p.start.SetLabel(i18n.Source("text.42a572b1399e"))
 		p.start.SetColors(actionStopFill, colors.red, colors.text)
 	} else {
-		p.start.SetLabel("INICIAR")
+		p.start.SetLabel(i18n.Source("text.7f23d98fbc9a"))
 		p.start.SetColors(actionStartFill, colors.green, colors.text)
 	}
 }
@@ -115,7 +117,7 @@ func (p *AISPanel) Tick() {
 	p.writeSnapshot(vessels)
 	if p.enabled && !p.screen.receiver.AISStatus().Running {
 		p.enabled = false
-		p.start.SetLabel("INICIAR")
+		p.start.SetLabel(i18n.Source("text.7f23d98fbc9a"))
 	}
 	if p.viewerDone != nil {
 		select {
@@ -145,43 +147,43 @@ func (p *AISPanel) openMap() {
 	}
 	if p.viewer != nil && p.viewer.Process != nil {
 		focusRTL433Viewer(p.viewer.Process.Pid)
-		p.feedback = "MAPA YA ABIERTO"
+		p.feedback = i18n.Source("text.d45ae247faf6")
 		return
 	}
 	executable, err := os.Executable()
 	if err != nil {
-		p.feedback = "ERROR AL ABRIR MAPA"
+		p.feedback = i18n.Source("text.590655f681fb")
 		return
 	}
 	cmd := exec.Command(executable, "--ais-map", p.snapshotPath)
 	cmd.SysProcAttr = rtl433ViewerProcessAttributes()
 	if err = cmd.Start(); err != nil {
-		p.feedback = "ERROR AL ABRIR MAPA"
+		p.feedback = i18n.Source("text.590655f681fb")
 		return
 	}
 	p.viewer = cmd
 	p.viewerDone = make(chan struct{})
 	done := p.viewerDone
 	go func() { _ = cmd.Wait(); close(done) }()
-	p.feedback = "MAPA ABIERTO"
+	p.feedback = i18n.Source("text.60ac967b38ed")
 }
 func (p *AISPanel) DrawPanel() {
-	status := ais.Status{State: "SIN RECEPTOR"}
+	status := ais.Status{State: i18n.Source("text.810e0d52136b")}
 	var vessels []ais.Vessel
 	if p.screen.receiver != nil {
 		status = p.screen.receiver.AISStatus()
 		vessels = p.screen.receiver.AISVessels()
 	}
-	simpleui.DrawText(fmt.Sprintf("AIS MARÍTIMO · 161.975 / 162.025 MHz · %s · %d barcos · %d mensajes", status.State, len(vessels), status.Messages), 40, toolY+7, 12, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.e875b1e3a6ad"), status.State, len(vessels), status.Messages), 40, toolY+7, 12, colors.cyan)
 	if status.Error != "" {
 		simpleui.DrawText(sondeClip(status.Error, 100), 570, toolY+38, 12, colors.red)
 	} else {
-		simpleui.DrawText("Recepción simultánea de los dos canales AIS", 570, toolY+38, 12, colors.muted)
+		simpleui.DrawText(i18n.Source("text.df56a0a60cfd"), 570, toolY+38, 12, colors.muted)
 	}
 	cols := []struct {
 		x    float32
 		name string
-	}{{40, "BARCO / MMSI"}, {310, "ÚLTIMA"}, {410, "LATITUD"}, {535, "LONGITUD"}, {665, "VEL. kn"}, {770, "RUMBO"}, {880, "ESTADO"}, {1090, "DESTINO"}}
+	}{{40, i18n.Source("text.86bc0565e4a8")}, {310, i18n.Source("text.a1f6986b3cd0")}, {410, i18n.Source("text.5b99241b86d1")}, {535, i18n.Source("text.b0ddd4ea3459")}, {665, i18n.Source("text.0ac388f099a3")}, {770, i18n.Source("text.6cbb45c7f467")}, {880, i18n.Source("text.f16fe7d4376e")}, {1090, i18n.Source("text.2adab83f1039")}}
 	for _, c := range cols {
 		simpleui.DrawText(c.name, c.x, toolY+78, 12, colors.muted)
 	}
@@ -192,7 +194,7 @@ func (p *AISPanel) DrawPanel() {
 		}
 		name := v.Name
 		if name == "" {
-			name = fmt.Sprintf("MMSI %09d", v.MMSI)
+			name = fmt.Sprintf(i18n.Source("text.9694010de751"), v.MMSI)
 		}
 		lat, lon, speed, course := "--", "--", "--", "--"
 		if v.Latitude != nil {
@@ -213,7 +215,7 @@ func (p *AISPanel) DrawPanel() {
 		}
 	}
 	if len(vessels) == 0 {
-		simpleui.DrawText("Pulsa INICIAR para decodificar AIS desde el receptor SDR. ABRIR MAPA muestra las posiciones en otra ventana.", 40, toolY+110, 13, colors.muted)
+		simpleui.DrawText(i18n.Source("text.40928f3855aa"), 40, toolY+110, 13, colors.muted)
 	}
-	simpleui.DrawText(sondeClip(p.feedback+"  AIS-catcher · mapa local sin conexión a Internet", 150), 40, toolY+174, 12, colors.muted)
+	simpleui.DrawText(sondeClip(p.feedback+i18n.Source("text.85ae4ddda2ad"), 150), 40, toolY+174, 12, colors.muted)
 }

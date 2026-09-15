@@ -1,6 +1,8 @@
 package tetra
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"math"
 	"path/filepath"
@@ -198,7 +200,7 @@ func New(inputRate float64, codecPath string, onAudio func([]float32)) *Decoder 
 	if inputRate <= 0 {
 		inputRate = 2_048_000
 	}
-	d := &Decoder{rate: inputRate, state: "DETENIDO", users: make(map[uint32]User), groups: make(map[uint32]Group), calls: make(map[uint16]Call), neighbours: make(map[uint8]Neighbour), positions: make(map[uint32]Position), fragments: make(map[uint32]llcFragment), onAudio: onAudio}
+	d := &Decoder{rate: inputRate, state: i18n.Source("text.7dc7253c376a"), users: make(map[uint32]User), groups: make(map[uint32]Group), calls: make(map[uint16]Call), neighbours: make(map[uint8]Neighbour), positions: make(map[uint32]Position), fragments: make(map[uint32]llcFragment), onAudio: onAudio}
 	for slot := range d.voice {
 		path := codecPath
 		if slot > 0 && codecPath != "" {
@@ -217,7 +219,7 @@ func New(inputRate float64, codecPath string, onAudio func([]float32)) *Decoder 
 	d.activeCallID = 0
 	d.audioFrames, d.lastAudio = 0, time.Time{}
 	d.channelErrors, d.channelBits, d.channelFrames, d.channelBad = 0, 0, 0, 0
-	d.lastAudioDecision = "ESPERANDO TRÁFICO"
+	d.lastAudioDecision = i18n.Source("text.f23c887ad72d")
 	d.audioRejectedEncrypted, d.audioRejectedUnselected = 0, 0
 	d.audioRejectedInactive, d.audioRejectedDamaged = 0, 0
 	d.clearAudioOnly = true
@@ -246,7 +248,7 @@ func (d *Decoder) Configure(enabled bool) {
 	if !enabled {
 		stop, done := d.stop, d.done
 		d.running = false
-		d.state = "DETENIDO"
+		d.state = i18n.Source("text.7dc7253c376a")
 		d.mu.Unlock()
 		close(stop)
 		<-done
@@ -256,7 +258,7 @@ func (d *Decoder) Configure(enabled bool) {
 	d.stop = make(chan struct{})
 	d.done = make(chan struct{})
 	d.running = true
-	d.state = "BUSCANDO SINCRONÍA"
+	d.state = i18n.Source("text.ffd67419a304")
 	d.totalBits, d.lastSyncBit = 0, 0
 	queue, stop, done := d.queue, d.stop, d.done
 	d.mu.Unlock()
@@ -356,7 +358,7 @@ func (d *Decoder) Snapshot() Status {
 	if time.Since(d.activeAudioSeen) > 5*time.Second {
 		activeAudioSlot = 0
 	}
-	codecReady, codecError := false, "CÓDEC NO CONFIGURADO"
+	codecReady, codecError := false, i18n.Source("text.f5eba8656a25")
 	codecReady = true
 	for _, voice := range d.voice {
 		if voice == nil || !voice.ready {
@@ -560,12 +562,12 @@ func (d *Decoder) run(queue <-chan []float32, stop <-chan struct{}, done chan<- 
 						d.syncHits++
 						d.lastSyncBit = d.totalBits
 						d.lastSync = time.Now()
-						d.state = "SYNC TETRA REAL"
+						d.state = i18n.Source("text.1a0eec2ea2d8")
 						start := len(bits) - len(syncTraining) - 120
 						if start >= 0 {
 							if si, ok := decodeBSCH(bits[start : start+120]); ok {
 								d.system = si
-								d.state = "BSCH DECODIFICADO"
+								d.state = i18n.Source("text.3ae12d84005b")
 							} else {
 								d.bschFailures++
 							}
@@ -591,9 +593,9 @@ func (d *Decoder) run(queue <-chan []float32, stop <-chan struct{}, done chan<- 
 						}
 						d.lastSync = time.Now()
 						if isNDB2 {
-							d.state = "RÁFAGA NDB2 TETRA"
+							d.state = i18n.Source("text.ca0891cf37a5")
 						} else {
-							d.state = "RÁFAGA NDB1 TETRA"
+							d.state = i18n.Source("text.4941d8345139")
 						}
 						d.mu.Unlock()
 						if detectedSlot >= 0 && d.totalBits >= 266 {
@@ -631,7 +633,7 @@ func (d *Decoder) run(queue <-chan []float32, stop <-chan struct{}, done chan<- 
 				d.timingError = float32(math.Sqrt(math.Max(timingScore[timingPhase], 0)))
 				d.points = append(d.points[:0], points...)
 				if time.Since(d.lastSync) > 2*time.Second {
-					d.state = "BUSCANDO SYNC / NTS1"
+					d.state = i18n.Source("text.3593ef92d400")
 				}
 				d.mu.Unlock()
 				phaseErrorSum, freqSum, powerSum = 0, 0, 0
@@ -713,10 +715,10 @@ func (d *Decoder) processNormalBurst(burst []byte, slot int, ndb2 bool) {
 		if aachOK && usage > 3 && !secondHalfStolen {
 			if d.activeAudioSlot != int8(slot+1) || time.Since(d.activeAudioSeen) > 5*time.Second {
 				d.audioRejectedUnselected++
-				d.lastAudioDecision = fmt.Sprintf("TS%d NDB2 NO SELECCIONADO", slot+1)
+				d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.2a23a8778525"), slot+1)
 			} else if d.clearAudioOnly && d.slotEncrypted[slot] != 0 {
 				d.audioRejectedEncrypted++
-				d.lastAudioDecision = fmt.Sprintf("TS%d NDB2 CIFRADO O DESCONOCIDO", slot+1)
+				d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.7eb6ee09206c"), slot+1)
 			} else if half := descrambleBlock(coded[216:], si); half != nil {
 				voiceBits := make([]byte, 432)
 				copy(voiceBits[216:], half)
@@ -764,7 +766,7 @@ func (d *Decoder) processMACPayloadLocked(payload []byte, slot int) {
 		case 2:
 			if network, valid := parseMACSysinfo(pdu); valid {
 				d.network = network
-				d.state = "SYSINFO DECODIFICADO"
+				d.state = i18n.Source("text.b8e9cb5666a8")
 			}
 			// Broadcast PDUs occupy their logical channel; remaining decoded
 			// bits are padding rather than another concatenated MAC PDU.
@@ -777,33 +779,33 @@ func (d *Decoder) processMACPayloadLocked(payload []byte, slot int) {
 
 func (d *Decoder) processVoiceLocked(coded []byte, si SystemInfo, slot int) {
 	if d.onAudio == nil || slot < 0 || slot > 3 {
-		d.lastAudioDecision = "SALIDA DE AUDIO NO DISPONIBLE"
+		d.lastAudioDecision = i18n.Source("text.6c1b0a200965")
 		return
 	}
 	if d.clearAudioOnly && d.slotEncrypted[slot] != 0 {
 		d.audioRejectedEncrypted++
 		if d.slotEncrypted[slot] < 0 {
-			d.lastAudioDecision = fmt.Sprintf("TS%d CIFRADO DESCONOCIDO", slot+1)
+			d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.9f2b662ac114"), slot+1)
 		} else {
-			d.lastAudioDecision = fmt.Sprintf("TS%d CIFRADO", slot+1)
+			d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.a77e9dacae7f"), slot+1)
 		}
 		return
 	}
 	if d.activeAudioSlot != int8(slot+1) || time.Since(d.activeAudioSeen) > 5*time.Second {
 		d.audioRejectedUnselected++
-		d.lastAudioDecision = fmt.Sprintf("TS%d NO SELECCIONADO", slot+1)
+		d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.821b9e6355ad"), slot+1)
 		return
 	}
 	voice := d.voice[slot]
 	if voice == nil || !voice.ready {
 		d.audioRejectedInactive++
-		d.lastAudioDecision = "CÓDEC DE VOZ NO DISPONIBLE"
+		d.lastAudioDecision = i18n.Source("text.6e2f954078c1")
 		return
 	}
 	type4 := descrambleFullSlot(coded, si)
 	if type4 == nil {
 		d.audioRejectedDamaged++
-		d.lastAudioDecision = "TRAMA SIN SCRAMBLER VÁLIDO"
+		d.lastAudioDecision = i18n.Source("text.6f25d4113ad0")
 		return
 	}
 	d.processVoiceBitsLocked(type4, slot, false)
@@ -814,12 +816,12 @@ func (d *Decoder) processVoiceBitsLocked(type4 []byte, slot int, stolen bool) {
 	pcm, ok := voice.decode(type4, stolen)
 	if !ok {
 		d.audioRejectedDamaged++
-		d.lastAudioDecision = fmt.Sprintf("TS%d TRAMA DE VOZ RECHAZADA", slot+1)
+		d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.1623e5216486"), slot+1)
 		return
 	}
 	d.audioFrames++
 	d.lastAudio = time.Now()
-	d.lastAudioDecision = fmt.Sprintf("REPRODUCIENDO TS%d", slot+1)
+	d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.666d67a4beb1"), slot+1)
 	d.onAudio(pcm)
 }
 
@@ -842,7 +844,7 @@ func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
 	address, reason, ok := parseMACResourceDetailed(payload)
 	if !ok {
 		d.macRejected++
-		if reason == "ASIGNACION CIFRADA" {
+		if reason == i18n.Source("text.16d64e4e5757") {
 			d.macEncrypted++
 		}
 		return
@@ -868,7 +870,7 @@ func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
 	fresh := userFromResource(address, slot+1)
 	fresh.Seen = u.Seen + 1
 	d.users[address.SSI] = fresh
-	d.state = "MAC-RESOURCE DECODIFICADO"
+	d.state = i18n.Source("text.4af968458e3c")
 	pdu, llcOK := parseLLC(payload, address)
 	if !llcOK || pdu.FCSInvalid {
 		d.llcRejected++
@@ -908,13 +910,13 @@ func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
 		now := time.Now()
 		text := cmce.Kind
 		if cmce.CallID != 0 {
-			text += fmt.Sprintf(" · CALL %d", cmce.CallID)
+			text += fmt.Sprintf(i18n.Source("text.b93dd9106135"), cmce.CallID)
 		}
 		event := Message{Time: now, Kind: cmce.Kind, Text: text, AddressSSI: address.SSI, Slot: uint8(slot + 1), Encrypted: address.Encrypted, Recognized: true}
 		if cmce.Code == 0 || cmce.Code == 1 || cmce.Code == 2 || cmce.Code == 7 || cmce.Code == 11 {
 			g := d.groups[address.SSI]
 			g.ID = address.SSI
-			g.Name = "DESTINO CMCE"
+			g.Name = i18n.Source("text.2021937d53ce")
 			g.LastSeen = now
 			g.Calls++
 			g.LastEvent = cmce.Kind
@@ -941,7 +943,7 @@ func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
 				if len(cmce.SDS) >= 8 {
 					protocol = uint8(bitsToUint(cmce.SDS, 0, 8))
 				}
-				d.messages = append([]Message{{Time: now, Kind: "SDS NO INTERPRETADO", Text: fmt.Sprintf("Protocolo %d · %d bits", protocol, len(cmce.SDS)), AddressSSI: address.SSI, PartySSI: caller, Slot: uint8(slot + 1), Encrypted: address.Encrypted, SDS: true, SDSDataType: cmce.SDSDataType, SDSProtocol: protocol, ProtocolName: sdsProtocolName(protocol), RawHex: bitsToHex(cmce.SDS), RawBits: len(cmce.SDS)}}, d.messages...)
+				d.messages = append([]Message{{Time: now, Kind: i18n.Source("text.eeb166f565bb"), Text: fmt.Sprintf(i18n.Source("text.fd16f493a08d"), protocol, len(cmce.SDS)), AddressSSI: address.SSI, PartySSI: caller, Slot: uint8(slot + 1), Encrypted: address.Encrypted, SDS: true, SDSDataType: cmce.SDSDataType, SDSProtocol: protocol, ProtocolName: sdsProtocolName(protocol), RawHex: bitsToHex(cmce.SDS), RawBits: len(cmce.SDS)}}, d.messages...)
 			}
 		} else {
 			d.messages = append([]Message{event}, d.messages...)
@@ -949,13 +951,13 @@ func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
 		if len(d.messages) > 200 {
 			d.messages = d.messages[:200]
 		}
-		d.state = "CMCE " + cmce.Kind
+		d.state = i18n.Source("text.294f01df2e1e") + cmce.Kind
 	} else {
 		if parsed, ok := parseNeighbourBroadcast(tl, d.system, d.network); ok {
 			for _, neighbour := range parsed {
 				d.neighbours[neighbour.CellID] = neighbour
 			}
-			d.state = "CELDAS VECINAS DECODIFICADAS"
+			d.state = i18n.Source("text.79cfaa890cbf")
 			return
 		}
 		d.llcNonCMCE++

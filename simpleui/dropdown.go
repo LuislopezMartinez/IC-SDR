@@ -1,5 +1,7 @@
 package simpleui
 
+import "go-zero/internal/i18n"
+
 import rl "github.com/gen2brain/raylib-go/raylib"
 
 // Dropdown displays a selectable list in an overlay.
@@ -71,7 +73,7 @@ func (dropdown *Dropdown) SetItems(items []string) {
 // SetSelected changes the selection without emitting OnChange. Use -1 to clear it.
 func (dropdown *Dropdown) SetSelected(index int) {
 	if index < -1 || index >= len(dropdown.items) {
-		panic("simpleui: dropdown selection is outside its item list")
+		panic(i18n.Source("text.ac0ed6c5b521"))
 	}
 	dropdown.selected = index
 	dropdown.highlighted = index
@@ -180,7 +182,7 @@ func (dropdown *Dropdown) Draw() {
 		color = theme.TextMuted
 	}
 	textY := bounds.Y + (bounds.Height-MeasureTextStyled("Ag", dropdown.fontSize, dropdown.font).Y)*0.5
-	DrawTextStyled(text, bounds.X+12, textY, dropdown.fontSize, dropdown.font, color)
+	DrawTextStyled(dropdown.fitText(text, bounds.Width-48), bounds.X+12, textY, dropdown.fontSize, dropdown.font, color)
 	dropdown.drawArrow()
 	if !dropdown.Enabled() && dropdown.disabledText != "" {
 		width := MeasureText(dropdown.disabledText, 12).X
@@ -204,9 +206,34 @@ func (dropdown *Dropdown) DrawOverlay() {
 			rl.DrawRectangleRec(item, theme.InputSelection)
 		}
 		textY := item.Y + (item.Height-MeasureTextStyled("Ag", dropdown.fontSize, dropdown.font).Y)*0.5
-		DrawTextStyled(dropdown.items[index], item.X+11, textY, dropdown.fontSize, dropdown.font, theme.Text)
+		DrawTextStyled(dropdown.fitText(dropdown.items[index], item.Width-24), item.X+11, textY, dropdown.fontSize, dropdown.font, theme.Text)
 	}
 	dropdown.drawScrollbar(popup)
+}
+
+func (dropdown *Dropdown) fitText(value string, width float32) string {
+	if width <= 0 {
+		return ""
+	}
+	if MeasureTextStyled(value, dropdown.fontSize, dropdown.font).X <= width {
+		return value
+	}
+	const ellipsis = "…"
+	ellipsisWidth := MeasureTextStyled(ellipsis, dropdown.fontSize, dropdown.font).X
+	if ellipsisWidth > width {
+		return ""
+	}
+	runes := []rune(value)
+	low, high := 0, len(runes)
+	for low < high {
+		mid := (low + high + 1) / 2
+		if MeasureTextStyled(string(runes[:mid]), dropdown.fontSize, dropdown.font).X+ellipsisWidth <= width {
+			low = mid
+		} else {
+			high = mid - 1
+		}
+	}
+	return string(runes[:low]) + ellipsis
 }
 
 func (dropdown *Dropdown) handleOverlayKeyboard() {

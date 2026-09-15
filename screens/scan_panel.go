@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"math"
 	"strings"
@@ -41,7 +43,7 @@ func NewScanPanel(screen *MainScreen) *ScanPanel {
 	}
 	return &ScanPanel{screen: screen, centerToMemory: screen.scanCenterToMemory, resume: screen.scanResume, policy: screen.scanPolicy, dwellMs: screen.scanDwellMs,
 		minimumHz: minimum, maximumHz: maximum,
-		activePeakHz: -1, currentMemory: -1, status: "READY", overlayVisible: true}
+		activePeakHz: -1, currentMemory: -1, status: i18n.Source("text.c2e3ac47f4a3"), overlayVisible: true}
 }
 
 func (p *ScanPanel) Enter() {
@@ -57,7 +59,7 @@ func (p *ScanPanel) Enter() {
 func (p *ScanPanel) Stop() {
 	p.running, p.listening = false, false
 	p.consecutiveHits, p.currentMemory, p.activePeakHz = 0, -1, -1
-	p.status = "READY"
+	p.status = i18n.Source("text.c2e3ac47f4a3")
 }
 
 func (p *ScanPanel) Update(spectrum []float32) {
@@ -82,16 +84,16 @@ func (p *ScanPanel) updateWatch(spectrum []float32) {
 		if current != nil {
 			level = current.levelDB
 		}
-		if p.policy == "STRONGER" {
+		if p.policy == i18n.Source("text.8cb51251cc49") {
 			alternative := p.findPeak(spectrum, p.minimumHz, p.maximumHz, p.activePeakHz-half, p.activePeakHz+half)
 			if alternative != nil && alternative.levelDB >= p.thresholdDB() && alternative.levelDB >= level+6 {
 				p.activePeakHz = alternative.frequencyHz
 				p.tuneDetected(alternative)
 				p.lastSignalAt = rl.GetTime()
 				if p.currentMemory >= 0 {
-					p.status = "JUMP MEMORY  " + p.screen.memoryPanel.memories[p.currentMemory].Name
+					p.status = i18n.Source("text.d21296b55fce") + p.screen.memoryPanel.memories[p.currentMemory].Name
 				} else {
-					p.status = "JUMP  " + formatScanMHz(alternative.frequencyHz)
+					p.status = i18n.Source("text.f27222c817b4") + formatScanMHz(alternative.frequencyHz)
 				}
 				return
 			}
@@ -104,10 +106,10 @@ func (p *ScanPanel) updateWatch(spectrum []float32) {
 
 func memoryPassband(memory MemoryEntry) (int64, int64) {
 	bw := int64(max(memory.FilterBandwidthHz, 1000))
-	if memory.Mode == "USB" {
+	if memory.Mode == i18n.Source("text.61f0acff1735") {
 		return memory.FrequencyHz, memory.FrequencyHz + bw
 	}
-	if memory.Mode == "LSB" {
+	if memory.Mode == i18n.Source("text.6323db4948ad") {
 		return memory.FrequencyHz - bw, memory.FrequencyHz
 	}
 	return memory.FrequencyHz - bw/2, memory.FrequencyHz + bw/2
@@ -124,21 +126,21 @@ func (p *ScanPanel) processCandidate(peak *scanPeak) {
 	}
 	if peak == nil || peak.levelDB < p.thresholdDB() {
 		p.consecutiveHits = 0
-		p.status = "SCANNING"
+		p.status = i18n.Source("text.368328f69b28")
 		return
 	}
 	p.consecutiveHits++
 	if p.consecutiveHits < 3 {
-		p.status = fmt.Sprintf("VERIFY  %.0f dB", peak.levelDB)
+		p.status = fmt.Sprintf(i18n.Source("text.594e6fa45a21"), peak.levelDB)
 		return
 	}
 	p.activePeakHz = peak.frequencyHz
 	p.tuneDetected(peak)
 	p.listening, p.consecutiveHits, p.lastSignalAt = true, 0, rl.GetTime()
 	if p.currentMemory >= 0 {
-		p.status = "LISTENING  " + p.screen.memoryPanel.memories[p.currentMemory].Name
+		p.status = i18n.Source("text.58e004a8ae5d") + p.screen.memoryPanel.memories[p.currentMemory].Name
 	} else {
-		p.status = "SIGNAL  " + formatScanMHz(peak.frequencyHz)
+		p.status = i18n.Source("text.9a686f8614c7") + formatScanMHz(peak.frequencyHz)
 	}
 }
 
@@ -147,12 +149,12 @@ func (p *ScanPanel) processListening(level float32) {
 		p.lastSignalAt = rl.GetTime()
 		return
 	}
-	if p.resume == "HOLD" {
-		p.status = "HOLD"
+	if p.resume == i18n.Source("text.aacf94b7be62") {
+		p.status = i18n.Source("text.aacf94b7be62")
 		return
 	}
 	delay := .3
-	if p.resume == "DELAY" {
+	if p.resume == i18n.Source("text.85135a165905") {
 		delay = float64(p.dwellMs) / 1000
 	}
 	if rl.GetTime()-p.lastSignalAt >= delay {
@@ -164,7 +166,7 @@ func (p *ScanPanel) thresholdDB() float32 { return float32(p.screen.squelchThres
 
 func (p *ScanPanel) stopListening() {
 	p.listening, p.consecutiveHits = false, 0
-	p.currentMemory, p.activePeakHz, p.status = -1, -1, "SCANNING"
+	p.currentMemory, p.activePeakHz, p.status = -1, -1, i18n.Source("text.368328f69b28")
 }
 
 func (p *ScanPanel) tuneDetected(peak *scanPeak) {
@@ -208,9 +210,9 @@ func (p *ScanPanel) matchingMemory(frequencyHz int64) int {
 func (p *ScanPanel) tunePeak(frequencyHz int64, centered bool) {
 	dial := frequencyHz
 	if p.screen.audioPanel != nil {
-		if p.screen.mode.SelectedText() == "USB" {
+		if p.screen.mode.SelectedText() == i18n.Source("text.61f0acff1735") {
 			dial -= int64(p.screen.audioPanel.pbtLow)
-		} else if p.screen.mode.SelectedText() == "LSB" {
+		} else if p.screen.mode.SelectedText() == i18n.Source("text.6323db4948ad") {
 			dial += int64(p.screen.audioPanel.pbtLow)
 		}
 	}
@@ -280,48 +282,48 @@ func (p *ScanPanel) ToggleRunning() {
 	if p.running {
 		p.screen.centerMode = false
 		p.syncModeSwitch()
-		p.status = "SCANNING"
+		p.status = i18n.Source("text.368328f69b28")
 	} else {
-		p.status = "READY"
+		p.status = i18n.Source("text.c2e3ac47f4a3")
 		p.syncModeSwitch()
 	}
 }
 
 func (p *ScanPanel) DrawPanel() {
-	simpleui.DrawTextStyled("SCANNER", 42, 644, 16, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(i18n.Source("text.3ab76426b6b1"), 42, 644, 16, simpleui.FontSemiBold, colors.cyan)
 	simpleui.DrawTextStyled(p.displayStatus(), 165, 643, 15, simpleui.FontSemiBold, func() rl.Color {
 		if p.running {
 			return colors.green
 		}
 		return colors.muted
 	}())
-	simpleui.DrawTextStyled(fmt.Sprintf("RANGO %.5f–%.5f MHz  ·  DISPARO SQL %d dBm", float64(p.minimumHz)/1e6, float64(p.maximumHz)/1e6, p.screen.squelchThreshold), 720, 645, 13, simpleui.FontSemiBold, colors.muted)
+	simpleui.DrawTextStyled(fmt.Sprintf(i18n.Source("text.b36443dc69a7"), float64(p.minimumHz)/1e6, float64(p.maximumHz)/1e6, p.screen.squelchThreshold), 720, 645, 13, simpleui.FontSemiBold, colors.muted)
 	memoryColor := rl.Color{R: 45, G: 58, B: 72, A: 255}
-	memoryDetail := "OFF · Sintonizar el pico"
+	memoryDetail := i18n.Source("text.65d91a8169bb")
 	if p.centerToMemory {
 		memoryColor = rl.Color{R: 20, G: 120, B: 155, A: 255}
-		memoryDetail = "ON · Si coincide con un canal"
+		memoryDetail = i18n.Source("text.61e9965fdaeb")
 	}
-	drawScanButton(42, 678, 220, 58, "AJUSTAR A MEMORIA", memoryDetail, memoryColor)
-	drawScanButton(276, 678, 220, 58, "AL PERDER LA SEÑAL  ▾", p.resumeDescription(), rl.Color{R: 150, G: 95, B: 18, A: 255})
-	drawScanButton(510, 678, 190, 58, fmt.Sprintf("ESPERA %d s  ▾", p.dwellMs/1000), "Antes de continuar", rl.Color{R: 70, G: 68, B: 55, A: 255})
-	startColor, startText, startDetail := rl.Color{R: 25, G: 125, B: 65, A: 255}, "INICIAR ESCANEO", "Buscar entre MIN y MAX"
+	drawScanButton(42, 678, 220, 58, i18n.Source("text.1ab4548ebac8"), memoryDetail, memoryColor)
+	drawScanButton(276, 678, 220, 58, i18n.Source("text.97d93859b616"), p.resumeDescription(), rl.Color{R: 150, G: 95, B: 18, A: 255})
+	drawScanButton(510, 678, 190, 58, fmt.Sprintf(i18n.Source("text.0941f1ae0f33"), p.dwellMs/1000), i18n.Source("text.ab2f402a25a7"), rl.Color{R: 70, G: 68, B: 55, A: 255})
+	startColor, startText, startDetail := rl.Color{R: 25, G: 125, B: 65, A: 255}, i18n.Source("text.b4fe709f8dde"), i18n.Source("text.00c06d82f25a")
 	if p.running {
-		startColor, startText, startDetail = rl.Color{R: 155, G: 42, B: 35, A: 255}, "DETENER ESCANEO", "Conservar frecuencia actual"
+		startColor, startText, startDetail = rl.Color{R: 155, G: 42, B: 35, A: 255}, i18n.Source("text.5a97c42b8106"), i18n.Source("text.e726c37337e1")
 	}
 	drawScanButton(714, 678, 190, 58, startText, startDetail, startColor)
-	saveTitle, saveDetail := "GUARDAR MEMORIA", "Frecuencia y ajustes actuales"
+	saveTitle, saveDetail := i18n.Source("text.6ff697259e83"), i18n.Source("text.241615dbf1e4")
 	saveColor := rl.Color{R: 25, G: 85, B: 145, A: 255}
 	if rl.GetTime() < p.saveFeedbackUntil {
-		saveTitle, saveDetail = "MEMORIA GUARDADA  ✓", p.savedMemoryName
+		saveTitle, saveDetail = i18n.Source("text.0da8ee259f58"), p.savedMemoryName
 		saveColor = rl.Color{R: 24, G: 125, B: 70, A: 255}
 	}
 	drawScanButton(918, 678, 190, 58, saveTitle, saveDetail, saveColor)
-	drawScanButton(1122, 678, 260, 58, "DURANTE LA ESCUCHA  ▾", p.policyDescription(), rl.Color{R: 45, G: 58, B: 72, A: 255})
+	drawScanButton(1122, 678, 260, 58, i18n.Source("text.f00673420f00"), p.policyDescription(), rl.Color{R: 45, G: 58, B: 72, A: 255})
 	if p.choiceMenu != "" {
 		p.drawChoiceStrip()
 	} else {
-		simpleui.DrawTextStyled("Arrastra MIN y MAX sobre el FFT · El nivel SQL es el disparo del scanner", 42, 760, 14, simpleui.FontRegular, colors.muted)
+		simpleui.DrawTextStyled(i18n.Source("text.7c2a22ae4d58"), 42, 760, 14, simpleui.FontRegular, colors.muted)
 	}
 }
 
@@ -345,7 +347,7 @@ func (p *ScanPanel) updateInput() {
 	mouse := simpleui.MousePosition()
 	// The scanner now lives permanently in the sidebar. Keep its MIN/MAX
 	// guides draggable on the FFT without activating the removed legacy panel.
-	if p.screen.activeTool != "SCAN" {
+	if p.screen.activeTool != i18n.Source("text.7a1580c49e45") {
 		if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
 			p.beginGuideDrag(mouse)
 		}
@@ -414,8 +416,8 @@ func (p *ScanPanel) toggleChoiceMenu(name string) {
 func (p *ScanPanel) choiceOptions() ([]string, int) {
 	switch p.choiceMenu {
 	case "resume":
-		selected := map[string]int{"AUTO": 0, "DELAY": 1, "HOLD": 2}[p.resume]
-		return []string{"CONTINUAR RÁPIDO", "ESPERAR Y CONTINUAR", "QUEDARSE EN LA SEÑAL"}, selected
+		selected := map[string]int{i18n.Source("text.6ea56fae9eac"): 0, i18n.Source("text.85135a165905"): 1, i18n.Source("text.aacf94b7be62"): 2}[p.resume]
+		return []string{i18n.Source("text.6644e058a60c"), i18n.Source("text.f59d9399e141"), i18n.Source("text.892e8fdfcc94")}, selected
 	case "dwell":
 		values := []int{1000, 2000, 3000, 5000, 10000}
 		selected := 0
@@ -429,10 +431,10 @@ func (p *ScanPanel) choiceOptions() ([]string, int) {
 		return labels, selected
 	case "policy":
 		selected := 0
-		if p.policy == "STRONGER" {
+		if p.policy == i18n.Source("text.8cb51251cc49") {
 			selected = 1
 		}
-		return []string{"MANTENER SEÑAL ACTUAL", "SALTAR A OTRA MÁS FUERTE"}, selected
+		return []string{i18n.Source("text.f16e1a114189"), i18n.Source("text.5b7e51d47e4a")}, selected
 	}
 	return nil, -1
 }
@@ -466,11 +468,11 @@ func (p *ScanPanel) selectChoice(mouse rl.Vector2) bool {
 	index := min(max(int((mouse.X-300)/(1000/float32(len(options)))), 0), len(options)-1)
 	switch p.choiceMenu {
 	case "resume":
-		p.resume = []string{"AUTO", "DELAY", "HOLD"}[index]
+		p.resume = []string{i18n.Source("text.6ea56fae9eac"), i18n.Source("text.85135a165905"), i18n.Source("text.aacf94b7be62")}[index]
 	case "dwell":
 		p.dwellMs = []int{1000, 2000, 3000, 5000, 10000}[index]
 	case "policy":
-		p.policy = []string{"CURRENT", "STRONGER"}[index]
+		p.policy = []string{i18n.Source("text.e3cc57e193d6"), i18n.Source("text.8cb51251cc49")}[index]
 	}
 	p.choiceMenu = ""
 	p.screen.markSettingsDirty()
@@ -480,37 +482,37 @@ func (p *ScanPanel) selectChoice(mouse rl.Vector2) bool {
 func (p *ScanPanel) resumeDescription() string {
 	switch p.resume {
 	case "AUTO":
-		return "Continuar rápidamente"
+		return i18n.Source("text.630bf4d7beca")
 	case "HOLD":
-		return "Permanecer detenido"
+		return i18n.Source("text.5d729fabca83")
 	default:
-		return "Esperar y continuar"
+		return i18n.Source("text.a7f460cb08f7")
 	}
 }
 
 func (p *ScanPanel) policyDescription() string {
-	if p.policy == "STRONGER" {
-		return "Saltar a otra más fuerte"
+	if p.policy == i18n.Source("text.8cb51251cc49") {
+		return i18n.Source("text.8dbbb1195b28")
 	}
-	return "Mantener señal actual"
+	return i18n.Source("text.a525b7eaa09c")
 }
 
 func (p *ScanPanel) displayStatus() string {
 	switch {
 	case p.status == "READY":
-		return "PREPARADO"
+		return i18n.Source("text.d78afe9b19e4")
 	case p.status == "SCANNING":
-		return "BUSCANDO TRANSMISIONES"
+		return i18n.Source("text.56307fcca4b2")
 	case p.status == "HOLD":
-		return "ESCUCHA RETENIDA"
+		return i18n.Source("text.8938a45da268")
 	case strings.HasPrefix(p.status, "VERIFY"):
-		return "VERIFICANDO" + strings.TrimPrefix(p.status, "VERIFY")
+		return i18n.Source("text.d6d6ffba9552") + strings.TrimPrefix(p.status, i18n.Source("text.188a5356a091"))
 	case strings.HasPrefix(p.status, "SIGNAL"):
-		return "ESCUCHANDO" + strings.TrimPrefix(p.status, "SIGNAL")
+		return i18n.Source("text.b81e489cf9d6") + strings.TrimPrefix(p.status, i18n.Source("text.8e1a5272bdd1"))
 	case strings.HasPrefix(p.status, "LISTENING"):
-		return "ESCUCHANDO" + strings.TrimPrefix(p.status, "LISTENING")
+		return i18n.Source("text.b81e489cf9d6") + strings.TrimPrefix(p.status, i18n.Source("text.18f4914611d3"))
 	case strings.HasPrefix(p.status, "JUMP"):
-		return "CAMBIO" + strings.TrimPrefix(p.status, "JUMP")
+		return i18n.Source("text.1bd8ee8cff59") + strings.TrimPrefix(p.status, i18n.Source("text.f8b3c726c4df"))
 	default:
 		return p.status
 	}
@@ -552,10 +554,10 @@ func (p *ScanPanel) DrawSpectrumOverlay(x, y, w, h float32) {
 		rl.DrawRectangleRec(rl.Rectangle{X: minX, Y: y, Width: max(0, maxX-minX), Height: h - 26}, rl.Color{R: 25, G: 155, B: 220, A: 25})
 		rl.DrawLineEx(rl.Vector2{X: minX, Y: y}, rl.Vector2{X: minX, Y: y + h - 26}, 2, colors.cyan)
 		rl.DrawLineEx(rl.Vector2{X: maxX, Y: y}, rl.Vector2{X: maxX, Y: y + h - 26}, 2, colors.cyan)
-		drawScanTag(fmt.Sprintf("MIN %.5f", float64(p.minimumHz)/1e6), minX, y+50)
-		drawScanTag(fmt.Sprintf("MAX %.5f", float64(p.maximumHz)/1e6), maxX, y+78)
+		drawScanTag(fmt.Sprintf(i18n.Source("text.93f24c02fb1a"), float64(p.minimumHz)/1e6), minX, y+50)
+		drawScanTag(fmt.Sprintf(i18n.Source("text.68ab84e8e4f6"), float64(p.maximumHz)/1e6), maxX, y+78)
 	}
-	if p.running && p.screen.activeTool != "SCAN" {
+	if p.running && p.screen.activeTool != i18n.Source("text.7a1580c49e45") {
 		p.drawCompact(x+w-330, y+8)
 	}
 }
@@ -578,10 +580,12 @@ func (p *ScanPanel) drawCompact(x, y float32) {
 	rl.DrawRectangleRoundedLinesEx(bounds, .2, 6, 1, colors.cyan)
 	rl.DrawCircle(int32(x+15), int32(y+14), 5, colors.green)
 	textColor := simpleui.EnsureTextContrast(colors.text, background)
-	simpleui.DrawTextStyled("SCAN  ·  "+p.status, x+29, y+6, 12, simpleui.FontSemiBold, textColor)
+	simpleui.DrawTextStyled(i18n.Source("text.312992971874")+p.status, x+29, y+6, 12, simpleui.FontSemiBold, textColor)
 	if !p.screen.overlayOpen() && rl.IsMouseButtonPressed(rl.MouseButtonLeft) && rl.CheckCollisionPointRec(simpleui.MousePosition(), bounds) {
 		p.screen.uiSounds.PlayToolSelect()
-		p.screen.selectTool("SCAN")
+		p.screen.selectTool(i18n.Source("text.7a1580c49e45"))
 	}
 }
-func formatScanMHz(hz int64) string { return fmt.Sprintf("%.5f MHz", float64(hz)/1e6) }
+func formatScanMHz(hz int64) string {
+	return fmt.Sprintf(i18n.Source("text.4d983ee4ca80"), float64(hz)/1e6)
+}

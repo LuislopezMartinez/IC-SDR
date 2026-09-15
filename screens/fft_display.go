@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 
 	"go-zero/simpleui"
@@ -43,30 +45,30 @@ func NewFFTDisplay(screen *MainScreen) *FFTDisplay {
 	panel.refreshLabel = label("fftRefreshLabel", 240, 654, 190, "")
 	panel.refresh = simpleui.NewSlider("fftRefresh", 248, 680, 174, 20, 5, 60, float32(panel.refreshFPS))
 	panel.refresh.SetStep(1)
-	panel.peak = simpleui.NewSwitch("fftPeak", 445, 650, 180, 28, "PEAK HOLD", panel.peakHold, 12)
-	panel.decayLabel = label("fftDecayLabel", 445, 692, 180, "PEAK DECAY  3 dB/s")
+	panel.peak = simpleui.NewSwitch("fftPeak", 445, 650, 180, 28, i18n.Source("text.72a3162cd4ec"), panel.peakHold, 12)
+	panel.decayLabel = label("fftDecayLabel", 445, 692, 180, i18n.Source("text.ab8cb66fa1d4"))
 	panel.decay = simpleui.NewSlider("fftDecay", 453, 718, 164, 18, 1, 10, panel.peakDecay)
 	panel.decay.SetStep(1)
-	panel.windowButton = simpleui.NewButton("fftWindow", 45, 740, 210, 43, "WINDOW  HANN", 12)
-	size := label("fftSize", 265, 740, 155, "FFT 4096\n500 Hz/bin")
-	panel.fftRangeLabel = label("fftRangeLabel", 430, 752, 205, "FFT RANGE  -37 / 0 dB")
+	panel.windowButton = simpleui.NewButton("fftWindow", 45, 740, 210, 43, i18n.Source("text.c65a97b8b4fe"), 12)
+	size := label("fftSize", 265, 740, 155, i18n.Source("text.847683cb656d"))
+	panel.fftRangeLabel = label("fftRangeLabel", 430, 752, 205, i18n.Source("text.af51c984b510"))
 	panel.fftRange = simpleui.NewRangeSlider("fftRange", 438, 782, 190, 18, -140, 0, -37, 0)
 	panel.fftRange.SetMinimumGap(10)
 	panel.fftRange.SetRangeDragging(false)
 
-	panel.speedLabel = label("fftWaterfallSpeedLabel", 710, 654, 185, "SPEED  15 lines/s")
+	panel.speedLabel = label("fftWaterfallSpeedLabel", 710, 654, 185, i18n.Source("text.bd5876221bce"))
 	panel.speed = simpleui.NewSlider("fftWaterfallSpeed", 718, 680, 170, 20, 5, 60, 15)
 	panel.speed.SetStep(1)
-	panel.contrastLabel = label("fftWaterfallContrastLabel", 905, 654, 185, "CONTRAST  102 %")
+	panel.contrastLabel = label("fftWaterfallContrastLabel", 905, 654, 185, i18n.Source("text.e9ec9039db61"))
 	panel.contrast = simpleui.NewSlider("fftWaterfallContrast", 913, 680, 170, 20, 25, 200, 102)
 	panel.contrast.SetStep(1)
-	panel.waterfallRangeLabel = label("fftWaterfallRangeLabel", 710, 720, 185, "LEVEL  -60 / 0 dB")
+	panel.waterfallRangeLabel = label("fftWaterfallRangeLabel", 710, 720, 185, i18n.Source("text.460e892c8110"))
 	panel.waterfallRange = simpleui.NewRangeSlider("fftWaterfallRange", 718, 750, 170, 18, -120, 0, -60, 0)
 	panel.waterfallRange.SetMinimumGap(10)
 	panel.waterfallRange.SetRangeDragging(false)
-	panel.paletteButton = simpleui.NewButton("fftPalette", 905, 735, 120, 43, "PALETTE GRAY", 12)
-	reset := simpleui.NewButton("fftWaterfallReset", 1035, 735, 82, 43, "RESET", 12)
-	adjust := simpleui.NewButton("fftWaterfallAdjust", 1127, 735, 105, 43, "ADJUST", 12)
+	panel.paletteButton = simpleui.NewButton("fftPalette", 905, 735, 120, 43, i18n.Source("text.40e4bc6977aa"), 12)
+	reset := simpleui.NewButton("fftWaterfallReset", 1035, 735, 82, 43, i18n.Source("text.7ef2fad58d1f"), 12)
+	adjust := simpleui.NewButton("fftWaterfallAdjust", 1127, 735, 105, 43, i18n.Source("text.b0da66f86167"), 12)
 
 	panel.average.OnChange(func(value float32) {
 		panel.averagingMs = int(value)
@@ -121,7 +123,7 @@ func NewFFTDisplay(screen *MainScreen) *FFTDisplay {
 	})
 	panel.paletteButton.OnClick(panel.cyclePalette)
 	reset.OnClick(panel.resetWaterfall)
-	adjust.OnClick(func() { screen.selectTool("WATERFALL_ADJUST") })
+	adjust.OnClick(func() { screen.selectTool(i18n.Source("text.9b6bb9932898")) })
 
 	panel.controls = []simpleui.Element{panel.averageLabel, panel.average, panel.refreshLabel, panel.refresh,
 		panel.peak, panel.decayLabel, panel.decay, panel.windowButton, size, panel.fftRangeLabel, panel.fftRange,
@@ -153,8 +155,8 @@ func (panel *FFTDisplay) Sync() {
 
 func (panel *FFTDisplay) DrawPanel() {
 	rl.DrawLineEx(rl.Vector2{X: 690, Y: toolY + 12}, rl.Vector2{X: 690, Y: toolY + toolH - 12}, 1.5, colors.border)
-	drawCentered("FFT DISPLAY", rl.Rectangle{X: 260, Y: toolY + 7, Width: 220, Height: 20}, 14, colors.cyan)
-	drawCentered("WATERFALL", rl.Rectangle{X: 850, Y: toolY + 7, Width: 220, Height: 20}, 14, colors.blue)
+	drawCentered(i18n.Source("text.618262ce4370"), rl.Rectangle{X: 260, Y: toolY + 7, Width: 220, Height: 20}, 14, colors.cyan)
+	drawCentered(i18n.Source("text.e52a5d80bf71"), rl.Rectangle{X: 850, Y: toolY + 7, Width: 220, Height: 20}, 14, colors.blue)
 }
 
 func (panel *FFTDisplay) UpdatePeaks(spectrum []float32) {
@@ -185,7 +187,7 @@ func (panel *FFTDisplay) UpdatePeaks(spectrum []float32) {
 }
 
 func (panel *FFTDisplay) cycleWindow() {
-	windows := []string{"HANN", "BLACKMAN-HARRIS", "FLAT TOP", "RECTANGULAR"}
+	windows := []string{i18n.Source("text.26701b540b4b"), i18n.Source("text.dbcf1c5bae70"), i18n.Source("text.18012268eaac"), i18n.Source("text.2ac455cdbd57")}
 	index := indexOf(windows, panel.window)
 	panel.window = windows[(index+1)%len(windows)]
 	panel.screen.fftWindow = panel.window
@@ -197,7 +199,7 @@ func (panel *FFTDisplay) cycleWindow() {
 }
 
 func (panel *FFTDisplay) cyclePalette() {
-	palettes := []string{"BLUE", "VIRIDIS", "FIRE", "GRAY"}
+	palettes := []string{i18n.Source("text.24a866f4940f"), i18n.Source("text.ddacfc88b465"), i18n.Source("text.f27f17e3f063"), i18n.Source("text.2d71cca47c3a")}
 	index := indexOf(palettes, panel.screen.waterfallSettings.Palette)
 	panel.screen.waterfallSettings.Palette = palettes[(index+1)%len(palettes)]
 	panel.screen.waterfall.InvalidateColors()
@@ -218,15 +220,15 @@ func (panel *FFTDisplay) resetWaterfall() {
 }
 
 func (panel *FFTDisplay) refreshLabels() {
-	panel.averageLabel.SetText(fmt.Sprintf("AVERAGING  %d ms", panel.averagingMs))
-	panel.refreshLabel.SetText(fmt.Sprintf("REFRESH  %d FPS", panel.refreshFPS))
-	panel.decayLabel.SetText(fmt.Sprintf("PEAK DECAY  %.0f dB/s", panel.peakDecay))
-	panel.speedLabel.SetText(fmt.Sprintf("SPEED  %d lines/s", panel.screen.waterfallSettings.LinesPerSecond))
-	panel.contrastLabel.SetText(fmt.Sprintf("CONTRAST  %d %%", panel.screen.waterfallSettings.Contrast))
-	panel.windowButton.SetLabel("WINDOW  " + panel.window)
-	panel.paletteButton.SetLabel("PALETTE " + panel.screen.waterfallSettings.Palette)
-	panel.fftRangeLabel.SetText(fmt.Sprintf("FFT RANGE  %.0f / %.0f dB", panel.screen.spectrumMinimumDB, panel.screen.spectrumMaximumDB))
-	panel.waterfallRangeLabel.SetText(fmt.Sprintf("LEVEL  %.0f / %.0f dB", panel.screen.waterfallSettings.MinimumDBm, panel.screen.waterfallSettings.MaximumDBm))
+	panel.averageLabel.SetText(fmt.Sprintf(i18n.Source("text.79e61f99e79e"), panel.averagingMs))
+	panel.refreshLabel.SetText(fmt.Sprintf(i18n.Source("text.3bddd0dd403c"), panel.refreshFPS))
+	panel.decayLabel.SetText(fmt.Sprintf(i18n.Source("text.a9affd4760b0"), panel.peakDecay))
+	panel.speedLabel.SetText(fmt.Sprintf(i18n.Source("text.1bd26570468c"), panel.screen.waterfallSettings.LinesPerSecond))
+	panel.contrastLabel.SetText(fmt.Sprintf(i18n.Source("text.c74ba288f018"), panel.screen.waterfallSettings.Contrast))
+	panel.windowButton.SetLabel(i18n.Source("text.4f11817cc853") + panel.window)
+	panel.paletteButton.SetLabel(i18n.Source("text.aed5c2bb0f22") + panel.screen.waterfallSettings.Palette)
+	panel.fftRangeLabel.SetText(fmt.Sprintf(i18n.Source("text.94a1bd9313e1"), panel.screen.spectrumMinimumDB, panel.screen.spectrumMaximumDB))
+	panel.waterfallRangeLabel.SetText(fmt.Sprintf(i18n.Source("text.f6ac728540d4"), panel.screen.waterfallSettings.MinimumDBm, panel.screen.waterfallSettings.MaximumDBm))
 }
 
 func indexOf(values []string, wanted string) int {

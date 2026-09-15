@@ -1,6 +1,8 @@
 package digitalvoice
 
 import (
+	"go-zero/internal/i18n"
+
 	"bufio"
 	"encoding/binary"
 	"fmt"
@@ -50,11 +52,11 @@ type Decoder struct {
 func New(inputRate float64, executable string, onAudio func([]float32)) *Decoder {
 	d := &Decoder{executable: executable, onAudio: onAudio, front: newFrontend(inputRate, 0, 12_500), outputChannels: 1}
 	d.voiceRate.reset(8_000, 48_000)
-	d.status = Status{State: "DETENIDO", Detail: "Pulsa INICIAR para activar la detección", InputDBFS: -60}
+	d.status = Status{State: i18n.Source("text.7dc7253c376a"), Detail: i18n.Source("text.e2cab4411acf"), InputDBFS: -60}
 	if info, err := os.Stat(executable); err == nil && !info.IsDir() {
 		d.status.Available = true
 	} else {
-		d.status.Detail = "Runtime DSD-neo no instalado"
+		d.status.Detail = i18n.Source("text.c25c64e91cd9")
 	}
 	return d
 }
@@ -73,7 +75,7 @@ func (d *Decoder) Start(mode string) error {
 	}
 	if !d.status.Available {
 		d.mu.Unlock()
-		return fmt.Errorf("runtime DSD-neo no disponible: %s", d.executable)
+		return fmt.Errorf(i18n.Source("text.2388a5036ee7"), d.executable)
 	}
 	d.stop, d.done, d.pcm = make(chan struct{}), make(chan struct{}), make(chan []byte, 12)
 	d.voiceRate.reset(8_000, 48_000)
@@ -102,7 +104,7 @@ func (d *Decoder) Start(mode string) error {
 		return err
 	}
 	d.cmd, d.stdin = cmd, stdin
-	d.status.State, d.status.Detail, d.status.Running = "BUSCANDO", "Detección automática activa", true
+	d.status.State, d.status.Detail, d.status.Running = i18n.Source("text.dc65cdab4d29"), i18n.Source("text.bd31ed750223"), true
 	d.status.StartedAt = time.Now()
 	d.mu.Unlock()
 	go d.runWriter()
@@ -166,7 +168,7 @@ func (d *Decoder) Stop() {
 		d.mu.Lock()
 		stop, stdin, cmd, running := d.stop, d.stdin, d.cmd, d.status.Running
 		d.status.Running, d.status.VoiceActive = false, false
-		d.status.State = "DETENIDO"
+		d.status.State = i18n.Source("text.7dc7253c376a")
 		d.mu.Unlock()
 		if !running {
 			return
@@ -213,7 +215,7 @@ func (d *Decoder) Snapshot() Status {
 	if s.VoiceActive && !s.LastVoice.IsZero() && time.Since(s.LastVoice) > time.Second {
 		s.VoiceActive = false
 		if s.Running {
-			s.State = "BUSCANDO"
+			s.State = i18n.Source("text.dc65cdab4d29")
 		}
 	}
 	return s
@@ -269,7 +271,7 @@ func (d *Decoder) runOutput(reader io.Reader) {
 			}
 			if voice {
 				d.mu.Lock()
-				d.status.VoiceActive, d.status.State, d.status.LastVoice = true, "DECODIFICANDO", time.Now()
+				d.status.VoiceActive, d.status.State, d.status.LastVoice = true, i18n.Source("text.c6d93a7e3862"), time.Now()
 				d.mu.Unlock()
 			}
 		}
@@ -306,8 +308,8 @@ func (d *Decoder) parseLine(line string) {
 	upper := strings.ToUpper(line)
 	// Auto hunting announces rejected candidates too. A failed CRC must not
 	// replace the last positively identified protocol in the UI.
-	if strings.Contains(upper, "CRC ERR") || strings.Contains(upper, "CRC FAIL") ||
-		strings.Contains(upper, "M17 EOT") || (strings.Contains(upper, "M17 LSF") && !strings.Contains(upper, "CRC OK")) {
+	if strings.Contains(upper, i18n.Source("text.44c29db98346")) || strings.Contains(upper, i18n.Source("text.23cb6173887b")) ||
+		strings.Contains(upper, i18n.Source("text.9a555a74bc9b")) || (strings.Contains(upper, i18n.Source("text.d91457b8cbee")) && !strings.Contains(upper, i18n.Source("text.c52eea4cc290"))) {
 		d.status.Detail = line
 		return
 	}
@@ -315,7 +317,7 @@ func (d *Decoder) parseLine(line string) {
 		d.status.Protocol = normalizeProtocol(match[1])
 	}
 	if match := slotPattern.FindStringSubmatch(line); len(match) > 1 {
-		d.status.Slot = "SLOT " + match[1]
+		d.status.Slot = i18n.Source("text.26aab9ac81fa") + match[1]
 	}
 	if match := targetPattern.FindStringSubmatch(line); len(match) > 1 {
 		d.status.Target = match[1]
@@ -336,7 +338,7 @@ func (d *Decoder) parseLine(line string) {
 			d.status.SNR = float32(v)
 		}
 	}
-	d.status.Encrypted = strings.Contains(strings.ToUpper(line), "ENCRYPT") || strings.Contains(strings.ToUpper(line), "CIPHER")
+	d.status.Encrypted = strings.Contains(strings.ToUpper(line), i18n.Source("text.61e16b5d6d35")) || strings.Contains(strings.ToUpper(line), i18n.Source("text.e555a71f0ce4"))
 	d.status.Detail = line
 	if d.status.Protocol != "" {
 		d.status.Events = append(d.status.Events, Event{At: time.Now().Format("15:04:05"), Protocol: d.status.Protocol, Slot: d.status.Slot, Source: d.status.Source, Target: d.status.Target, Detail: line})
@@ -350,15 +352,15 @@ func normalizeProtocol(value string) string {
 	v := strings.ToUpper(strings.ReplaceAll(value, "-", ""))
 	switch {
 	case strings.HasPrefix(v, "P25") && strings.Contains(v, "2"):
-		return "P25 II"
+		return i18n.Source("text.9e7aa85fb23c")
 	case strings.HasPrefix(v, "P25"):
 		return "P25 I"
 	case strings.HasPrefix(v, "NXDN48"):
-		return "NXDN48"
+		return i18n.Source("text.219166b38fb5")
 	case strings.HasPrefix(v, "NXDN"):
-		return "NXDN96"
+		return i18n.Source("text.de5fb248953b")
 	case v == "DSTAR":
-		return "D-STAR"
+		return i18n.Source("text.4fcb50bfd35b")
 	case v == "X2TDMA":
 		return "X2"
 	default:
@@ -370,9 +372,9 @@ func (d *Decoder) wait() {
 	err := d.cmd.Wait()
 	d.mu.Lock()
 	d.status.Running, d.status.VoiceActive = false, false
-	d.status.State = "DETENIDO"
+	d.status.State = i18n.Source("text.7dc7253c376a")
 	if err != nil {
-		d.status.State, d.status.Detail = "ERROR", err.Error()
+		d.status.State, d.status.Detail = i18n.Source("text.d98ee0e5f939"), err.Error()
 	}
 	close(d.done)
 	d.mu.Unlock()

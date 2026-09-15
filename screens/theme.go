@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"strings"
 
 	"go-zero/simpleui"
@@ -55,11 +57,11 @@ func validTheme(name string) bool {
 func themeDisplayName(name string) string {
 	switch strings.ToUpper(name) {
 	case themeLight:
-		return "CLARO"
+		return i18n.Source("text.33f29205b18a")
 	case themeBlue:
-		return "AZUL"
+		return i18n.Source("text.dcaa3316dde8")
 	default:
-		return "OSCURO"
+		return i18n.Source("text.4f88622f704e")
 	}
 }
 
@@ -98,7 +100,7 @@ func (screen *MainScreen) applyTheme(name string) {
 		return remapThemeColor(color, colors)
 	})
 	if screen.themeButton != nil {
-		screen.themeButton.SetLabel("ESTILO")
+		screen.themeButton.SetLabel(i18n.Source("text.193f56324ce6"))
 	}
 }
 

@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -33,7 +35,7 @@ const radiosondeQuickTuneHz int64 = 403_000_000
 func NewRadiosondePanel(screen *MainScreen) *RadiosondePanel {
 	p := &RadiosondePanel{screen: screen, family: screen.radiosondeFamily, targetHz: screen.radiosondeFrequencyHz}
 	if !radiosonde.ValidFamily(p.family) {
-		p.family = "AUTO"
+		p.family = i18n.Source("text.6ea56fae9eac")
 	}
 	if !validRadiosondeFrequency(p.targetHz) {
 		p.targetHz = radiosondeQuickTuneHz
@@ -51,19 +53,19 @@ func NewRadiosondePanel(screen *MainScreen) *RadiosondePanel {
 		b := button("sondeModel"+strconv.Itoa(i), f, 40+float32(i)*110, 100, func() { p.family = f; p.apply(); p.save() })
 		p.models = append(p.models, b)
 	}
-	p.start = button("sondeStart", "INICIAR", 490, 135, func() { p.enabled = !p.enabled; p.apply() })
-	jsonButton := button("sondeJSON", "JSON", 640, 105, func() { p.export(false) })
-	csvButton := button("sondeCSV", "CSV", 755, 105, func() { p.export(true) })
+	p.start = button("sondeStart", i18n.Source("text.7f23d98fbc9a"), 490, 135, func() { p.enabled = !p.enabled; p.apply() })
+	jsonButton := button("sondeJSON", i18n.Source("text.db1a21a0bc2e"), 640, 105, func() { p.export(false) })
+	csvButton := button("sondeCSV", i18n.Source("text.eb6b42f54c42"), 755, 105, func() { p.export(true) })
 	jsonButton.SetColors(actionExportFill, colors.green, colors.text)
 	csvButton.SetColors(actionExportFill, colors.green, colors.text)
-	clearButton := button("sondeClear", "LIMPIAR", 870, 120, func() {
+	clearButton := button("sondeClear", i18n.Source("text.2aded7edd569"), 870, 120, func() {
 		if screen.receiver != nil {
 			screen.receiver.ClearRadiosondeEvents()
 		}
-		p.feedback = "Historial limpiado"
+		p.feedback = i18n.Source("text.60d91d4b51a0")
 	})
 	clearButton.SetColors(actionClearFill, colors.red, colors.text)
-	p.tuneButton = button("sondeTune", fmt.Sprintf("SINTONIZAR %.3f MHz", float64(p.quickTuneHz)/1e6), 1010, 300, p.tuneRecommended)
+	p.tuneButton = button("sondeTune", fmt.Sprintf(i18n.Source("text.f1ca0fc14937"), float64(p.quickTuneHz)/1e6), 1010, 300, p.tuneRecommended)
 	p.tuneButton.SetColors(colors.blue, colors.border, colors.text)
 	p.SetVisible(false)
 	p.style()
@@ -93,7 +95,7 @@ func (p *RadiosondePanel) tuneRecommended() {
 	p.pendingAt = time.Time{}
 	p.apply()
 	p.save()
-	p.feedback = fmt.Sprintf("Sintonizado en %.3f MHz · busca la portadora de una sonda cercana", float64(p.quickTuneHz)/1e6)
+	p.feedback = fmt.Sprintf(i18n.Source("text.843252d10d6c"), float64(p.quickTuneHz)/1e6)
 }
 func (p *RadiosondePanel) SetVisible(v bool) {
 	for _, c := range p.controls {
@@ -103,9 +105,9 @@ func (p *RadiosondePanel) SetVisible(v bool) {
 func (p *RadiosondePanel) Enter() {
 	// Model selection and panel entry do not own the receiver tuning. The dial
 	// remains exactly where the user left it.
-	if p.screen.mode != nil && p.screen.mode.SelectedText() != "NFM" {
+	if p.screen.mode != nil && p.screen.mode.SelectedText() != i18n.Source("text.0896d612d497") {
 		for i, mode := range p.screen.mode.Items() {
-			if mode == "NFM" {
+			if mode == i18n.Source("text.0896d612d497") {
 				p.screen.mode.SetSelected(i)
 				p.screen.savedMode = mode
 				if p.screen.filterSelector != nil {
@@ -154,15 +156,15 @@ func (p *RadiosondePanel) style() {
 		b.SetColors(c, colors.border, colors.text)
 	}
 	if p.enabled {
-		p.start.SetLabel("DETENER")
+		p.start.SetLabel(i18n.Source("text.42a572b1399e"))
 		p.start.SetColors(actionStopFill, colors.red, colors.text)
 	} else {
-		p.start.SetLabel("INICIAR")
+		p.start.SetLabel(i18n.Source("text.7f23d98fbc9a"))
 		p.start.SetColors(actionStartFill, colors.green, colors.text)
 	}
 }
 func (p *RadiosondePanel) Tick() {
-	if p.screen.activeTool != "RADIOSONDE" {
+	if p.screen.activeTool != i18n.Source("text.7dd172035702") {
 		return
 	}
 	if p.targetHz != p.screen.frequencyHz || p.centerHz != p.screen.centerFrequencyHz {
@@ -190,7 +192,7 @@ func sondeNumber(v *float64, format string) string {
 	return fmt.Sprintf(format, *v)
 }
 func (p *RadiosondePanel) DrawPanel() {
-	status := radiosonde.Status{State: "SIN RECEPTOR"}
+	status := radiosonde.Status{State: i18n.Source("text.810e0d52136b")}
 	var events []radiosonde.Event
 	if p.screen.receiver != nil {
 		status = p.screen.receiver.RadiosondeStatus()
@@ -200,16 +202,16 @@ func (p *RadiosondePanel) DrawPanel() {
 }
 
 func (p *RadiosondePanel) drawTelemetry(status radiosonde.Status, events []radiosonde.Event) {
-	simpleui.DrawText(fmt.Sprintf("RADIOSONDAS · %.6f MHz · %s · %d tramas · %d bloques perdidos", float64(p.targetHz)/1e6, status.State, len(events), status.Dropped), 40, toolY+7, 12, colors.cyan)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.7a42bc962eaa"), float64(p.targetHz)/1e6, status.State, len(events), status.Dropped), 40, toolY+7, 12, colors.cyan)
 	if status.Error != "" {
 		simpleui.DrawText(sondeClip(status.Error, 72), 1020, toolY+36, 12, colors.red)
 	} else {
-		simpleui.DrawText("Sintoniza con el dial / espectro", 1020, toolY+36, 12, colors.muted)
+		simpleui.DrawText(i18n.Source("text.290eff6b039a"), 1020, toolY+36, 12, colors.muted)
 	}
 	columns := []struct {
 		x     float32
 		label string
-	}{{40, "SONDA"}, {240, "RECIBIDA UTC"}, {370, "LATITUD"}, {500, "LONGITUD"}, {640, "ALT m"}, {750, "Vh m/s"}, {860, "Vv m/s"}, {975, "T °C"}, {1080, "HR %"}, {1180, "P hPa"}, {1300, "REF. ALT"}}
+	}{{40, i18n.Source("text.52ab3c32429e")}, {240, i18n.Source("text.d31173c376be")}, {370, i18n.Source("text.5b99241b86d1")}, {500, i18n.Source("text.b0ddd4ea3459")}, {640, i18n.Source("text.567ffaded369")}, {750, i18n.Source("text.9c69984662ab")}, {860, i18n.Source("text.5ed52afa8bc2")}, {975, "T °C"}, {1080, "HR %"}, {1180, i18n.Source("text.6744bfbf744a")}, {1300, i18n.Source("text.e2675ff38bd5")}}
 	for _, c := range columns {
 		simpleui.DrawText(c.label, c.x, toolY+72, 12, colors.muted)
 	}
@@ -229,15 +231,16 @@ func (p *RadiosondePanel) drawTelemetry(status radiosonde.Status, events []radio
 		row++
 	}
 	if len(events) == 0 {
-		simpleui.DrawText("Selecciona familia, ajusta frecuencia y pulsa INICIAR. Una frecuencia activa; sin barrido automático.", 40, toolY+99, 13, colors.muted)
+		simpleui.DrawText(i18n.Source("text.cf43a2e1d9ba"), 40, toolY+99, 13, colors.muted)
 	}
 	footer := p.feedback
 	if footer == "" {
-		footer = "Últimas sondas · -- = dato no disponible · Historial: últimas 2000 tramas · Altitud según referencia original (JSON/CSV)"
+		footer = i18n.Source("text.63625c85932c")
 	}
 	simpleui.DrawText(sondeClip(footer, 180), 40, toolY+172, 12, colors.muted)
 }
 func sondeClip(s string, n int) string {
+	s = i18n.Display(s)
 	r := []rune(s)
 	if len(r) > n {
 		return string(r[:n-3]) + "..."
@@ -250,7 +253,7 @@ func (p *RadiosondePanel) export(asCSV bool) {
 	}
 	events := p.screen.receiver.RadiosondeEvents()
 	if len(events) == 0 {
-		p.feedback = "No hay tramas para exportar"
+		p.feedback = i18n.Source("text.bd91cb9610c8")
 		return
 	}
 	dir := resources.WritablePath("exports", "radiosonde")
@@ -289,7 +292,7 @@ func (p *RadiosondePanel) export(asCSV bool) {
 		p.feedback = err.Error()
 		return
 	}
-	p.feedback = "Guardado: " + path
+	p.feedback = i18n.Source("text.5ee32d24cca2") + path
 }
 func sondeCSVNumber(v *float64) string {
 	if v == nil {

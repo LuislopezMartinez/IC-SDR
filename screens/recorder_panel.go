@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -26,18 +28,18 @@ type RecorderPanel struct {
 
 func NewRecorderPanel(screen *MainScreen, recorder *AudioRecorder) *RecorderPanel {
 	p := &RecorderPanel{BaseElement: simpleui.NewBaseElement("recorderDeleteOverlay", 0, 0, designWidth, designHeight), screen: screen, recorder: recorder}
-	p.record = simpleui.NewButton("audioRecord", 1300, 445, 132, 36, "GRABAR", uiControlFontSize)
+	p.record = simpleui.NewButton("audioRecord", 1300, 445, 132, 36, i18n.Source("text.31d59748e4d1"), uiControlFontSize)
 	p.record.SetColors(rl.Color{R: 145, G: 38, B: 42, A: 255}, rl.Color{R: 255, G: 95, B: 95, A: 255}, colors.text)
-	p.pause = simpleui.NewButton("audioRecordPause", 1442, 445, 138, 36, "PAUSA", uiControlFontSize)
-	p.skip = simpleui.NewSwitch("audioRecordSkipSQL", 1300, 489, 280, 30, "OMITIR SILENCIO SQL", screen.recorderSkipSilence, uiMinimumFontSize)
+	p.pause = simpleui.NewButton("audioRecordPause", 1442, 445, 138, 36, i18n.Source("text.0b03bdac33fa"), uiControlFontSize)
+	p.skip = simpleui.NewSwitch("audioRecordSkipSQL", 1300, 489, 280, 30, i18n.Source("text.d5a32f2a10ee"), screen.recorderSkipSilence, uiMinimumFontSize)
 	p.format = simpleui.NewButton("audioRecordFormat", 1300, 525, 98, 32, "MP3", 13)
-	p.folder = simpleui.NewButton("audioRecordFolder", 1406, 525, 174, 32, "ABRIR CARPETA", 13)
-	p.toolRecord = simpleui.NewButton("toolAudioRecord", 35, 715, 135, 40, "GRABAR", uiControlFontSize)
+	p.folder = simpleui.NewButton("audioRecordFolder", 1406, 525, 174, 32, i18n.Source("text.f7aa514861ad"), 13)
+	p.toolRecord = simpleui.NewButton("toolAudioRecord", 35, 715, 135, 40, i18n.Source("text.31d59748e4d1"), uiControlFontSize)
 	p.toolRecord.SetColors(rl.Color{R: 145, G: 38, B: 42, A: 255}, rl.Color{R: 255, G: 95, B: 95, A: 255}, colors.text)
-	p.toolPause = simpleui.NewButton("toolAudioPause", 180, 715, 135, 40, "PAUSA", uiControlFontSize)
-	p.toolSkip = simpleui.NewSwitch("toolAudioSkipSQL", 330, 715, 270, 40, "OMITIR SILENCIO SQL", screen.recorderSkipSilence, 13)
-	p.toolFormat = simpleui.NewButton("toolAudioFormat", 35, 766, 150, 42, "FORMATO MP3", 13)
-	p.toolFolder = simpleui.NewButton("toolAudioFolder", 195, 766, 405, 42, "ABRIR CARPETA DE GRABACIONES", 14)
+	p.toolPause = simpleui.NewButton("toolAudioPause", 180, 715, 135, 40, i18n.Source("text.0b03bdac33fa"), uiControlFontSize)
+	p.toolSkip = simpleui.NewSwitch("toolAudioSkipSQL", 330, 715, 270, 40, i18n.Source("text.d5a32f2a10ee"), screen.recorderSkipSilence, 13)
+	p.toolFormat = simpleui.NewButton("toolAudioFormat", 35, 766, 150, 42, i18n.Source("text.500312539e9c"), 13)
+	p.toolFolder = simpleui.NewButton("toolAudioFolder", 195, 766, 405, 42, i18n.Source("text.771a20c38385"), 14)
 	startStop := p.ToggleRecording
 	togglePause := p.TogglePause
 	setSkip := func(value bool) {
@@ -105,25 +107,25 @@ func (p *RecorderPanel) OpenFolder() { openExplorerPath(p.recorder.Directory()) 
 func (p *RecorderPanel) refresh() {
 	state := p.recorder.State()
 	if state.Recording {
-		p.record.SetLabel("DETENER")
-		p.toolRecord.SetLabel("DETENER")
+		p.record.SetLabel(i18n.Source("text.42a572b1399e"))
+		p.toolRecord.SetLabel(i18n.Source("text.42a572b1399e"))
 	} else {
-		p.record.SetLabel("GRABAR")
-		p.toolRecord.SetLabel("GRABAR")
+		p.record.SetLabel(i18n.Source("text.31d59748e4d1"))
+		p.toolRecord.SetLabel(i18n.Source("text.31d59748e4d1"))
 	}
 	if state.Paused {
-		p.pause.SetLabel("CONTINUAR")
-		p.toolPause.SetLabel("CONTINUAR")
+		p.pause.SetLabel(i18n.Source("text.fad8cbb4bb22"))
+		p.toolPause.SetLabel(i18n.Source("text.fad8cbb4bb22"))
 	} else {
-		p.pause.SetLabel("PAUSA")
-		p.toolPause.SetLabel("PAUSA")
+		p.pause.SetLabel(i18n.Source("text.0b03bdac33fa"))
+		p.toolPause.SetLabel(i18n.Source("text.0b03bdac33fa"))
 	}
 	p.pause.SetEnabled(state.Recording)
 	p.toolPause.SetEnabled(state.Recording)
 	p.format.SetEnabled(!state.Recording)
 	p.toolFormat.SetEnabled(!state.Recording)
 	p.format.SetLabel(state.Format)
-	p.toolFormat.SetLabel("FORMATO " + state.Format)
+	p.toolFormat.SetLabel(i18n.Source("text.4034091b82a3") + state.Format)
 	p.skip.SetActive(state.SkipSquelchSilence)
 	p.toolSkip.SetActive(state.SkipSquelchSilence)
 }
@@ -138,7 +140,7 @@ func (p *RecorderPanel) Tick() {
 	if p.screen.webServer != nil && p.screen.webServer.RemoteActive() {
 		return
 	}
-	if p.screen.activeTool != "RECORDER" || p.screen.viewMode != 1 || !rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
+	if p.screen.activeTool != i18n.Source("text.e71378482f31") || p.screen.viewMode != 1 || !rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
 		return
 	}
 	mouse := simpleui.MousePosition()
@@ -200,11 +202,11 @@ func (p *RecorderPanel) DrawOverlay() {
 	modal := rl.Rectangle{X: 470, Y: 300, Width: 660, Height: 250}
 	rl.DrawRectangleRounded(modal, .04, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(modal, .04, 8, 2, colors.red)
-	drawCentered("ELIMINAR GRABACIÓN", rl.Rectangle{X: 490, Y: 325, Width: 620, Height: 30}, 22, colors.red)
+	drawCentered(i18n.Source("text.8eee8f2e7f12"), rl.Rectangle{X: 490, Y: 325, Width: 620, Height: 30}, 22, colors.red)
 	drawCentered(trimMemory(filepath.Base(p.deleteCandidate), 72), rl.Rectangle{X: 505, Y: 380, Width: 590, Height: 28}, 14, colors.text)
-	drawCentered("Esta acción no se puede deshacer.", rl.Rectangle{X: 505, Y: 420, Width: 590, Height: 24}, uiMinimumFontSize, colors.muted)
-	p.drawModalButton(p.cancelDeleteBounds(), "CANCELAR", p.modalPressed == 2, rl.Color{R: 45, G: 55, B: 65, A: 255}, colors.border)
-	p.drawModalButton(p.confirmDeleteBounds(), "ELIMINAR", p.modalPressed == 1, rl.Color{R: 125, G: 30, B: 35, A: 255}, colors.red)
+	drawCentered(i18n.Source("text.21ae79dcd38b"), rl.Rectangle{X: 505, Y: 420, Width: 590, Height: 24}, uiMinimumFontSize, colors.muted)
+	p.drawModalButton(p.cancelDeleteBounds(), i18n.Source("text.b1a5fe65d180"), p.modalPressed == 2, rl.Color{R: 45, G: 55, B: 65, A: 255}, colors.border)
+	p.drawModalButton(p.confirmDeleteBounds(), i18n.Source("text.b243b05a8aa4"), p.modalPressed == 1, rl.Color{R: 125, G: 30, B: 35, A: 255}, colors.red)
 }
 func (p *RecorderPanel) closeDeleteModal() {
 	p.deleteModal = false
@@ -230,31 +232,31 @@ func (p *RecorderPanel) drawModalButton(bounds rl.Rectangle, label string, press
 
 func (p *RecorderPanel) DrawSidebar() {
 	state := p.recorder.State()
-	drawSidebarSection(1292, 324, 296, 260, "RECORDER", colors.red)
-	drawStatusDot(1560, 340, state.Recording, "RECORDING", "READY")
+	drawSidebarSection(1292, 324, 296, 260, i18n.Source("text.e71378482f31"), colors.red)
+	drawStatusDot(1560, 340, state.Recording, i18n.Source("text.ac0a7f145139"), i18n.Source("text.c2e3ac47f4a3"))
 	simpleui.DrawTextStyled(formatRecordingDuration(state.DurationSeconds), 1372, 354, 25, simpleui.FontMono, colors.text)
 	simpleui.DrawTextStyled(recorderFormatDescription(state.Format), 1330, 389, 12, simpleui.FontRegular, colors.muted)
 	drawRecorderMeter(1308, 405, 264, 29, state.PeakDBFS, state.Recording && !state.Paused)
-	simpleui.DrawTextStyled("GLOBAL AUDIO RECORDER", 1308, 562, 12, simpleui.FontRegular, colors.muted)
+	simpleui.DrawTextStyled(i18n.Source("text.94d166731b44"), 1308, 562, 12, simpleui.FontRegular, colors.muted)
 	if state.DroppedChunks > 0 {
-		simpleui.DrawTextStyled(fmt.Sprintf("DROPS %d", state.DroppedChunks), 1500, 562, 12, simpleui.FontSemiBold, colors.orange)
+		simpleui.DrawTextStyled(fmt.Sprintf(i18n.Source("text.0100b243750a"), state.DroppedChunks), 1500, 562, 12, simpleui.FontSemiBold, colors.orange)
 	} else {
-		simpleui.DrawTextStyled("BUFFER OK", 1508, 562, 12, simpleui.FontSemiBold, colors.green)
+		simpleui.DrawTextStyled(i18n.Source("text.b57d70039d76"), 1508, 562, 12, simpleui.FontSemiBold, colors.green)
 	}
 }
 
 func (p *RecorderPanel) DrawPanel() {
 	state := p.recorder.State()
-	status := "PREPARADO"
+	status := i18n.Source("text.d78afe9b19e4")
 	dot := colors.muted
 	if state.Recording {
-		status = "GRABANDO"
+		status = i18n.Source("text.edd74dc734e6")
 		dot = colors.red
 		if state.Paused {
-			status = "PAUSADO"
+			status = i18n.Source("text.033d2e9017bb")
 			dot = colors.orange
 		} else if state.WaitingForSquelch {
-			status = "ESPERANDO SQL"
+			status = i18n.Source("text.ec0df1f33fe4")
 			dot = colors.blue
 		}
 	}
@@ -262,17 +264,17 @@ func (p *RecorderPanel) DrawPanel() {
 	simpleui.DrawTextStyled(status, 64, 649, 16, simpleui.FontSemiBold, colors.text)
 	simpleui.DrawTextStyled(formatRecordingDuration(state.DurationSeconds), 64, 676, 24, simpleui.FontMono, colors.text)
 	drawRecorderMeter(330, 650, 270, 38, state.PeakDBFS, state.Recording && !state.Paused)
-	detail := recorderFormatDescription(state.Format) + " · ARCHIVO ÚNICO POR SESIÓN"
+	detail := recorderFormatDescription(state.Format) + i18n.Source("text.2786cd13543c")
 	if state.Encoding {
-		detail = "CREANDO MP3…"
+		detail = i18n.Source("text.ed5eccdd8f60")
 	} else if state.LastError != "" {
 		detail = trimMemory(state.LastError, 72)
 	}
 	simpleui.DrawTextStyled(detail, 270, 694, 12, simpleui.FontRegular, colors.muted)
 	drawPanel(650, 638, 910, 182)
-	simpleui.DrawTextStyled("ÚLTIMAS GRABACIONES", 665, 650, 14, simpleui.FontSemiBold, colors.text)
+	simpleui.DrawTextStyled(i18n.Source("text.d0ac19dbf215"), 665, 650, 14, simpleui.FontSemiBold, colors.text)
 	if len(state.RecentFiles) == 0 {
-		simpleui.DrawText("Todavía no hay grabaciones finalizadas", 665, 686, 12, colors.muted)
+		simpleui.DrawText(i18n.Source("text.d8d2071efc27"), 665, 686, 12, colors.muted)
 	}
 	for i, file := range state.RecentFiles {
 		if i >= 5 {
@@ -284,15 +286,15 @@ func (p *RecorderPanel) DrawPanel() {
 		}
 		simpleui.DrawTextStyled(trimMemory(filepath.Base(file), 82), 668, yy, 12, simpleui.FontMono, colors.text)
 		drawRecorderRowButton(recorderPlayBounds(i), "▶", colors.green)
-		drawRecorderRowButton(recorderDeleteBounds(i), "DEL", colors.red)
+		drawRecorderRowButton(recorderDeleteBounds(i), i18n.Source("text.9b89497fcb0b"), colors.red)
 	}
 }
 
 func recorderFormatDescription(format string) string {
 	if format == recorderFormatMP3 {
-		return "MP3 · 48 kHz · 128 kbps · MONO"
+		return i18n.Source("text.0a35a010e6cc")
 	}
-	return "WAV · 48 kHz · 16-bit · MONO"
+	return i18n.Source("text.e1856d735af0")
 }
 
 func recorderPlayBounds(row int) rl.Rectangle {

@@ -3,6 +3,7 @@ package simpleui
 import (
 	_ "embed"
 	"fmt"
+	"go-zero/internal/i18n"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -50,7 +51,7 @@ func SetHorizontalDrawScale(scale float32) {
 func SetTextScale(scale float32) {
 	ensureNotStarted("SetTextScale")
 	if scale < .5 || scale > 2 {
-		panic("simpleui: text scale must be between 0.5 and 2")
+		panic(i18n.Source("text.c1ddc8f1dc6a"))
 	}
 	textScale = scale
 }
@@ -61,6 +62,7 @@ func DrawText(text string, x, y float32, size int32, color rl.Color) {
 }
 
 func DrawTextStyled(text string, x, y float32, size int32, style FontStyle, color rl.Color) {
+	text = i18n.Display(text)
 	effectiveSize := scaledTextSize(size)
 	font := cachedFont(style, effectiveSize)
 	if horizontalDrawScale != 1 {
@@ -79,6 +81,7 @@ func MeasureText(text string, size int32) rl.Vector2 {
 }
 
 func MeasureTextStyled(text string, size int32, style FontStyle) rl.Vector2 {
+	text = i18n.Display(text)
 	effectiveSize := scaledTextSize(size)
 	font := cachedFont(style, effectiveSize)
 	return rl.MeasureTextEx(font, text, float32(effectiveSize), textSpacing(effectiveSize))
@@ -90,7 +93,7 @@ func scaledTextSize(size int32) int32 {
 
 func cachedFont(style FontStyle, size int32) rl.Font {
 	if size <= 0 {
-		panic("simpleui: font size must be greater than zero")
+		panic(i18n.Source("text.79b5195d5d11"))
 	}
 	key := fontKey{style: style, size: size}
 	if font, exists := fonts[key]; exists {
@@ -99,7 +102,7 @@ func cachedFont(style FontStyle, size int32) rl.Font {
 	data := fontData(style)
 	font := rl.LoadFontFromMemory(".ttf", data, size*2, supportedCodepoints())
 	if font.Texture.ID == 0 {
-		panic(fmt.Sprintf("simpleui: failed to load embedded font style %d", style))
+		panic(fmt.Sprintf(i18n.Source("text.8ef830cdc283"), style))
 	}
 	rl.SetTextureFilter(font.Texture, rl.FilterBilinear)
 	fonts[key] = font
@@ -122,7 +125,18 @@ func supportedCodepoints() []rune {
 	for value := rune(32); value <= 255; value++ {
 		codepoints = append(codepoints, value)
 	}
-	return append(codepoints, '€', '₽', 'Ω', 'Δ', 'π', '∞', '≈', '≠', '≤', '≥', '±', '×', '÷', '√', '→', '←', '↑', '↓', '—', '–', '…', '•', '✓')
+	codepoints = append(codepoints, '€', '₽', 'Ω', 'Δ', 'π', '∞', '≈', '≠', '≤', '≥', '±', '×', '÷', '√', '→', '←', '↑', '↓', '—', '–', '…', '•', '✓')
+	seen := map[rune]bool{}
+	for _, r := range codepoints {
+		seen[r] = true
+	}
+	for _, r := range i18n.Codepoints() {
+		if !seen[r] {
+			codepoints = append(codepoints, r)
+			seen[r] = true
+		}
+	}
+	return codepoints
 }
 
 func textSpacing(size int32) float32 {
