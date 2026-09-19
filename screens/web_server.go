@@ -35,6 +35,7 @@ type webMemory struct {
 	Priority    bool   `json:"priority"`
 	CTCSSHz     string `json:"ctcssHz"`
 	DCSCode     string `json:"dcsCode"`
+	Tool        string `json:"tool"`
 	Color       string `json:"color"`
 }
 
@@ -388,7 +389,7 @@ func (service *WebServer) publishMemories(screen *MainScreen) {
 			list.Memories = append(list.Memories, webMemory{
 				Name: memory.Name, Description: memory.Description, Group: memoryGroup(memory), FrequencyHz: memory.FrequencyHz,
 				Mode: memory.Mode, FilterHz: memory.FilterBandwidthHz, StepHz: memory.StepHz,
-				ScanEnabled: memory.ScanEnabled, Priority: memory.Priority, CTCSSHz: memory.CTCSSHz, DCSCode: memory.DCSCode,
+				ScanEnabled: memory.ScanEnabled, Priority: memory.Priority, CTCSSHz: memory.CTCSSHz, DCSCode: memory.DCSCode, Tool: memory.Tool,
 				Color: colorHex(panel.groupColor(memoryGroup(memory))),
 			})
 		}

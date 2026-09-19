@@ -60,3 +60,32 @@ func TestWFMDemodulatorRecoversBroadcastTone(t *testing.T) {
 		t.Fatalf("WFM tone was not recovered: RMS %.4f", rms)
 	}
 }
+
+func TestWFMAntiAliasRejectsRDSSubcarrier(t *testing.T) {
+	const inputRate, outputRate = 2_048_000., 48_000.
+	const seconds = .15
+	makeSignal := func(toneHz float64) []float32 {
+		iq := make([]float32, int(inputRate*seconds)*2)
+		phase := 0.
+		for sample := 0; sample < len(iq)/2; sample++ {
+			instantaneous := 8_000. * math.Sin(2*math.Pi*toneHz*float64(sample)/inputRate)
+			phase += 2 * math.Pi * instantaneous / inputRate
+			iq[sample*2], iq[sample*2+1] = float32(math.Cos(phase)), float32(math.Sin(phase))
+		}
+		return iq
+	}
+	measure := func(toneHz float64) float64 {
+		demod := NewNFMDemodulator(inputRate, outputRate)
+		audio := demod.ProcessWide(makeSignal(toneHz), 0, 200_000, 50)
+		start := len(audio) / 2
+		var power float64
+		for _, sample := range audio[start:] {
+			power += float64(sample * sample)
+		}
+		return math.Sqrt(power / float64(len(audio)-start))
+	}
+	wanted, rds := measure(1_000), measure(57_000)
+	if wanted < .03 || rds > wanted*.08 {
+		t.Fatalf("WFM anti-alias insufficient: 1 kHz RMS %.5f, 57 kHz RMS %.5f", wanted, rds)
+	}
+}

@@ -13,6 +13,7 @@ type voiceDecoder struct {
 	ready            bool
 	errText          string
 	firstPass        uintptr
+	leveler          voiceLeveler
 }
 
 func newVoiceDecoder(path string) *voiceDecoder {
@@ -49,6 +50,7 @@ func (v *voiceDecoder) reset() {
 	}
 	v.init.Call()
 	v.firstPass = 1
+	v.leveler.reset()
 }
 
 func (v *voiceDecoder) decode(type4 []byte, stolen bool) ([]float32, bool) {
@@ -88,12 +90,5 @@ func (v *voiceDecoder) decode(type4 []byte, stolen bool) ([]float32, bool) {
 	}
 	var pcm8 [480]int16
 	v.sdec.Call(uintptr(unsafe.Pointer(&serial[0])), uintptr(unsafe.Pointer(&pcm8[0])))
-	pcm48 := make([]float32, len(pcm8)*6)
-	for i, sample := range pcm8 {
-		value := float32(sample) / 32768
-		for n := 0; n < 6; n++ {
-			pcm48[i*6+n] = value
-		}
-	}
-	return pcm48, true
+	return v.leveler.convert(pcm8[:]), true
 }

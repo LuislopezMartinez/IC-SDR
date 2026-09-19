@@ -161,20 +161,20 @@ func listSoapyDevices(config Config) ([]DeviceOption, error) {
 
 func deviceCandidates(config Config) []Config {
 	candidates := []Config{config}
-	if config.Serial != "" && config.Driver != "hackrf" {
-		anyRSP := config
-		anyRSP.Serial = ""
-		candidates = append(candidates, anyRSP)
+	// A saved serial may have disappeared. Try another unit of the same kind
+	// before moving on to the other installed receiver families.
+	if config.Serial != "" {
+		any := config
+		any.Serial = ""
+		candidates = append(candidates, any)
 	}
-	if config.Driver != "rtlsdr" {
-		rtl := config
-		rtl.Driver, rtl.Serial = "rtlsdr", ""
-		candidates = append(candidates, rtl)
-	} else {
-		// A saved RTL-SDR may be unplugged while an RSP is available.
-		rsp := config
-		rsp.Driver, rsp.Serial = "sdrplay", ""
-		candidates = append(candidates, rsp)
+	for _, driver := range []string{"sdrplay", "rtlsdr", "hackrf"} {
+		if driver == config.Driver {
+			continue
+		}
+		fallback := config
+		fallback.Driver, fallback.Serial = driver, ""
+		candidates = append(candidates, fallback)
 	}
 	return candidates
 }
@@ -446,7 +446,10 @@ func (device *soapyDevice) hardwareSettings() HardwareSettings {
 	if device.driver == "hackrf" {
 		return HardwareSettings{
 			Available: true, Device: device.hardware, Driver: device.driver, Serial: device.serial,
-			RFGain: float32(device.api.getGain(device.device, soapyRX, 0)),
+			RFGain:      float32(device.api.getGainElement(device.device, soapyRX, 0, "LNA")),
+			IFGain:      float32(device.api.getGainElement(device.device, soapyRX, 0, "VGA")),
+			ExternalAmp: device.api.getGainElement(device.device, soapyRX, 0, "AMP") > 0,
+			BiasT:       device.readBoolSetting("bias_tx"),
 		}
 	}
 	return HardwareSettings{
@@ -501,7 +504,20 @@ func (device *soapyDevice) applyHardwareSettings(settings HardwareSettings) erro
 	}
 	if device.driver == "hackrf" {
 		if current.RFGain != settings.RFGain {
-			apply(device.api.setGain(device.device, soapyRX, 0, float64(settings.RFGain)), i18n.Source("text.1398091f5afd"))
+			apply(device.api.setGainElement(device.device, soapyRX, 0, "LNA", float64(settings.RFGain)), "HackRF LNA")
+		}
+		if current.IFGain != settings.IFGain {
+			apply(device.api.setGainElement(device.device, soapyRX, 0, "VGA", float64(settings.IFGain)), "HackRF VGA")
+		}
+		if current.ExternalAmp != settings.ExternalAmp {
+			gain := float64(0)
+			if settings.ExternalAmp {
+				gain = 14
+			}
+			apply(device.api.setGainElement(device.device, soapyRX, 0, "AMP", gain), "HackRF AMP")
+		}
+		if current.BiasT != settings.BiasT {
+			apply(device.api.writeSetting(device.device, "bias_tx", boolString(settings.BiasT)), "HackRF Bias-T")
 		}
 		return errors.Join(failures...)
 	}

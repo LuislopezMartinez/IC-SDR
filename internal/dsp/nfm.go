@@ -11,12 +11,54 @@ type NFMDemodulator struct {
 	previousI, previousQ                float32
 	previousAudio, highpass, deemphasis float32
 	rmsPower, gain, limiterGain         float32
+	wideFIR                             [511]float32
+	wideHistory                         [511]float32
+	wideWrite                           int
 	output                              []float32
 	subaudible                          []float32
 }
 
 func NewNFMDemodulator(inputRate, outputRate float64) *NFMDemodulator {
-	return &NFMDemodulator{inputRate: inputRate, outputRate: outputRate, previousI: 1, rmsPower: .0001, gain: 1, limiterGain: 1}
+	demod := &NFMDemodulator{inputRate: inputRate, outputRate: outputRate, previousI: 1, rmsPower: .0001, gain: 1, limiterGain: 1}
+	demod.configureWideFIR()
+	return demod
+}
+
+func (demod *NFMDemodulator) configureWideFIR() {
+	const cutoffHz = 16_000
+	middle := float64(len(demod.wideFIR)-1) / 2
+	sum := float64(0)
+	for tap := range demod.wideFIR {
+		distance := float64(tap) - middle
+		coefficient := 2 * cutoffHz / demod.inputRate
+		if distance != 0 {
+			coefficient = math.Sin(2*math.Pi*cutoffHz/demod.inputRate*distance) / (math.Pi * distance)
+		}
+		window := .42 - .5*math.Cos(2*math.Pi*float64(tap)/float64(len(demod.wideFIR)-1)) + .08*math.Cos(4*math.Pi*float64(tap)/float64(len(demod.wideFIR)-1))
+		demod.wideFIR[tap] = float32(coefficient * window)
+		sum += coefficient * window
+	}
+	for tap := range demod.wideFIR {
+		demod.wideFIR[tap] /= float32(sum)
+	}
+}
+
+func (demod *NFMDemodulator) pushWide(sample float32) {
+	demod.wideHistory[demod.wideWrite] = sample
+	demod.wideWrite = (demod.wideWrite + 1) % len(demod.wideHistory)
+}
+
+func (demod *NFMDemodulator) filteredWide() float32 {
+	value := float32(0)
+	position := demod.wideWrite
+	for tap := range demod.wideFIR {
+		position--
+		if position < 0 {
+			position = len(demod.wideHistory) - 1
+		}
+		value += demod.wideHistory[position] * demod.wideFIR[tap]
+	}
+	return value
 }
 
 func (demod *NFMDemodulator) Process(iq []float32, frequencyOffsetHz float64, bandwidthHz, deemphasisUs int) []float32 {
@@ -71,18 +113,47 @@ func (demod *NFMDemodulator) process(iq []float32, frequencyOffsetHz float64, ba
 		dot := demod.iFilter[2]*demod.previousI + demod.qFilter[2]*demod.previousQ
 		discriminator := float32(math.Atan2(float64(cross), float64(dot))) / max(deviationRadians, 1e-6)
 		demod.previousI, demod.previousQ = demod.iFilter[2], demod.qFilter[2]
+		if wide {
+			// Remove the 19 kHz pilot, 38 kHz stereo difference signal, 57 kHz
+			// RDS and ultrasonic FM noise before decimation to 48 kHz. Sampling
+			// the raw discriminator folded those components into audible audio.
+			demod.pushWide(discriminator)
+		}
 		demod.resamplePhase += demod.outputRate
 		if demod.resamplePhase < demod.inputRate {
 			continue
 		}
 		demod.resamplePhase -= demod.inputRate
+		if wide {
+			discriminator = demod.filteredWide()
+		}
 		demod.highpass = discriminator - demod.previousAudio + highpassR*demod.highpass
 		demod.previousAudio = discriminator
 		demod.subaudible = append(demod.subaudible, discriminator)
 		demod.deemphasis += deemphasisAlpha * (demod.highpass - demod.deemphasis)
-		demod.output = append(demod.output, demod.processDynamics(demod.deemphasis))
+		if wide {
+			demod.output = append(demod.output, demod.processWideDynamics(demod.deemphasis))
+		} else {
+			demod.output = append(demod.output, demod.processDynamics(demod.deemphasis))
+		}
 	}
 	return demod.output
+}
+
+func (demod *NFMDemodulator) processWideDynamics(sample float32) float32 {
+	// Broadcast stations already apply carefully controlled programme dynamics.
+	// Preserve them and use only a transparent safety limiter.
+	const ceiling = float32(.95)
+	desired := float32(1)
+	if magnitude := absFloat(sample); magnitude > ceiling {
+		desired = ceiling / magnitude
+	}
+	if desired < demod.limiterGain {
+		demod.limiterGain = desired
+	} else {
+		demod.limiterGain += coefficient(.150, demod.outputRate) * (desired - demod.limiterGain)
+	}
+	return min(max(sample*demod.limiterGain, -ceiling), ceiling)
 }
 
 func (demod *NFMDemodulator) Subaudible() []float32 { return demod.subaudible }

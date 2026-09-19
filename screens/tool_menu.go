@@ -36,6 +36,7 @@ var toolMenuItems = []toolMenuItem{
 	{id: i18n.Source("text.bcdc9d50f2be"), label: i18n.Source("text.3fc45e92c2be"), row: 2},
 	{id: i18n.Source("text.918191dc299c"), label: i18n.Source("text.db6a87d580b1"), row: 2},
 	{id: i18n.Source("text.03c820ee5c6c"), label: i18n.Source("text.ace1d287d60c"), row: 2},
+	{id: "CHECK_UPDATES", label: "ACTUALIZACIONES", row: 2},
 }
 
 type ToolMenu struct {
@@ -53,6 +54,7 @@ type ToolMenu struct {
 	icons           map[string]rl.Texture2D
 	onSelect        func(string)
 	onSelectSound   func()
+	onCheckUpdates  func()
 }
 
 func NewToolMenu(selected string, onSelect func(string)) *ToolMenu {
@@ -128,6 +130,13 @@ func (menu *ToolMenu) UpdateOverlay(input simpleui.Input) bool {
 				menu.pressedItem = -1
 				return true
 			}
+			if toolMenuItems[item].id == "CHECK_UPDATES" {
+				menu.Close()
+				if menu.onCheckUpdates != nil {
+					menu.onCheckUpdates()
+				}
+				return true
+			}
 			menu.selected = toolMenuItems[item].id
 			menu.Close()
 			if menu.onSelectSound != nil {
@@ -143,7 +152,8 @@ func (menu *ToolMenu) UpdateOverlay(input simpleui.Input) bool {
 	return true
 }
 
-func (menu *ToolMenu) SetSelectSound(play func()) { menu.onSelectSound = play }
+func (menu *ToolMenu) SetSelectSound(play func())   { menu.onSelectSound = play }
+func (menu *ToolMenu) SetCheckUpdates(check func()) { menu.onCheckUpdates = check }
 
 func (menu *ToolMenu) DrawOverlay() {
 	if !menu.open {
@@ -372,7 +382,7 @@ func (menu *ToolMenu) itemBounds(index int) rl.Rectangle {
 	}
 	if item.row == 2 {
 		y = 551
-		step, width = 220, 210
+		step, width = 150, 140
 	}
 	rowX := float32(640) - float32(count)*step/2
 	return rl.Rectangle{X: rowX + float32(column)*step, Y: y, Width: width, Height: 108}

@@ -1356,6 +1356,20 @@
     "text.0ecb9f4b22e5": "DISTANCIAS · arrastra esta cabecera",
     "text.d2317ec4971d": "Desnivel B − A: %+.1f m",
     "text.5a1bf7f02c98": "Mapzen / Open Topo Data · 81 muestras",
-    "text.e9aa69efa6e1": "Verde: terreno · naranja: LOS · azul: Fresnel"
+    "text.e9aa69efa6e1": "Verde: terreno · naranja: LOS · azul: Fresnel",
+    "text.bb40197c6706": "SEÑALIZACIÓN",
+    "text.930589e3a4d9": "MENSAJES SDS",
+    "text.535ad08d8b0d": "EXPORTAR JSON",
+    "text.292ea49f103c": "Error al exportar",
+    "text.27d2334b9f25": "Exportado a DATA/exports/tetra",
+    "text.812b5403c47a": "EVENTO",
+    "text.469580027ba3": "PARTICIPANTE",
+    "text.9f882da226a8": "LLAMADA",
+    "text.f8a5e4dd4992": "PORTADORA",
+    "text.a9474bdd7d25": "TS RX / ASIG.",
+    "text.c06d3a82731b": "RESUMEN",
+    "text.b6a0fa6b7ce3": "%d eventos · rueda para recorrer · pulsa una fila para ver el detalle",
+    "text.ee139409c0cb": "CENTRAR POSICIONES",
+    "text.33438a9c0b7a": "HERRAMIENTA"
   }
 }

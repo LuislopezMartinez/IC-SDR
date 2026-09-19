@@ -21,7 +21,7 @@ func TestParseMACResourceSSI(t *testing.T) {
 }
 
 func TestParseLLCCMCESetup(t *testing.T) {
-	bits := make([]byte, 40)
+	bits := make([]byte, 48)
 	put := func(start, n int, v uint32) {
 		for i := 0; i < n; i++ {
 			bits[start+i] = byte((v >> uint(n-1-i)) & 1)

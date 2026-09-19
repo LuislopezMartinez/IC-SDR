@@ -17,8 +17,8 @@ type RecorderPanel struct {
 	recorder                                      *AudioRecorder
 	controls                                      []simpleui.Element
 	toolControls                                  []simpleui.Element
-	record, pause, format, folder                 *simpleui.Button
-	skip                                          *simpleui.Switch
+	record, pause, folder                         *simpleui.Button
+	skip, format                                  *simpleui.Switch
 	toolRecord, toolPause, toolFormat, toolFolder *simpleui.Button
 	toolSkip                                      *simpleui.Switch
 	deleteModal                                   bool
@@ -32,8 +32,9 @@ func NewRecorderPanel(screen *MainScreen, recorder *AudioRecorder) *RecorderPane
 	p.record.SetColors(rl.Color{R: 145, G: 38, B: 42, A: 255}, rl.Color{R: 255, G: 95, B: 95, A: 255}, colors.text)
 	p.pause = simpleui.NewButton("audioRecordPause", 1442, 445, 138, 36, i18n.Source("text.0b03bdac33fa"), uiControlFontSize)
 	p.skip = simpleui.NewSwitch("audioRecordSkipSQL", 1300, 489, 280, 30, i18n.Source("text.d5a32f2a10ee"), screen.recorderSkipSilence, uiMinimumFontSize)
-	p.format = simpleui.NewButton("audioRecordFormat", 1300, 525, 98, 32, "MP3", 13)
-	p.folder = simpleui.NewButton("audioRecordFolder", 1406, 525, 174, 32, i18n.Source("text.f7aa514861ad"), 13)
+	p.format = simpleui.NewSwitch("audioRecordFormat", 1300, 525, 122, 32, "MP3", screen.recorderFormat == recorderFormatMP3, 13)
+	p.format.SetTrackColors(colors.panelAlt, colors.green)
+	p.folder = simpleui.NewButton("audioRecordFolder", 1430, 525, 150, 32, i18n.Source("text.f7aa514861ad"), 13)
 	p.toolRecord = simpleui.NewButton("toolAudioRecord", 35, 715, 135, 40, i18n.Source("text.31d59748e4d1"), uiControlFontSize)
 	p.toolRecord.SetColors(rl.Color{R: 145, G: 38, B: 42, A: 255}, rl.Color{R: 255, G: 95, B: 95, A: 255}, colors.text)
 	p.toolPause = simpleui.NewButton("toolAudioPause", 180, 715, 135, 40, i18n.Source("text.0b03bdac33fa"), uiControlFontSize)
@@ -49,26 +50,27 @@ func NewRecorderPanel(screen *MainScreen, recorder *AudioRecorder) *RecorderPane
 		p.refresh()
 	}
 	openFolder := func() { openExplorerPath(recorder.Directory()) }
-	toggleFormat := func() {
+	setFormat := func(mp3 bool) {
 		if recorder.State().Recording {
+			p.refresh()
 			return
 		}
-		if screen.recorderFormat == recorderFormatMP3 {
-			screen.recorderFormat = recorderFormatWAV
-		} else {
+		screen.recorderFormat = recorderFormatWAV
+		if mp3 {
 			screen.recorderFormat = recorderFormatMP3
 		}
 		recorder.SetFormat(screen.recorderFormat)
 		screen.markSettingsDirty()
 		p.refresh()
 	}
+	toggleFormat := func() { setFormat(screen.recorderFormat != recorderFormatMP3) }
 	p.record.OnClick(startStop)
 	p.toolRecord.OnClick(startStop)
 	p.pause.OnClick(togglePause)
 	p.toolPause.OnClick(togglePause)
 	p.skip.OnChange(setSkip)
 	p.toolSkip.OnChange(setSkip)
-	p.format.OnClick(toggleFormat)
+	p.format.OnChange(setFormat)
 	p.toolFormat.OnClick(toggleFormat)
 	p.folder.OnClick(openFolder)
 	p.toolFolder.OnClick(openFolder)
@@ -125,6 +127,7 @@ func (p *RecorderPanel) refresh() {
 	p.format.SetEnabled(!state.Recording)
 	p.toolFormat.SetEnabled(!state.Recording)
 	p.format.SetLabel(state.Format)
+	p.format.SetActive(state.Format == recorderFormatMP3)
 	p.toolFormat.SetLabel(i18n.Source("text.4034091b82a3") + state.Format)
 	p.skip.SetActive(state.SkipSquelchSilence)
 	p.toolSkip.SetActive(state.SkipSquelchSilence)

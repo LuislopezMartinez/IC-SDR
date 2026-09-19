@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [string]$Version = '0.8.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -9,6 +10,8 @@ $distRoot = [System.IO.Path]::GetFullPath((Join-Path $projectRoot 'dist\IC-SDR-G
 $expectedDist = [System.IO.Path]::GetFullPath((Join-Path $projectRoot 'dist\IC-SDR-Go'))
 $digitalVoiceRuntime = Join-Path $projectRoot 'DATA\tools\digital_voice\runtime'
 $digitalVoiceManifestPath = Join-Path $digitalVoiceRuntime 'runtime-version.json'
+$audioRuntime = Join-Path $projectRoot 'DATA\tools\audio\runtime'
+$audioManifestPath = Join-Path $audioRuntime 'runtime-version.json'
 
 if ($distRoot -ne $expectedDist -or -not $distRoot.StartsWith($projectRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Ruta de distribución no segura: $distRoot"
@@ -30,6 +33,20 @@ foreach ($required in @($digitalVoiceExe, (Join-Path $digitalVoiceRuntime 'bin\m
 $digitalVoiceExeHash = (Get-FileHash -LiteralPath $digitalVoiceExe -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($digitalVoiceExeHash -ne $digitalVoiceManifest.executableSha256.ToLowerInvariant()) {
     throw "El ejecutable DSD-neo no coincide con el manifiesto: $digitalVoiceExeHash"
+}
+
+if (-not (Test-Path -LiteralPath $audioManifestPath)) {
+    throw "Falta el manifiesto de LAME: $audioManifestPath"
+}
+$audioManifest = Get-Content -LiteralPath $audioManifestPath -Raw | ConvertFrom-Json
+if ($audioManifest.version -ne '3.100.1') {
+    throw "Versión de LAME no admitida: $($audioManifest.version). Se esperaba 3.100.1."
+}
+$lameExe = Join-Path $audioRuntime 'lame.exe'
+if (-not (Test-Path -LiteralPath $lameExe)) { throw "Falta LAME: $lameExe" }
+$lameExeHash = (Get-FileHash -LiteralPath $lameExe -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($lameExeHash -ne $audioManifest.executableSha256.ToLowerInvariant()) {
+    throw "El ejecutable LAME no coincide con el manifiesto: $lameExeHash"
 }
 
 # Windows locks the executable, runtime DLLs and startup.log while IC-SDR is
@@ -68,13 +85,15 @@ if (-not $SkipTests) {
 }
 
 $exePath = Join-Path $distRoot 'IC-SDR-Go.exe'
-& go build -trimpath -ldflags '-s -w -H=windowsgui' -o $exePath .
+if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Versión no válida: $Version" }
+& go build -trimpath -ldflags "-s -w -H=windowsgui -X go-zero/internal/update.CurrentVersion=$Version" -o $exePath .
 if ($LASTEXITCODE -ne 0) { throw 'No se pudo compilar IC-SDR-Go.exe.' }
 
 $copies = @(
     @{ Source = 'DATA\runtime\windows-x64'; Destination = 'DATA\runtime\windows-x64' },
     @{ Source = 'DATA\tools\dmr\runtime'; Destination = 'DATA\tools\dmr\runtime' },
     @{ Source = 'DATA\tools\digital_voice\runtime'; Destination = 'DATA\tools\digital_voice\runtime' },
+    @{ Source = 'DATA\tools\audio\runtime'; Destination = 'DATA\tools\audio\runtime' },
     @{ Source = 'DATA\tools\rtl_433\runtime'; Destination = 'DATA\tools\rtl_433\runtime' },
     @{ Source = 'DATA\tools\radiosonde\runtime'; Destination = 'DATA\tools\radiosonde\runtime' },
     @{ Source = 'DATA\tools\ais\runtime'; Destination = 'DATA\tools\ais\runtime' },

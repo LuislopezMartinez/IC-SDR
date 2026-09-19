@@ -176,6 +176,9 @@ type resourceAddress struct {
 	HeaderBits        int
 	LengthBits        int
 	ChannelAllocation bool
+	Carrier           uint16
+	AssignedSlots     uint8
+	AllocationFields  map[string]uint32
 }
 
 func parseMACResource(bits []byte) (resourceAddress, bool) {
@@ -235,6 +238,9 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 	if cur >= len(bits) {
 		return resourceAddress{}, i18n.Source("text.1d4574e7be32"), false
 	}
+	var carrier uint16
+	allocationFields := map[string]uint32{}
+	var assignedSlots uint8
 	hasAllocation := bits[cur] != 0
 	cur++
 	if hasAllocation {
@@ -243,6 +249,17 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 			// mode. Keep that association even though the following allocation
 			// cannot be interpreted without decrypting the PDU.
 			return resourceAddress{Type: addrType, SSI: ssi, Encrypted: true, UsageMarker: usageMarker, HasUsageMarker: hasUsageMarker, HeaderBits: cur, LengthBits: lengthBits, ChannelAllocation: true}, "", true
+		}
+		if cur+23 <= len(bits) {
+			assignedSlots = uint8(bitsToUint(bits, cur+2, 4))
+			carrier = uint16(bitsToUint(bits, cur+10, 12))
+			allocationFields["Allocation_type"] = bitsToUint(bits, cur, 2)
+			allocationFields["Timeslot_assigned"] = uint32(assignedSlots)
+			allocationFields["Uplink_downlink_assigned"] = bitsToUint(bits, cur+6, 2)
+			if bits[cur+22] != 0 && cur+33 <= len(bits) {
+				allocationFields["Extended_frequency_band"] = bitsToUint(bits, cur+23, 4)
+				allocationFields["Extended_offset"] = bitsToUint(bits, cur+27, 2)
+			}
 		}
 		var ok bool
 		cur, ok = skipChannelAllocation(bits, cur)
@@ -253,7 +270,7 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 	if cur > len(bits) {
 		return resourceAddress{}, i18n.Source("text.1d4574e7be32"), false
 	}
-	return resourceAddress{Type: addrType, SSI: ssi, Encrypted: encryption > 0, UsageMarker: usageMarker, HasUsageMarker: hasUsageMarker, HeaderBits: cur, LengthBits: lengthBits, ChannelAllocation: hasAllocation}, "", true
+	return resourceAddress{Type: addrType, SSI: ssi, Encrypted: encryption > 0, UsageMarker: usageMarker, HasUsageMarker: hasUsageMarker, HeaderBits: cur, LengthBits: lengthBits, ChannelAllocation: hasAllocation, Carrier: carrier, AssignedSlots: assignedSlots, AllocationFields: allocationFields}, "", true
 }
 
 // skipChannelAllocation advances over 21.4.2.2 channel allocation, including
@@ -354,6 +371,7 @@ type cmceInfo struct {
 	CallingSSI  uint32
 	SDSDataType uint8
 	SDS         []byte
+	Fields      map[string]uint32
 }
 
 type llcPDU struct {
@@ -496,7 +514,7 @@ func parseTLSDU(tl []byte) (cmceInfo, uint8, bool) {
 		return cmceInfo{}, pdisc, false
 	}
 	var call uint16
-	if len(tl) >= 22 {
+	if len(tl) >= 22 && code != 8 && code != 15 && code != 16 {
 		call = uint16(bitsToUint(tl, 8, 14))
 	}
 	result := cmceInfo{Kind: name, Code: code, CallID: call}
@@ -529,6 +547,9 @@ func parseTLSDU(tl []byte) (cmceInfo, uint8, bool) {
 		if length > 0 && offset+length <= len(tl) {
 			result.SDS = append([]byte(nil), tl[offset:offset+length]...)
 		}
+	}
+	if !enrichCMCE(tl, &result) {
+		return cmceInfo{}, pdisc, false
 	}
 	return result, pdisc, true
 }

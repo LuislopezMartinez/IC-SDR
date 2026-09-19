@@ -5,16 +5,15 @@ import (
 
 	"encoding/binary"
 	"fmt"
-	"io"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
-	shinemp3 "github.com/braheezy/shine-mp3/pkg/mp3"
 	"go-zero/internal/resources"
 )
 
@@ -357,53 +356,60 @@ func (r *AudioRecorder) uniquePath(chunk recorderChunk) string {
 }
 
 func encodeWAVToMP3(wavPath, mp3Path string) (err error) {
-	input, err := os.Open(wavPath)
-	if err != nil {
-		return err
+	lamePath := resources.Path("tools", "audio", "runtime", "lame.exe")
+	if _, err := os.Stat(lamePath); err != nil {
+		return fmt.Errorf("no se encuentra LAME: %w", err)
 	}
-	defer input.Close()
-	if _, err = input.Seek(44, io.SeekStart); err != nil {
-		return err
+	_ = os.Remove(mp3Path)
+	command := exec.Command(lamePath, "--silent", "--cbr", "-b", "160", "-q", "2", "-m", "m", "--noreplaygain", wavPath, mp3Path)
+	if output, err := command.CombinedOutput(); err != nil {
+		_ = os.Remove(mp3Path)
+		message := strings.TrimSpace(string(output))
+		if message != "" {
+			return fmt.Errorf("LAME: %w: %s", err, message)
+		}
+		return fmt.Errorf("LAME: %w", err)
 	}
-	output, err := os.Create(mp3Path)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if closeErr := output.Close(); err == nil {
-			err = closeErr
-		}
-		if err != nil {
-			_ = os.Remove(mp3Path)
-		}
-	}()
-
-	encoder := shinemp3.NewEncoder(audioSampleRate, 1)
-	pcmBytes := make([]byte, shinemp3.SHINE_MAX_SAMPLES*2)
-	samples := make([]int16, shinemp3.SHINE_MAX_SAMPLES)
-	for {
-		n, readErr := io.ReadFull(input, pcmBytes)
-		if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
-			return readErr
-		}
-		if n == 0 {
-			break
-		}
-		for i := range samples {
-			samples[i] = 0
-		}
-		for i := 0; i < n/2; i++ {
-			samples[i] = int16(binary.LittleEndian.Uint16(pcmBytes[i*2:]))
-		}
-		encoded, written := encoder.EncodeBufferInterleaved(samples)
-		if _, err = output.Write(encoded[:written]); err != nil {
-			return err
-		}
-		if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
-			break
-		}
+	info, err := os.Stat(mp3Path)
+	if err != nil || info.Size() < 4 {
+		_ = os.Remove(mp3Path)
+		return fmt.Errorf("LAME no generó un archivo MP3 válido")
 	}
 	return nil
+}
+
+func mp3FrameBytes(frame []byte) (int, error) {
+	if len(frame) < 4 {
+		return 0, fmt.Errorf("trama MP3 demasiado corta: %d bytes", len(frame))
+	}
+	header := binary.BigEndian.Uint32(frame[:4])
+	if header&0xffe00000 != 0xffe00000 {
+		return 0, fmt.Errorf("sincronización MP3 no válida")
+	}
+	version, layer := (header>>19)&3, (header>>17)&3
+	bitrateIndex, sampleRateIndex := (header>>12)&15, (header>>10)&3
+	padding := int((header >> 9) & 1)
+	if layer != 1 || bitrateIndex == 0 || bitrateIndex == 15 || sampleRateIndex == 3 {
+		return 0, fmt.Errorf("cabecera MP3 no compatible")
+	}
+	bitratesMPEG1 := [...]int{0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320}
+	bitratesMPEG2 := [...]int{0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160}
+	sampleRates := map[uint32][3]int{3: {44100, 48000, 32000}, 2: {22050, 24000, 16000}, 0: {11025, 12000, 8000}}
+	rates, ok := sampleRates[version]
+	if !ok {
+		return 0, fmt.Errorf("versión MPEG reservada")
+	}
+	bitrate := bitratesMPEG1[bitrateIndex]
+	coefficient := 144
+	if version != 3 {
+		bitrate = bitratesMPEG2[bitrateIndex]
+		coefficient = 72
+	}
+	length := coefficient*bitrate*1000/rates[sampleRateIndex] + padding
+	if length > len(frame) {
+		return 0, fmt.Errorf("trama MP3 incompleta: %d de %d bytes", len(frame), length)
+	}
+	return length, nil
 }
 
 var unsafeFilePart = regexp.MustCompile(`[^A-Za-z0-9_-]+`)

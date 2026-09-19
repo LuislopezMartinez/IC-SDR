@@ -12,6 +12,25 @@ func TestIQStats(t *testing.T) {
 	}
 }
 
+func TestRecorderSinkReceivesContinuousDemodulatorAudio(t *testing.T) {
+	receiver := &Receiver{}
+	var got []float32
+	var enabled, open bool
+	receiver.SetRecorderSink(func(samples []float32, squelchEnabled, squelchOpen bool) {
+		got = append(got, samples...)
+		enabled, open = squelchEnabled, squelchOpen
+	})
+	receiver.publishRecorderAudio([]float32{.1, -.2, .3}, true, true)
+	if len(got) != 3 || got[1] != -.2 || !enabled || !open {
+		t.Fatalf("recorder sink received samples=%v enabled=%v open=%v", got, enabled, open)
+	}
+	receiver.SetRecorderSink(nil)
+	receiver.publishRecorderAudio([]float32{.9}, false, false)
+	if len(got) != 3 {
+		t.Fatal("disabled recorder sink still received audio")
+	}
+}
+
 func TestSquelchClosesAndReopensAudio(t *testing.T) {
 	receiver := NewReceiver(Config{SampleRate: 2_048_000, FFTSize: 4096})
 	receiver.SetSquelch(true, -100, 0, 20)

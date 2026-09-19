@@ -42,11 +42,11 @@ type AudioPlayer struct {
 	sourceCount    int
 	sourcePosition float64
 	processor      *AudioProcessor
-	recorder       *AudioRecorder
 	squelchEnabled atomic.Bool
 	squelchOpen    atomic.Bool
 	meterPeakBits  atomic.Uint32
 	digitalMode    atomic.Bool
+	wideFMMode     atomic.Bool
 	digitalActive  atomic.Bool
 	digitalStarved int
 	playbackMode   string
@@ -55,8 +55,8 @@ type AudioPlayer struct {
 
 type webAudioSink struct{ publish func([]float32) }
 
-func NewAudioPlayer(receiver *sdr.Receiver, recorder *AudioRecorder) *AudioPlayer {
-	return &AudioPlayer{receiver: receiver, recorder: recorder, volume: .62, source: make([]float32, 8192), processor: NewAudioProcessor()}
+func NewAudioPlayer(receiver *sdr.Receiver, _ *AudioRecorder) *AudioPlayer {
+	return &AudioPlayer{receiver: receiver, volume: .62, source: make([]float32, 8192), processor: NewAudioProcessor()}
 }
 
 func (player *AudioPlayer) Pump() {
@@ -64,6 +64,7 @@ func (player *AudioPlayer) Pump() {
 		mode, active := player.receiver.AudioPlaybackState()
 		player.transitionPlaybackMode(mode)
 		player.digitalMode.Store(mode == i18n.Source("text.2604864ce4d3") || mode == i18n.Source("text.f69d86a86926") || mode == i18n.Source("text.3ae4feb8250d"))
+		player.wideFMMode.Store(mode == i18n.Source("text.6b742bac3eb4"))
 		player.digitalActive.Store(active)
 	}
 	if !player.ready {
@@ -189,7 +190,11 @@ func (player *AudioPlayer) fillAudio(destination []float32) {
 	} else {
 		player.digitalStarved = 0
 	}
-	player.processor.Process(destination[:availableOutput])
+	if player.wideFMMode.Load() {
+		player.processor.ProcessWideFM(destination[:availableOutput])
+	} else {
+		player.processor.Process(destination[:availableOutput])
+	}
 	player.publishAudioPeak(destination[:availableOutput])
 	if sink := player.webAudioSink.Load(); sink != nil {
 		if player.webMuted.Load() {
@@ -197,9 +202,6 @@ func (player *AudioPlayer) fillAudio(destination []float32) {
 		} else {
 			sink.publish(destination)
 		}
-	}
-	if player.recorder != nil {
-		player.recorder.Submit(destination[:availableOutput], player.squelchEnabled.Load(), player.squelchOpen.Load())
 	}
 }
 
@@ -266,8 +268,17 @@ func (player *AudioPlayer) SetMuted(muted bool) {
 func (player *AudioPlayer) ConfigureProcessing(lowCut, highCut int, enabled bool, gains [5]float32, profile string) {
 	player.processor.Configure(lowCut, highCut, enabled, gains, profile)
 }
-func (player *AudioPlayer) Spectrum(destination []float32)      { player.processor.Spectrum(destination) }
-func (player *AudioPlayer) SetRecorder(recorder *AudioRecorder) { player.recorder = recorder }
+func (player *AudioPlayer) Spectrum(destination []float32) { player.processor.Spectrum(destination) }
+func (player *AudioPlayer) SetRecorder(recorder *AudioRecorder) {
+	if player.receiver == nil {
+		return
+	}
+	if recorder == nil {
+		player.receiver.SetRecorderSink(nil)
+		return
+	}
+	player.receiver.SetRecorderSink(recorder.Submit)
+}
 func (player *AudioPlayer) SetRecorderSquelch(enabled, open bool) {
 	player.squelchEnabled.Store(enabled)
 	player.squelchOpen.Store(open)

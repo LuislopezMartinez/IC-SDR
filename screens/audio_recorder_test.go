@@ -2,6 +2,7 @@ package screens
 
 import (
 	"encoding/binary"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -52,12 +53,16 @@ func TestAudioRecorderWritesValidWAV(t *testing.T) {
 	recorder.Close()
 }
 
-func TestAudioRecorderWritesMP3WithoutExternalEncoder(t *testing.T) {
+func TestAudioRecorderWritesMP3WithBundledLAME(t *testing.T) {
 	recorder := newAudioRecorder(t.TempDir())
 	recorder.SetFormat(recorderFormatMP3)
 	recorder.Configure(145_800_000, "SAT", "FM")
 	recorder.Start()
-	recorder.Submit(make([]float32, 2400), false, true)
+	samples := make([]float32, audioSampleRate*2)
+	for i := range samples {
+		samples[i] = float32(.4 * math.Sin(2*math.Pi*1000*float64(i)/audioSampleRate))
+	}
+	recorder.Submit(samples, false, true)
 	recorder.Stop()
 	deadline := time.Now().Add(3 * time.Second)
 	for len(recorder.State().RecentFiles) == 0 && time.Now().Before(deadline) {
@@ -78,11 +83,41 @@ func TestAudioRecorderWritesMP3WithoutExternalEncoder(t *testing.T) {
 		recorder.Close()
 		t.Fatalf("invalid MP3 output %q (%d bytes)", path, len(data))
 	}
+	frames, duration, err := inspectMP3Frames(data)
+	if err != nil {
+		recorder.Close()
+		t.Fatalf("corrupt MP3 stream: %v", err)
+	}
+	if frames < 80 || duration < 2*time.Second || duration > 2100*time.Millisecond {
+		recorder.Close()
+		t.Fatalf("MP3 frames=%d duration=%v, want approximately 2 seconds", frames, duration)
+	}
 	if matches, _ := filepath.Glob(path + ".wav.part"); len(matches) != 0 {
 		recorder.Close()
 		t.Fatal("temporary WAV was not removed")
 	}
 	recorder.Close()
+}
+
+func inspectMP3Frames(data []byte) (frames int, duration time.Duration, err error) {
+	for len(data) > 0 {
+		length, frameErr := mp3FrameBytes(data)
+		if frameErr != nil {
+			return frames, duration, frameErr
+		}
+		header := binary.BigEndian.Uint32(data[:4])
+		version := (header >> 19) & 3
+		samples := 1152
+		if version != 3 {
+			samples = 576
+		}
+		sampleRateIndex := (header >> 10) & 3
+		rates := map[uint32][3]int{3: {44100, 48000, 32000}, 2: {22050, 24000, 16000}, 0: {11025, 12000, 8000}}
+		duration += time.Duration(samples) * time.Second / time.Duration(rates[version][sampleRateIndex])
+		frames++
+		data = data[length:]
+	}
+	return frames, duration, nil
 }
 
 func TestAudioRecorderCanSkipClosedSquelch(t *testing.T) {

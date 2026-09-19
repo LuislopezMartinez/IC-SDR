@@ -14,11 +14,11 @@ import (
 	"go-zero/simpleui"
 )
 
-var tetraTabs = []string{i18n.Source("text.65cbe1e19791"), i18n.Source("text.a0511f3fa0fb"), i18n.Source("text.195f5fd6e9c6"), i18n.Source("text.36d9977c457c"), i18n.Source("text.fe86cd5572c0"), i18n.Source("text.176c7866b945"), i18n.Source("text.b29ec97662f8")}
+var tetraTabs = []string{i18n.Source("text.65cbe1e19791"), i18n.Source("text.a0511f3fa0fb"), i18n.Source("text.195f5fd6e9c6"), i18n.Source("text.36d9977c457c"), i18n.Source("text.fe86cd5572c0"), i18n.Source("text.176c7866b945"), i18n.Source("text.b29ec97662f8"), i18n.Source("text.bb40197c6706")}
 
 func RunTETRAViewer(path, settingsPath string) {
 	simpleui.SetMode(1400, 780, simpleui.Fit)
-	simpleui.SetInitialWindowSize(700, 390)
+	simpleui.SetInitialWindowSize(1100, 613)
 	// The viewer is commonly kept beside the receiver at a reduced size. Use
 	// larger glyphs and smooth canvas reduction so text remains readable near
 	// the minimum window dimensions.
@@ -31,13 +31,19 @@ func RunTETRAViewer(path, settingsPath string) {
 }
 
 type tetraViewer struct {
-	path                  string
-	settingsPath          string
-	snapshot              tetra.LiveSnapshot
-	tab                   int
-	nextRead              time.Time
-	nextSettingsRead      time.Time
-	topmost, topmostKnown bool
+	path                      string
+	settingsPath              string
+	snapshot                  tetra.LiveSnapshot
+	tab                       int
+	nextRead                  time.Time
+	eventOffset, detailOffset int
+	selectedEvent             *tetra.Message
+	exportStatus              string
+	gpsLat, gpsLon, gpsSpan   float64
+	gpsFitted, gpsDragging    bool
+	gpsLast                   rl.Vector2
+	nextSettingsRead          time.Time
+	topmost, topmostKnown     bool
 }
 
 func (v *tetraViewer) read() {
@@ -85,7 +91,7 @@ func (v *tetraViewer) draw() {
 	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.b5bce57093ca"), float64(v.snapshot.FrequencyHz)/1e6, state, viewerTime(v.snapshot.Updated)), 28, 56, 13, colors.muted)
 	mouse := simpleui.MousePosition()
 	for i, name := range tetraTabs {
-		b := rl.Rectangle{X: 24 + float32(i)*193, Y: 88, Width: 179, Height: 45}
+		b := rl.Rectangle{X: 24 + float32(i)*170, Y: 88, Width: 160, Height: 45}
 		fill := colors.panelAlt
 		if i == v.tab {
 			fill = colors.blue
@@ -95,6 +101,9 @@ func (v *tetraViewer) draw() {
 		drawCentered(name, b, 14, colors.text)
 		if rl.IsMouseButtonReleased(rl.MouseButtonLeft) && rl.CheckCollisionPointRec(mouse, b) {
 			v.tab = i
+			v.eventOffset = 0
+			v.detailOffset = 0
+			v.selectedEvent = nil
 		}
 	}
 	drawPanel(24, 150, 1352, 600)
@@ -108,11 +117,13 @@ func (v *tetraViewer) draw() {
 	case 3:
 		v.drawUsers()
 	case 4:
-		v.drawMessages()
+		v.drawEvents(false)
 	case 5:
 		v.drawGPS()
 	case 6:
 		v.drawConsole()
+	case 7:
+		v.drawEvents(true)
 	}
 }
 
@@ -366,29 +377,30 @@ func (v *tetraViewer) drawEmpty(title string, count int, hint string) {
 }
 func (v *tetraViewer) drawGPS() {
 	simpleui.DrawTextStyled(i18n.Source("text.e08d65caa6d5"), 48, 175, 18, simpleui.FontSemiBold, colors.cyan)
-	mapBox := rl.Rectangle{X: 48, Y: 220, Width: 900, Height: 480}
-	rl.DrawRectangleRec(mapBox, rl.Color{R: 8, G: 17, B: 24, A: 255})
-	rl.DrawRectangleLinesEx(mapBox, 1, colors.border)
-	for i := 1; i < 8; i++ {
-		x := mapBox.X + mapBox.Width*float32(i)/8
-		rl.DrawLine(int32(x), int32(mapBox.Y), int32(x), int32(mapBox.Y+mapBox.Height), colors.grid)
-	}
-	for i := 1; i < 6; i++ {
-		y := mapBox.Y + mapBox.Height*float32(i)/6
-		rl.DrawLine(int32(mapBox.X), int32(y), int32(mapBox.X+mapBox.Width), int32(y), colors.grid)
-	}
-	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.d57b21258ad8"), len(v.snapshot.Positions)), 990, 230, 15, colors.text)
+	v.drawPositionMap()
 	if len(v.snapshot.Positions) == 0 {
 		simpleui.DrawText(i18n.Source("text.98de653665fb"), 990, 270, 13, colors.muted)
 		return
 	}
 	for i, p := range v.snapshot.Positions {
-		if i >= 10 {
+		if i >= 7 {
 			break
 		}
-		y := 270 + float32(i)*42
-		simpleui.DrawTextStyled(fmt.Sprintf(i18n.Source("text.6bb3cf0cf824"), p.SSI), 990, y, 14, simpleui.FontMono, colors.cyan)
-		simpleui.DrawText(fmt.Sprintf(i18n.Source("text.76cbe80026b1"), p.Latitude, p.Longitude, p.SpeedKmh, p.Heading, p.AccuracyM), 990, y+19, 12, colors.text)
+		y := float32(250 + i*66)
+		simpleui.DrawTextStyled(fmt.Sprintf("SSI %08d · %s", p.SSI, p.Protocol), 990, y, 13, simpleui.FontMono, colors.cyan)
+		simpleui.DrawText(fmt.Sprintf("%.6f, %.6f", p.Latitude, p.Longitude), 990, y+20, 12, colors.text)
+		speed, heading := "—", "—"
+		if p.HasVelocity {
+			speed = fmt.Sprintf("%.1f", p.SpeedKmh)
+		}
+		if p.HasHeading {
+			heading = fmt.Sprintf("%.1f", p.Heading)
+		}
+		motion := speed + " km/h · " + heading + "°"
+		if p.AccuracyKnown {
+			motion += fmt.Sprintf(" · ~%.0f m", p.AccuracyM)
+		}
+		simpleui.DrawText(motion, 990, y+39, 11, colors.muted)
 	}
 }
 func (v *tetraViewer) drawConsole() {

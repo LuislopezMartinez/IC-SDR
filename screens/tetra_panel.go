@@ -41,6 +41,8 @@ type TETRAPanel struct {
 	viewerTopmost                                               bool
 }
 
+const tetraChannelBandwidthHz = 25_000
+
 func NewTETRAPanel(screen *MainScreen) *TETRAPanel {
 	p := &TETRAPanel{screen: screen, snapshotPath: resources.WritablePath("cache", "tetra-live.json"), commandPath: resources.WritablePath("cache", "tetra-command.json"), viewerSettingsPath: resources.WritablePath("settings", "tetra-viewer.json"), clearOnly: true}
 	p.loadViewerSettings()
@@ -118,7 +120,7 @@ func (p *TETRAPanel) tune(hz int64) {
 	}
 	if s.receiver != nil {
 		s.receiver.SetCenterFrequency(hz)
-		s.receiver.SetDemodulator(i18n.Source("text.f69d86a86926"), hz, 25_000)
+		s.receiver.SetDemodulator(i18n.Source("text.f69d86a86926"), hz, tetraChannelBandwidthHz)
 	}
 	s.waterfall.Reset()
 	s.markSettingsDirty()
@@ -135,7 +137,7 @@ func (p *TETRAPanel) Enter() {
 	if s.filterSelector != nil {
 		s.selectFilter(s.filterSelector.SelectPreset(i18n.Source("text.f69d86a86926"), 0))
 	} else {
-		s.demodBandwidthHz = 25_000
+		s.demodBandwidthHz = tetraChannelBandwidthHz
 	}
 	s.tuningStepHz = 12_500
 	if s.stepSelector != nil {
@@ -148,6 +150,13 @@ func (p *TETRAPanel) Leave() {
 }
 func (p *TETRAPanel) apply() {
 	if p.enabled {
+		// TETRA carriers occupy a 25 kHz channel. Reassert the wide preset when
+		// starting as memories and previous modes may have restored another one.
+		p.screen.demodBandwidthHz = tetraChannelBandwidthHz
+		if p.screen.filterSelector != nil && p.screen.filter != nil {
+			preset := p.screen.filterSelector.SelectPreset(i18n.Source("text.f69d86a86926"), 0)
+			p.screen.filter.SetLabel(filterButtonLabel(preset))
+		}
 		// Keep the RF capture fixed while the narrow TETRA VFO and AFC make
 		// sub-bin corrections; repeated hardware retunes would break timing.
 		p.screen.centerMode = false
@@ -156,6 +165,9 @@ func (p *TETRAPanel) apply() {
 		}
 	}
 	if p.screen.receiver != nil {
+		if p.enabled {
+			p.screen.receiver.SetDemodulator(i18n.Source("text.f69d86a86926"), p.screen.frequencyHz, tetraChannelBandwidthHz)
+		}
 		p.screen.receiver.ConfigureTETRA(p.enabled)
 		p.screen.receiver.SetTETRAAudioPolicy(p.listenSlot, p.clearOnly)
 	}
@@ -243,7 +255,7 @@ func (p *TETRAPanel) Tick() {
 	}
 	s.frequencyHz = next
 	if s.receiver != nil {
-		s.receiver.SetDemodulator(i18n.Source("text.f69d86a86926"), next, s.demodBandwidthHz)
+		s.receiver.SetDemodulator(i18n.Source("text.f69d86a86926"), next, tetraChannelBandwidthHz)
 	}
 	p.centerFiltered = 0
 	s.markSettingsDirty()

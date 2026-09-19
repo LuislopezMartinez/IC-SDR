@@ -140,6 +140,7 @@ type MainScreen struct {
 	toolMenu               *ToolMenu
 	sdrSettings            *SDRSettings
 	sdrHeader              *SDRHeaderPanel
+	updateDialog           *UpdateDialog
 	audioPlayer            *AudioPlayer
 	webServer              *WebServer
 	webPanel               *WebPanel
@@ -390,6 +391,9 @@ func (screen *MainScreen) CreateControls() {
 	spanDown.OnClick(func() { screen.changeSpan(-1) })
 	spanUp.OnClick(func() { screen.changeSpan(1) })
 	screen.toolMenu = NewToolMenu(screen.activeTool, screen.selectTool)
+	screen.updateDialog = NewUpdateDialog()
+	screen.toolMenu.SetCheckUpdates(func() { screen.updateDialog.Check(true) })
+	screen.updateDialog.Check(false)
 	screen.toolMenu.SetSelectSound(screen.uiSounds.PlayToolSelect)
 	simpleui.SetActivationFeedback(screen.uiSounds.PlayButton)
 	if screen.receiver != nil && screen.savedHardware != nil && screen.savedHardware.Driver == screen.receiver.HardwareSettings().Driver {
@@ -524,6 +528,7 @@ func (screen *MainScreen) CreateControls() {
 		simpleui.Add(element)
 	}
 	simpleui.Add(screen.toolMenu)
+	simpleui.Add(screen.updateDialog)
 	simpleui.Add(screen.bandSelector)
 	simpleui.Add(screen.stepSelector)
 	simpleui.Add(screen.filterSelector)
@@ -2030,7 +2035,8 @@ func (screen *MainScreen) overlayOpen() bool {
 		(screen.sdrSettings != nil && screen.sdrSettings.OverlayOpen()) ||
 		(screen.stepSelector != nil && screen.stepSelector.OverlayOpen()) ||
 		(screen.filterSelector != nil && screen.filterSelector.OverlayOpen()) ||
-		(screen.memoryPanel != nil && screen.memoryPanel.OverlayOpen())
+		(screen.memoryPanel != nil && screen.memoryPanel.OverlayOpen()) ||
+		(screen.updateDialog != nil && screen.updateDialog.OverlayOpen())
 }
 
 func (screen *MainScreen) visibleBin(normalized float32) (int, bool) {

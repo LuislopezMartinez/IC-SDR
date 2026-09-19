@@ -70,12 +70,12 @@ type Stats struct {
 }
 
 type HardwareSettings struct {
-	Available, AGC, BiasT, RFNotch, DABNotch, IQCorrection bool
-	DigitalAGC, OffsetTuning, IQSwap                       bool
-	Device, Driver, Serial, Antenna                        string
-	Antennas                                               []string
-	RFGain, IFGain, PPM                                    float32
-	AGCSetpoint, DirectSampling                            int
+	Available, AGC, BiasT, ExternalAmp, RFNotch, DABNotch, IQCorrection bool
+	DigitalAGC, OffsetTuning, IQSwap                                    bool
+	Device, Driver, Serial, Antenna                                     string
+	Antennas                                                            []string
+	RFGain, IFGain, PPM                                                 float32
+	AGCSetpoint, DirectSampling                                         int
 }
 
 type Receiver struct {
@@ -131,6 +131,28 @@ type Receiver struct {
 	squelchCloseRemaining              int
 	audio                              []float32
 	audioRead, audioWrite, audioCount  int
+	recorderSink                       atomic.Pointer[receiverAudioSink]
+}
+
+type receiverAudioSink struct {
+	write func([]float32, bool, bool)
+}
+
+// SetRecorderSink taps the continuous 48 kHz demodulator output before the
+// independent speaker/WASAPI buffer. This prevents playback rebuffering from
+// becoming a gap in a recording.
+func (receiver *Receiver) SetRecorderSink(write func([]float32, bool, bool)) {
+	if write == nil {
+		receiver.recorderSink.Store(nil)
+		return
+	}
+	receiver.recorderSink.Store(&receiverAudioSink{write: write})
+}
+
+func (receiver *Receiver) publishRecorderAudio(samples []float32, squelchEnabled, squelchOpen bool) {
+	if sink := receiver.recorderSink.Load(); sink != nil && len(samples) > 0 {
+		sink.write(samples, squelchEnabled, squelchOpen)
+	}
 }
 
 func NewReceiver(config Config) *Receiver {
@@ -925,7 +947,9 @@ func (receiver *Receiver) processAudio(iq []float32) {
 		}
 	}
 	receiver.stats.AudioBuffered = uint64(receiver.audioCount)
+	squelchEnabled, squelchOpen := receiver.squelchEnabled, receiver.stats.SquelchOpen
 	receiver.mu.Unlock()
+	receiver.publishRecorderAudio(samples, squelchEnabled, squelchOpen)
 }
 
 func (receiver *Receiver) enqueueDigitalAudio(samples []float32) {
@@ -947,6 +971,7 @@ func (receiver *Receiver) enqueueDigitalAudio(samples []float32) {
 	receiver.stats.AudioBuffered = uint64(receiver.audioCount)
 	receiver.stats.SquelchOpen = len(samples) > 0
 	receiver.mu.Unlock()
+	receiver.publishRecorderAudio(samples, false, len(samples) > 0)
 }
 
 func (receiver *Receiver) signalLevelLocked(mode string, tunedHz, centerHz int64, bandwidthHz int) float32 {

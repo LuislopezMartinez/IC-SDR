@@ -29,3 +29,26 @@ func TestRTLSDRHeaderUsesDriverSpecificControls(t *testing.T) {
 		t.Fatal("manual tuner gain remained enabled under AGC")
 	}
 }
+
+func TestHackRFHeaderExposesHardwareStages(t *testing.T) {
+	p := NewSDRHeaderPanel(nil, nil)
+	p.current = sdr.HardwareSettings{
+		Available: true, Driver: "hackrf", Device: "HackRF One",
+		RFGain: 24, IFGain: 40, ExternalAmp: true, BiasT: true,
+	}
+	p.refresh()
+	if p.rfGain.Value() != 24 || p.ifGain.Value() != 40 || !p.rfGain.Enabled() || !p.ifGain.Enabled() {
+		t.Fatalf("HackRF gains unavailable: LNA=%.0f VGA=%.0f enabled=%v/%v", p.rfGain.Value(), p.ifGain.Value(), p.rfGain.Enabled(), p.ifGain.Enabled())
+	}
+	if !p.agc.Active() || !p.biasT.Active() || !p.agc.Enabled() || !p.biasT.Enabled() {
+		t.Fatalf("HackRF AMP/Bias-T unavailable: active=%v/%v enabled=%v/%v", p.agc.Active(), p.biasT.Active(), p.agc.Enabled(), p.biasT.Enabled())
+	}
+	if !strings.Contains(p.rfLabel.Text(), "LNA") || !strings.Contains(p.ifLabel.Text(), "VGA") {
+		t.Fatalf("HackRF labels incorrect: %q / %q", p.rfLabel.Text(), p.ifLabel.Text())
+	}
+	p.current = sdr.HardwareSettings{Available: true, Driver: "rtlsdr"}
+	p.refresh()
+	if p.agc.Label() == "AMP" {
+		t.Fatal("HackRF AMP label leaked into RTL-SDR controls")
+	}
+}

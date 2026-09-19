@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.7.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.7.0)**
+**Versión actual: [v0.8.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.8.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -44,6 +44,16 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.8.0
+
+- Monitor TETRA con pestaña de señalización, hasta 1.000 eventos, detalle hexadecimal y exportación JSON.
+- Mejoras SDS/TETRA: mensajes SDS-TL, localización, LIP, NMEA y mapa GPS por SSI.
+- Audio WFM con filtrado antialias y limitador transparente; procesamiento general menos saturado.
+- Grabación directa desde el demodulador y exportación MP3 a 160 kb/s mediante LAME.
+- Controles completos para HackRF: LNA, VGA, amplificador y Bias-T.
+- Las memorias restauran el módulo activo y el escáner recupera memorias sin interferir con la interfaz.
+- Comprobación de nuevas versiones desde el menú.
 
 ## Novedades de v0.7.0
 
@@ -170,3 +180,13 @@ El menú incluye **Distancias**, que abre un mapa independiente con dos pins arr
 El panel muestra distancia aproximada sobre una Tierra esférica, coordenadas, locator Maidenhead, rumbos en ambos sentidos y elevaciones del terreno. **Perfil y enlace** permite introducir frecuencia en MHz y alturas de antenas sobre el terreno en metros; muestra pérdida en espacio libre, línea de vista y despeje del 60% de la primera zona de Fresnel. La gráfica usa verde para el relieve, naranja para la línea de vista y azul para el límite inferior del 60% de Fresnel, con curvatura terrestre y radio efectivo k=4/3.
 
 Las elevaciones proceden de [Mapzen mediante Open Topo Data](https://www.opentopodata.org/), con 81 muestras por recorrido y consulta en segundo plano al terminar de arrastrar un pin. La resolución efectiva del perfil depende de la distancia entre muestras y del modelo de elevaciones; no garantiza detectar todos los obstáculos y no incluye edificios ni árboles. Sin conexión, distancia, coordenadas, rumbos, locators y pérdida en espacio libre siguen funcionando; las elevaciones no disponibles se identifican explícitamente. Los mapas utilizan el cargador compartido de tiles y su respaldo local.
+
+El monitor TETRA incluye una pestaña **Señalización**, separada de los mensajes SDS. Conserva el identificador de llamada, SSI del recurso, participante, portadora, máscara de slots asignados, slot de recepción, concesión de transmisión y campos de servicio/opciones presentes en D-SETUP, D-CONNECT, D-TX-GRANTED, D-INFO, D-TX-CEASED y D-RELEASE. Los campos se contrastaron con la DLL del plugin SDRSharp proporcionada para análisis; no se incorpora esa DLL al programa.
+
+El visor permite recorrer los últimos 1000 eventos, seleccionar una fila y consultar el detalle y los bits originales en hexadecimal con desplazamiento. **Exportar JSON** guarda todos los eventos retenidos de la pestaña activa en `DATA/exports/tetra`. El slot de recepción y la máscara de asignación son datos diferentes; esta última se presenta en hexadecimal.
+
+SDS interpreta además mensajes de texto con cabecera SDS-TL (130 y 137), localización en texto (3 y 131) y cabeceras de control LIP extendidas. Las posiciones cortas LIP y las sentencias NMEA RMC/GGA válidas se conservan por SSI y se muestran en el mapa GPS con tiles y respaldo local. Un mensaje NMEA sin posición válida no crea un marcador. Los subtipos, codificaciones y contenidos todavía no interpretados conservan su hexadecimal; no se inventan coordenadas ni valores de movimiento ausentes. Los formatos LIP largos no se presentan como posiciones decodificadas.
+
+La validación incluye tramas sintéticas completas MAC → LLC → CMCE → evento, campos opcionales, mensajes truncados, SDS-TL, posiciones NMEA y separación entre SDS y señalización. La recepción de una emisión concreta requiere comprobar después una grabación IQ o una señal en directo; los textos de SDRSharp por sí solos no permiten validar la demodulación.
+
+Cada memoria guarda el identificador del **tool activo** en el campo opcional `tool`. Al crear o editar una memoria desde la aplicación o el control web se utiliza el tool activo en ese momento. Al sintonizarla, el tool se restaura antes del modo, filtro, paso y frecuencia. Las memorias antiguas sin este campo siguen siendo válidas y conservan el comportamiento anterior, incluido el acceso automático a DMR para memorias DMR heredadas.

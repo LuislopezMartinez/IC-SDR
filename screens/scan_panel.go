@@ -178,7 +178,7 @@ func (p *ScanPanel) tuneDetected(peak *scanPeak) {
 			memory := p.screen.memoryPanel.memories[index]
 			preservedCenter := p.screen.centerFrequencyHz
 			p.screen.centerMode = false
-			p.screen.memoryPanel.recall(memory)
+			p.screen.memoryPanel.recallForScanner(memory)
 			p.screen.centerFrequencyHz = preservedCenter
 			if p.screen.receiver != nil {
 				p.screen.receiver.SetCenterFrequency(preservedCenter)

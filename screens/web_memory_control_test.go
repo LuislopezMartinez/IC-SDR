@@ -4,12 +4,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"go-zero/internal/i18n"
 	"go-zero/simpleui"
 )
 
 func TestWebMemoryControlSaveTuneDeleteAndGroups(t *testing.T) {
 	dir := t.TempDir()
-	screen := &MainScreen{frequencyHz: 100_000_000, centerFrequencyHz: 100_000_000, spanHz: 250_000, centerMode: true}
+	screen := &MainScreen{activeTool: i18n.Source("text.4c4310fd27fd"), frequencyHz: 100_000_000, centerFrequencyHz: 100_000_000, spanHz: 250_000, centerMode: true}
 	screen.mode = simpleui.NewDropdown("webMemoryMode", 0, 0, 100, 30, "MODE", []string{"AM", "NFM"}, 12)
 	panel := &MemoryPanel{screen: screen, path: filepath.Join(dir, "memories.json"), groupColorsPath: filepath.Join(dir, "groups.json"), groupColors: map[string]string{}, groups: []string{"TODAS"}, selectedGroup: "TODAS", selected: -1}
 	screen.memoryPanel = panel
@@ -18,7 +19,7 @@ func TestWebMemoryControlSaveTuneDeleteAndGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 	screen.applyWebControl(webControlCommand{Action: "memorySave", MemoryIndex: -1, Memory: &entry})
-	if len(panel.memories) != 1 || panel.memories[0].Name != "PRUEBA" {
+	if len(panel.memories) != 1 || panel.memories[0].Name != "PRUEBA" || panel.memories[0].Tool != screen.activeTool {
 		t.Fatalf("save: %+v", panel.memories)
 	}
 	screen.applyWebControl(webControlCommand{Action: "groupAdd", Group: "LOCAL"})

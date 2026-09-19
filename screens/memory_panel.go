@@ -38,6 +38,7 @@ type MemoryEntry struct {
 	Priority          bool   `json:"priority"`
 	CTCSSHz           string `json:"ctcssHz,omitempty"`
 	DCSCode           string `json:"dcsCode,omitempty"`
+	Tool              string `json:"tool,omitempty"`
 }
 
 type MemoryPanel struct {
@@ -176,6 +177,9 @@ func (p *MemoryPanel) openEditModal() {
 		return
 	}
 	p.pendingEditIndex, p.pendingMemory = p.selected, p.memories[p.selected]
+	if p.screen != nil {
+		p.pendingMemory.Tool = storableMemoryTool(p.screen.activeTool)
+	}
 	p.modal, p.modalPressed, p.editField, p.editError = "edit", 0, 0, ""
 	p.loadEditBuffer()
 }
@@ -482,7 +486,7 @@ func (p *MemoryPanel) openSaveModal() {
 	if p.selectedGroup != "" && p.selectedGroup != i18n.Source("text.201f15dab8b3") {
 		group = p.selectedGroup
 	}
-	p.pendingMemory = MemoryEntry{Name: name, FrequencyHz: p.screen.frequencyHz, Mode: p.screen.mode.SelectedText(), FilterBandwidthHz: p.screen.demodBandwidthHz, StepHz: p.screen.tuningStepHz, ScanEnabled: true, Group: group}
+	p.pendingMemory = MemoryEntry{Tool: storableMemoryTool(p.screen.activeTool), Name: name, FrequencyHz: p.screen.frequencyHz, Mode: p.screen.mode.SelectedText(), FilterBandwidthHz: p.screen.demodBandwidthHz, StepHz: p.screen.tuningStepHz, ScanEnabled: true, Group: group}
 	if p.screen.subtonePanel != nil {
 		status := p.screen.subtonePanel.status()
 		if status.Detected && status.Kind == i18n.Source("text.74108b47eb26") {
@@ -891,10 +895,11 @@ func (p *MemoryPanel) drawEditModalContent() {
 	}
 	drawEditToggle(rl.Rectangle{X: 500, Y: 620, Width: 285, Height: 42}, i18n.Source("text.8f705ae0f2a9"), p.pendingMemory.ScanEnabled)
 	drawEditToggle(rl.Rectangle{X: 815, Y: 620, Width: 285, Height: 42}, i18n.Source("text.2613ec622f3e"), p.pendingMemory.Priority)
+	drawCentered(i18n.Source("text.33438a9c0b7a")+": "+memoryToolLabel(p.pendingMemory.Tool), rl.Rectangle{X: 490, Y: 672, Width: 620, Height: 20}, 13, colors.cyan)
 	if p.editError != "" {
-		drawCentered(p.editError, rl.Rectangle{X: 490, Y: 675, Width: 620, Height: 22}, 13, colors.red)
+		drawCentered(p.editError, rl.Rectangle{X: 490, Y: 694, Width: 620, Height: 18}, 13, colors.red)
 	} else if p.modal == "create" && len(p.memoriesAtFrequency(p.pendingMemory.FrequencyHz)) > 0 {
-		drawCentered(i18n.Source("text.5fc0062e5f59"), rl.Rectangle{X: 490, Y: 675, Width: 620, Height: 22}, 13, colors.orange)
+		drawCentered(i18n.Source("text.5fc0062e5f59"), rl.Rectangle{X: 490, Y: 694, Width: 620, Height: 18}, 13, colors.orange)
 	}
 }
 
@@ -1017,7 +1022,37 @@ func drawModalAction(bounds rl.Rectangle, label string, accent rl.Color, pressed
 	drawCentered(label, bounds, 16, simpleui.EnsureTextContrast(colors.text, background))
 }
 
+func storableMemoryTool(tool string) string {
+	for _, item := range toolMenuItems {
+		if item.id == tool && tool != "DISTANCE_MAP" {
+			return tool
+		}
+	}
+	return ""
+}
+func memoryToolLabel(tool string) string {
+	for _, item := range toolMenuItems {
+		if item.id == tool {
+			return item.label
+		}
+	}
+	return tool
+}
+
 func (p *MemoryPanel) recall(m MemoryEntry) {
+	p.recallWithContext(m, true)
+}
+
+// recallForScanner applies the receiver parameters of a memory without taking
+// ownership of navigation controls that the user may currently be operating.
+func (p *MemoryPanel) recallForScanner(m MemoryEntry) {
+	p.recallWithContext(m, false)
+}
+
+func (p *MemoryPanel) recallWithContext(m MemoryEntry, interactive bool) {
+	if tool := storableMemoryTool(m.Tool); interactive && tool != "" {
+		p.screen.selectTool(tool)
+	}
 	mode := strings.ToUpper(strings.TrimSpace(m.Mode))
 	if mode == i18n.Source("text.ade0cbd42252") {
 		mode = i18n.Source("text.2604864ce4d3")
@@ -1025,7 +1060,7 @@ func (p *MemoryPanel) recall(m MemoryEntry) {
 	if mode == i18n.Source("text.0896d612d497") && (strings.Contains(strings.ToUpper(m.Name), i18n.Source("text.ade0cbd42252")) || strings.Contains(strings.ToUpper(m.Group), i18n.Source("text.ade0cbd42252"))) {
 		mode = i18n.Source("text.2604864ce4d3")
 	}
-	if mode == i18n.Source("text.2604864ce4d3") {
+	if interactive && m.Tool == "" && mode == i18n.Source("text.2604864ce4d3") {
 		// A manual recall owns the workspace, unlike a scanner recall, and should
 		// expose decoder state and slot activity immediately.
 		p.screen.selectTool(i18n.Source("text.93239b223632"))
@@ -1055,7 +1090,9 @@ func (p *MemoryPanel) recall(m MemoryEntry) {
 		}
 	}
 	p.screen.frequencyHz = m.FrequencyHz
-	p.screen.updateBandForFrequency(m.FrequencyHz)
+	if interactive {
+		p.screen.updateBandForFrequency(m.FrequencyHz)
+	}
 	half := p.screen.spanHz / 2
 	if p.screen.centerMode || m.FrequencyHz < p.screen.centerFrequencyHz-half || m.FrequencyHz > p.screen.centerFrequencyHz+half {
 		p.screen.centerFrequencyHz = m.FrequencyHz

@@ -1355,7 +1355,21 @@
     "text.0ecb9f4b22e5": "DISTANCES · drag this header",
     "text.d2317ec4971d": "Elevation B − A: %+.1f m",
     "text.5a1bf7f02c98": "Mapzen / Open Topo Data · 81 samples",
-    "text.e9aa69efa6e1": "Green: terrain · orange: LOS · blue: Fresnel"
+    "text.e9aa69efa6e1": "Green: terrain · orange: LOS · blue: Fresnel",
+    "text.bb40197c6706": "SIGNALLING",
+    "text.930589e3a4d9": "SDS MESSAGES",
+    "text.535ad08d8b0d": "EXPORT JSON",
+    "text.292ea49f103c": "Export failed",
+    "text.27d2334b9f25": "Exported to DATA/exports/tetra",
+    "text.812b5403c47a": "EVENT",
+    "text.469580027ba3": "PARTICIPANT",
+    "text.9f882da226a8": "CALL",
+    "text.f8a5e4dd4992": "CARRIER",
+    "text.a9474bdd7d25": "RX TS / ASSIGN.",
+    "text.c06d3a82731b": "SUMMARY",
+    "text.b6a0fa6b7ce3": "%d events · scroll to browse · click a row for details",
+    "text.ee139409c0cb": "FIT POSITIONS",
+    "text.33438a9c0b7a": "TOOL"
   },
   "name": "English"
 }

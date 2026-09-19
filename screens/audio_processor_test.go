@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"go-zero/internal/i18n"
+
 	"math"
 	"testing"
 )
@@ -38,5 +40,43 @@ func TestAudioSpectrumFindsTone(t *testing.T) {
 	frequency := 16000 * float64(maximum) / float64(len(spectrum)-1)
 	if math.Abs(frequency-1000) > 200 {
 		t.Fatalf("spectrum peak = %.0f Hz, want approximately 1000 Hz", frequency)
+	}
+}
+
+func TestNormalAudioProfileRemainsLinearBelowLimiter(t *testing.T) {
+	processor := NewAudioProcessor()
+	processor.Configure(20, 16000, false, [5]float32{}, i18n.Source("text.db2cb3fe28e2"))
+	samples := make([]float32, 48000)
+	for index := range samples {
+		samples[index] = float32(.4 * math.Sin(2*math.Pi*1000*float64(index)/audioSampleRate))
+	}
+	processor.Process(samples)
+	// Ignore filter startup and compare the positive peak after settling. A
+	// second saturator would reduce this to roughly tanh(.48)*.94 = .418 and
+	// introduce harmonics; the normal profile should preserve the filter level.
+	peak := float32(0)
+	for _, sample := range samples[24000:] {
+		peak = max(peak, sample)
+	}
+	if math.Abs(float64(peak-.4)) > .015 {
+		t.Fatalf("normal profile peak = %.4f, want linear level near .4", peak)
+	}
+}
+
+func TestWideFMRetainsBroadcastAudioAboveSpeechBand(t *testing.T) {
+	processor := NewAudioProcessor()
+	processor.Configure(100, 4000, false, [5]float32{}, i18n.Source("text.db2cb3fe28e2"))
+	samples := make([]float32, 48000)
+	for index := range samples {
+		samples[index] = float32(.3 * math.Sin(2*math.Pi*10000*float64(index)/audioSampleRate))
+	}
+	processor.ProcessWideFM(samples)
+	var power float64
+	for _, sample := range samples[24000:] {
+		power += float64(sample * sample)
+	}
+	rms := math.Sqrt(power / 24000)
+	if rms < .08 {
+		t.Fatalf("WFM 10 kHz programme audio was removed: RMS %.4f", rms)
 	}
 }

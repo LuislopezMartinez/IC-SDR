@@ -73,7 +73,15 @@ func NewSDRHeaderPanel(receiver *sdr.Receiver, onChanged func()) *SDRHeaderPanel
 			p.refresh()
 		})
 	}
-	p.agc.OnChange(func(v bool) { p.current.AGC = v; p.submit(); p.refresh() })
+	p.agc.OnChange(func(v bool) {
+		if p.current.Driver == "hackrf" {
+			p.current.ExternalAmp = v
+		} else {
+			p.current.AGC = v
+		}
+		p.submit()
+		p.refresh()
+	})
 	p.biasT.OnChange(func(v bool) { p.current.BiasT = v; p.submit() })
 	p.iqCorrection.OnChange(func(v bool) {
 		if p.current.Driver == "rtlsdr" {
@@ -134,7 +142,10 @@ func (p *SDRHeaderPanel) DrawBackground() { drawPanel(1264, 4, 312, 198) }
 func (p *SDRHeaderPanel) sync() {
 	if p.receiver != nil {
 		p.current = p.receiver.HardwareSettings()
-		if !p.deviceSelect.Open() || !sameSDRDevices(p.devices, p.receiver.CachedDevices()) {
+		// Never replace the rows while the user is clicking the popup. Device
+		// discovery is asynchronous and used to make a freshly found HackRF
+		// move underneath the pointer between press and release.
+		if !p.deviceSelect.Open() {
 			p.syncDevices()
 		}
 	}
@@ -186,6 +197,7 @@ func (p *SDRHeaderPanel) refresh() {
 	hackrf := s.Driver == "hackrf"
 	hasAntennas := s.Available && sdr.IsRSPDx(s.Device) && len(s.Antennas) > 1
 	p.agc.SetActive(s.AGC)
+	p.agc.SetLabel(i18n.Source("text.20e0541e8b46"))
 	p.biasT.SetActive(s.BiasT)
 	p.iqCorrection.SetActive(s.IQCorrection)
 	p.rfNotch.SetActive(s.RFNotch)
@@ -202,8 +214,12 @@ func (p *SDRHeaderPanel) refresh() {
 		p.ifGain.SetRange(0, 2)
 		p.ifGain.SetStep(1)
 	} else if hackrf {
-		p.rfGain.SetRange(0, 116)
-		p.rfGain.SetStep(1)
+		p.agc.SetLabel("AMP")
+		p.agc.SetActive(s.ExternalAmp)
+		p.rfGain.SetRange(0, 40)
+		p.rfGain.SetStep(8)
+		p.ifGain.SetRange(0, 62)
+		p.ifGain.SetStep(2)
 	} else {
 		p.iqCorrection.SetLabel("IQ")
 		p.rfNotch.SetLabel(i18n.Source("text.5acff90d01d7"))
@@ -248,12 +264,14 @@ func (p *SDRHeaderPanel) refresh() {
 		control.SetVisible(!hackrf)
 	}
 	if hackrf {
-		for _, control := range []simpleui.Element{p.agc, p.biasT, p.iqCorrection, p.ifGain, p.ppm, p.setpoint, p.rfNotch, p.dabNotch} {
+		for _, control := range []simpleui.Element{p.iqCorrection, p.ppm, p.setpoint, p.rfNotch, p.dabNotch} {
 			control.SetEnabled(false)
 		}
 	}
 	if hackrf {
-		p.ifGain.SetEnabled(false)
+		p.agc.SetEnabled(s.Available)
+		p.biasT.SetEnabled(s.Available)
+		p.ifGain.SetEnabled(s.Available)
 	} else if rtl {
 		p.ifGain.SetEnabled(s.Available)
 		p.setpoint.SetEnabled(false)
@@ -266,8 +284,8 @@ func (p *SDRHeaderPanel) refresh() {
 func (p *SDRHeaderPanel) refreshLabels() {
 	p.ppmLabel.SetText(fmt.Sprintf(i18n.Source("text.f2033d5208fc"), p.current.PPM))
 	if p.current.Driver == "hackrf" {
-		p.rfLabel.SetText(fmt.Sprintf(i18n.Source("text.3be24414fd2d"), p.current.RFGain))
-		p.ifLabel.SetText(i18n.Source("text.44fa8071a0c2"))
+		p.rfLabel.SetText(fmt.Sprintf("LNA  %.0f dB", p.current.RFGain))
+		p.ifLabel.SetText(fmt.Sprintf("VGA  %.0f dB", p.current.IFGain))
 		p.ppmLabel.SetText(i18n.Source("text.6f41a0c5df05"))
 		p.setpointLabel.SetText(i18n.Source("text.eb6ef01999d1"))
 		return

@@ -18,7 +18,34 @@ func parseSDS(bits []byte, ssi uint32, now time.Time) (Message, *Position, bool)
 	protocol := uint8(bitsToUint(bits, 0, 8))
 	payload := bits[8:]
 	message := Message{Time: now, PartySSI: ssi, SDS: true, SDSProtocol: protocol, ProtocolName: sdsProtocolName(protocol), RawHex: bitsToHex(bits), RawBits: len(bits)}
-	switch protocol {
+	application := protocol
+	if protocol >= 128 {
+		var ok bool
+		payload, message.Fields, ok = sdsTransport(payload)
+		if !ok {
+			return message, nil, false
+		}
+		if protocol == 130 {
+			application = 2
+		}
+		if protocol == 137 {
+			application = 9
+		}
+		if protocol == 131 {
+			application = 3
+		}
+	}
+	switch application {
+	case 3:
+		text, position, ok := parseLocationText(payload, ssi, now)
+		if !ok {
+			return Message{}, nil, false
+		}
+		message.Kind = "SDS LOCATION TEXT"
+		message.Text = text
+		message.Recognized = true
+		return message, position, true
+
 	case 2, 9: // simple text / simple immediate text
 		text, ok := parseSDSText(payload)
 		if !ok {
@@ -29,9 +56,26 @@ func parseSDS(bits []byte, ssi uint32, now time.Time) (Message, *Position, bool)
 	case 10: // Location Information Protocol
 		position, ok := parseShortLIP(payload, ssi, now)
 		if !ok {
+			if fields, text, valid := lipControl(payload); valid {
+				message.Fields = fields
+				message.Kind = "LIP CONTROL"
+				message.Text = text
+				message.Recognized = true
+				return message, nil, true
+			}
 			return Message{}, nil, false
 		}
-		text := fmt.Sprintf(i18n.Source("text.2d71493983ac"), position.Latitude, position.Longitude, position.SpeedKmh, position.Heading, position.AccuracyM)
+		speed, heading, accuracy := "—", "—", "—"
+		if position.HasVelocity {
+			speed = fmt.Sprintf("%.1f", position.SpeedKmh)
+		}
+		if position.HasHeading {
+			heading = fmt.Sprintf("%.1f", position.Heading)
+		}
+		if position.AccuracyKnown {
+			accuracy = fmt.Sprintf("~%.0f", position.AccuracyM)
+		}
+		text := fmt.Sprintf("%.6f, %.6f · %s km/h · %s° · %s m", position.Latitude, position.Longitude, speed, heading, accuracy)
 		message.Kind, message.Text, message.Recognized = i18n.Source("text.d1647141cb62"), text, true
 		return message, &position, true
 	}
@@ -40,6 +84,14 @@ func parseSDS(bits []byte, ssi uint32, now time.Time) (Message, *Position, bool)
 
 func sdsProtocolName(protocol uint8) string {
 	switch protocol {
+	case 3:
+		return "Simple location system"
+	case 130:
+		return "Text messaging TL"
+	case 131:
+		return "Location system TL"
+	case 137:
+		return "Immediate text TL"
 	case 2:
 		return i18n.Source("text.6c359eec4e84")
 	case 9:
@@ -73,6 +125,10 @@ func bitsToHex(bits []byte) string {
 
 func parseSDSText(bits []byte) (string, bool) {
 	if len(bits) < 8 {
+		return "", false
+	}
+	coding := bitsToUint(bits, 1, 7)
+	if coding != 0 && coding != 1 {
 		return "", false
 	}
 	offset := 8 // timestamp-used + coding scheme
@@ -121,5 +177,5 @@ func parseShortLIP(bits []byte, ssi uint32, now time.Time) (Position, bool) {
 	if velocityCode > 28 {
 		velocity = 16 * math.Pow(1.038, float64(velocityCode)-13)
 	}
-	return Position{SSI: ssi, Latitude: latitude, Longitude: longitude, SpeedKmh: velocity, Heading: float64(directionCode) * 22.5, AccuracyM: 10 * math.Pow(2, float64(errorCode)), AgeCode: age, Time: now}, true
+	return Position{Protocol: "LIP", HasVelocity: velocityCode < 127, HasHeading: directionCode < 15, AccuracyKnown: errorCode < 7, SSI: ssi, Latitude: latitude, Longitude: longitude, SpeedKmh: velocity, Heading: float64(directionCode) * 22.5, AccuracyM: 10 * math.Pow(2, float64(errorCode)), AgeCode: age, Time: now}, true
 }

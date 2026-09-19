@@ -35,12 +35,13 @@ type AudioProcessor struct {
 	eq                                          [5]audioBiquad
 	profile                                     string
 	previousInput, highpass, lowpass1, lowpass2 float32
+	limiterGain                                 float32
 	ring                                        [512]float32
 	ringWrite, ringCount                        int
 }
 
 func NewAudioProcessor() *AudioProcessor {
-	p := &AudioProcessor{lowCut: 100, highCut: 4000, eqEnabled: true, profile: i18n.Source("text.db2cb3fe28e2")}
+	p := &AudioProcessor{lowCut: 100, highCut: 4000, eqEnabled: true, profile: i18n.Source("text.db2cb3fe28e2"), limiterGain: 1}
 	p.configureEQ()
 	return p
 }
@@ -60,9 +61,23 @@ func (p *AudioProcessor) configureEQ() {
 }
 
 func (p *AudioProcessor) Process(samples []float32) {
+	p.process(samples, false)
+}
+
+func (p *AudioProcessor) ProcessWideFM(samples []float32) {
+	p.process(samples, true)
+}
+
+func (p *AudioProcessor) process(samples []float32, wideFM bool) {
 	p.mu.Lock()
-	highpassR := float32(math.Exp(-2 * math.Pi * float64(p.lowCut) / audioSampleRate))
-	lowpassAlpha := float32(1 - math.Exp(-2*math.Pi*float64(p.highCut)/audioSampleRate))
+	lowCut, highCut := p.lowCut, p.highCut
+	if wideFM {
+		// The default 100 Hz..4 kHz speech passband is appropriate for radio
+		// communications but makes broadcast FM sound like a telephone.
+		lowCut, highCut = 30, max(highCut, 15_000)
+	}
+	highpassR := float32(math.Exp(-2 * math.Pi * float64(lowCut) / audioSampleRate))
+	lowpassAlpha := float32(1 - math.Exp(-2*math.Pi*float64(highCut)/audioSampleRate))
 	for i, input := range samples {
 		p.highpass = input - p.previousInput + highpassR*p.highpass
 		p.previousInput = input
@@ -75,14 +90,30 @@ func (p *AudioProcessor) Process(samples []float32) {
 			}
 		}
 		switch p.profile {
-		case "SUAVE":
+		case i18n.Source("text.692233b9c713"):
 			value *= .82
-		case "FUERTE":
+		case i18n.Source("text.e5ccf011d642"):
 			value = float32(math.Tanh(float64(value*1.8))) * .92
-		default:
-			value = float32(math.Tanh(float64(value*1.2))) * .94
 		}
-		value = min(max(value, -.98), .98)
+		// Demodulators already apply their own speech compressor. Applying tanh
+		// again in the default listening profile flattened voice peaks and made
+		// strong stations sound saturated. This final stage now stays linear and
+		// only catches filter/EQ overshoot close to full scale.
+		if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+			value = 0
+		}
+		const ceiling = float32(.98)
+		desiredGain := float32(1)
+		if magnitude := absFloat32(value); magnitude > ceiling {
+			desiredGain = ceiling / magnitude
+		}
+		if desiredGain < p.limiterGain {
+			p.limiterGain = desiredGain
+		} else {
+			// About 100 ms release at 48 kHz avoids pumping after a single peak.
+			p.limiterGain += float32(1-math.Exp(-1/(.1*audioSampleRate))) * (desiredGain - p.limiterGain)
+		}
+		value = min(max(value*p.limiterGain, -ceiling), ceiling)
 		samples[i] = value
 		p.ring[p.ringWrite] = value
 		p.ringWrite = (p.ringWrite + 1) % len(p.ring)

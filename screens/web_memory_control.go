@@ -16,7 +16,7 @@ func errInvalidMemory(memory MemoryEntry) bool {
 	if memory.FrequencyHz < 100_000 || memory.FrequencyHz > 6_000_000_000 || memory.FilterBandwidthHz < 1 || memory.FilterBandwidthHz > 2_048_000 || memory.StepHz < 1 || memory.StepHz > 1_000_000 {
 		return true
 	}
-	if len(memory.Description) > 500 || len(memory.Group) > 40 || len(memory.CTCSSHz) > 24 || len(memory.DCSCode) > 24 {
+	if len(memory.Description) > 500 || len(memory.Group) > 40 || len(memory.CTCSSHz) > 24 || len(memory.DCSCode) > 24 || len(memory.Tool) > 64 {
 		return true
 	}
 	if memory.Group == "" || strings.EqualFold(memory.Group, i18n.Source("text.201f15dab8b3")) {
@@ -59,6 +59,7 @@ func (screen *MainScreen) applyWebMemoryControl(command webControlCommand) {
 			return
 		}
 		memory := *command.Memory
+		memory.Tool = storableMemoryTool(screen.activeTool)
 		memory.Name = strings.TrimSpace(memory.Name)
 		memory.Group = strings.TrimSpace(memory.Group)
 		if command.MemoryIndex < 0 {

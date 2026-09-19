@@ -35,6 +35,7 @@ type UtilitiesSidebar struct {
 	pause     *simpleui.Button
 	skip      *simpleui.Button
 	folder    *simpleui.Button
+	format    *simpleui.Switch
 }
 
 func NewUtilitiesSidebar(screen *MainScreen) *UtilitiesSidebar {
@@ -87,6 +88,21 @@ func NewUtilitiesSidebar(screen *MainScreen) *UtilitiesSidebar {
 	p.pause = button("utilityPause", i18n.Source("text.0b03bdac33fa"), 124, 836, 78, 32, screen.recorderPanel.TogglePause)
 	p.skip = button("utilitySkip", i18n.Source("text.a7056a455639"), 208, 836, 66, 32, screen.recorderPanel.ToggleSkipSilence)
 	p.folder = button("utilityFolder", i18n.Source("text.d313ad93be2d"), 280, 836, 54, 32, screen.recorderPanel.OpenFolder)
+	p.format = simpleui.NewSwitch("utilityRecordFormat", 205, 796, 129, 27, "MP3", screen.recorderFormat == recorderFormatMP3, 11)
+	p.format.SetTrackColors(colors.panelAlt, colors.green)
+	p.format.OnChange(func(mp3 bool) {
+		if screen.recorder.State().Recording {
+			p.format.SetActive(screen.recorderFormat == recorderFormatMP3)
+			return
+		}
+		screen.recorderFormat = recorderFormatWAV
+		if mp3 {
+			screen.recorderFormat = recorderFormatMP3
+		}
+		screen.recorder.SetFormat(screen.recorderFormat)
+		screen.markSettingsDirty()
+	})
+	p.controls = append(p.controls, p.format)
 	return p
 }
 
@@ -148,6 +164,9 @@ func (p *UtilitiesSidebar) Draw() {
 		p.record.SetLabel(i18n.Source("text.31d59748e4d1"))
 	}
 	p.pause.SetEnabled(state.Recording)
+	p.format.SetEnabled(!state.Recording)
+	p.format.SetActive(state.Format == recorderFormatMP3)
+	p.format.SetLabel(state.Format)
 	if state.Paused {
 		p.pause.SetLabel(i18n.Source("text.fad8cbb4bb22"))
 	} else {

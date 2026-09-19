@@ -82,31 +82,39 @@ type User struct {
 	Seen        uint64    `json:"seen"`
 }
 type Message struct {
-	Time         time.Time `json:"time"`
-	Kind         string    `json:"kind"`
-	Text         string    `json:"text"`
-	AddressSSI   uint32    `json:"addressSSI,omitempty"`
-	PartySSI     uint32    `json:"partySSI,omitempty"`
-	Slot         uint8     `json:"slot,omitempty"`
-	Encrypted    bool      `json:"encrypted,omitempty"`
-	SDS          bool      `json:"sds,omitempty"`
-	SDSDataType  uint8     `json:"sdsDataType,omitempty"`
-	SDSProtocol  uint8     `json:"sdsProtocol,omitempty"`
-	ProtocolName string    `json:"protocolName,omitempty"`
-	RawHex       string    `json:"rawHex,omitempty"`
-	RawBits      int       `json:"rawBits,omitempty"`
-	Recognized   bool      `json:"recognized,omitempty"`
+	Time          time.Time         `json:"time"`
+	CallID        uint16            `json:"callID,omitempty"`
+	Carrier       *uint16           `json:"carrier,omitempty"`
+	AssignedSlots uint8             `json:"assignedSlots,omitempty"`
+	Fields        map[string]uint32 `json:"fields,omitempty"`
+	Kind          string            `json:"kind"`
+	Text          string            `json:"text"`
+	AddressSSI    uint32            `json:"addressSSI,omitempty"`
+	PartySSI      uint32            `json:"partySSI,omitempty"`
+	Slot          uint8             `json:"slot,omitempty"`
+	Encrypted     bool              `json:"encrypted,omitempty"`
+	SDS           bool              `json:"sds,omitempty"`
+	SDSDataType   uint8             `json:"sdsDataType,omitempty"`
+	SDSProtocol   uint8             `json:"sdsProtocol,omitempty"`
+	ProtocolName  string            `json:"protocolName,omitempty"`
+	RawHex        string            `json:"rawHex,omitempty"`
+	RawBits       int               `json:"rawBits,omitempty"`
+	Recognized    bool              `json:"recognized,omitempty"`
 }
 type Position struct {
-	SSI       uint32    `json:"ssi"`
-	Latitude  float64   `json:"lat"`
-	Longitude float64   `json:"lon"`
-	Altitude  float64   `json:"alt,omitempty"`
-	SpeedKmh  float64   `json:"speedKmh,omitempty"`
-	Heading   float64   `json:"heading,omitempty"`
-	AccuracyM float64   `json:"accuracyM,omitempty"`
-	AgeCode   uint8     `json:"ageCode,omitempty"`
-	Time      time.Time `json:"time"`
+	SSI           uint32    `json:"ssi"`
+	Latitude      float64   `json:"lat"`
+	Longitude     float64   `json:"lon"`
+	Altitude      float64   `json:"alt,omitempty"`
+	SpeedKmh      float64   `json:"speedKmh,omitempty"`
+	Heading       float64   `json:"heading,omitempty"`
+	AccuracyM     float64   `json:"accuracyM,omitempty"`
+	AgeCode       uint8     `json:"ageCode,omitempty"`
+	Time          time.Time `json:"time"`
+	Protocol      string    `json:"protocol,omitempty"`
+	HasVelocity   bool      `json:"hasVelocity,omitempty"`
+	HasHeading    bool      `json:"hasHeading,omitempty"`
+	AccuracyKnown bool      `json:"accuracyKnown,omitempty"`
 }
 type Call struct {
 	ID          uint16    `json:"id"`
@@ -913,6 +921,22 @@ func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
 			text += fmt.Sprintf(i18n.Source("text.b93dd9106135"), cmce.CallID)
 		}
 		event := Message{Time: now, Kind: cmce.Kind, Text: text, AddressSSI: address.SSI, Slot: uint8(slot + 1), Encrypted: address.Encrypted, Recognized: true}
+		event.CallID = cmce.CallID
+		event.PartySSI = cmce.CallingSSI
+		event.Fields = cmce.Fields
+		event.RawHex = bitsToHex(tl)
+		event.RawBits = len(tl)
+		if address.ChannelAllocation && !address.Encrypted {
+			c := address.Carrier
+			event.Carrier = &c
+			event.AssignedSlots = address.AssignedSlots
+			if event.Fields == nil {
+				event.Fields = map[string]uint32{}
+			}
+			for k, v := range address.AllocationFields {
+				event.Fields[k] = v
+			}
+		}
 		if cmce.Code == 0 || cmce.Code == 1 || cmce.Code == 2 || cmce.Code == 7 || cmce.Code == 11 {
 			g := d.groups[address.SSI]
 			g.ID = address.SSI
@@ -943,13 +967,13 @@ func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
 				if len(cmce.SDS) >= 8 {
 					protocol = uint8(bitsToUint(cmce.SDS, 0, 8))
 				}
-				d.messages = append([]Message{{Time: now, Kind: i18n.Source("text.eeb166f565bb"), Text: fmt.Sprintf(i18n.Source("text.fd16f493a08d"), protocol, len(cmce.SDS)), AddressSSI: address.SSI, PartySSI: caller, Slot: uint8(slot + 1), Encrypted: address.Encrypted, SDS: true, SDSDataType: cmce.SDSDataType, SDSProtocol: protocol, ProtocolName: sdsProtocolName(protocol), RawHex: bitsToHex(cmce.SDS), RawBits: len(cmce.SDS)}}, d.messages...)
+				d.messages = append([]Message{{Time: now, Kind: i18n.Source("text.eeb166f565bb"), Text: fmt.Sprintf(i18n.Source("text.fd16f493a08d"), protocol, len(cmce.SDS)), Fields: message.Fields, AddressSSI: address.SSI, PartySSI: caller, Slot: uint8(slot + 1), Encrypted: address.Encrypted, SDS: true, SDSDataType: cmce.SDSDataType, SDSProtocol: protocol, ProtocolName: sdsProtocolName(protocol), RawHex: bitsToHex(cmce.SDS), RawBits: len(cmce.SDS)}}, d.messages...)
 			}
 		} else {
 			d.messages = append([]Message{event}, d.messages...)
 		}
-		if len(d.messages) > 200 {
-			d.messages = d.messages[:200]
+		if len(d.messages) > 1000 {
+			d.messages = d.messages[:1000]
 		}
 		d.state = i18n.Source("text.294f01df2e1e") + cmce.Kind
 	} else {

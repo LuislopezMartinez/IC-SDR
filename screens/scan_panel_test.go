@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"go-zero/internal/sdr"
+	"go-zero/simpleui"
 )
 
 func TestScanFindPeakAndDCExclusion(t *testing.T) {
@@ -17,6 +18,29 @@ func TestScanFindPeakAndDCExclusion(t *testing.T) {
 	peak := panel.findPeak(spectrum, 99_500_000, 100_500_000, 1, 0)
 	if peak == nil || peak.frequencyHz != 100_100_000 {
 		t.Fatalf("peak = %#v, want off-center signal", peak)
+	}
+}
+
+func TestScannerMemoryRecallLeavesOpenBandSelectorUntouched(t *testing.T) {
+	selector := NewBandSelector("HAM", "20 m", nil)
+	selector.Open()
+	screen := &MainScreen{
+		bandCategory: "HAM", bandName: "20 m", centerFrequencyHz: 14_200_000,
+		spanHz:       1_000_000,
+		mode:         simpleui.NewDropdown("scanTestMode", 0, 0, 100, 30, "", []string{"NFM"}, 12),
+		bandSelector: selector,
+	}
+	panel := &MemoryPanel{screen: screen}
+	panel.recallForScanner(MemoryEntry{Name: "PMR", FrequencyHz: 446_100_000, Mode: "NFM"})
+
+	if !selector.OverlayOpen() {
+		t.Fatal("scanner memory recall closed the band selector")
+	}
+	if selector.category != "HAM" || selector.selectedCategory != "HAM" || selector.selectedName != "20 m" {
+		t.Fatalf("scanner changed modal selection: category=%q selected=%q/%q", selector.category, selector.selectedCategory, selector.selectedName)
+	}
+	if screen.frequencyHz != 446_100_000 {
+		t.Fatalf("scanner did not tune the detected memory: %d", screen.frequencyHz)
 	}
 }
 
