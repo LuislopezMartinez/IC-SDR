@@ -20,6 +20,8 @@ import (
 	"go-zero/internal/rtl433"
 	"go-zero/internal/sstv"
 	"go-zero/internal/tetra"
+	"go-zero/internal/tetrapol"
+	"go-zero/internal/tetrapolruntime"
 )
 
 const demodulatedAudioSampleRate = 48_000
@@ -48,6 +50,7 @@ type Config struct {
 	APRSExecutable, APRSConfig, APRSWorkingDirectory string
 	SSTVExecutable, SSTVOutputDirectory              string
 	TETRACodec                                       string
+	TETRAPOLKitExecutable, TETRAPOLRPCELPExecutable  string
 	StartupLog                                       func(string, ...any)
 }
 
@@ -79,23 +82,30 @@ type HardwareSettings struct {
 }
 
 type Receiver struct {
-	radiosonde *radiosonde.Decoder
-	ais        *ais.Decoder
-	aircraft   *aircraft.Decoder
-	config     Config
-	device     *soapyDevice
-	fft        *dsp.FFT
-	am         *dsp.AMDemodulator
-	nfm        *dsp.NFMDemodulator
-	wfm        *dsp.NFMDemodulator
-	ssb        *dsp.SSBDemodulator
-	dmr        *dmr.Decoder
-	digital    *digitalvoice.Bank
-	rtl433     *rtl433.Decoder
-	aprs       *aprs.Decoder
-	sstv       *sstv.Decoder
-	tetra      *tetra.Decoder
-	subtone    *dsp.SubtoneDetector
+	radiosonde           *radiosonde.Decoder
+	ais                  *ais.Decoder
+	aircraft             *aircraft.Decoder
+	config               Config
+	device               *soapyDevice
+	fft                  *dsp.FFT
+	am                   *dsp.AMDemodulator
+	nfm                  *dsp.NFMDemodulator
+	wfm                  *dsp.NFMDemodulator
+	ssb                  *dsp.SSBDemodulator
+	dmr                  *dmr.Decoder
+	digital              *digitalvoice.Bank
+	rtl433               *rtl433.Decoder
+	aprs                 *aprs.Decoder
+	sstv                 *sstv.Decoder
+	tetra                *tetra.Decoder
+	tetrapol             *tetrapol.Decoder
+	tetrapolRuntime      *tetrapolruntime.Pipeline
+	tetrapolRuntimeMu    sync.Mutex
+	tetrapolRuntimeError string
+	tetrapolPrevious     float32
+	tetrapolHavePrevious bool
+	tetrapolAudioEnabled atomic.Bool
+	subtone              *dsp.SubtoneDetector
 
 	stop           chan struct{}
 	done           chan struct{}
@@ -132,11 +142,13 @@ type Receiver struct {
 	audio                              []float32
 	audioRead, audioWrite, audioCount  int
 	recorderSink                       atomic.Pointer[receiverAudioSink]
+	iqSink                             atomic.Pointer[receiverIQSink]
 }
 
 type receiverAudioSink struct {
 	write func([]float32, bool, bool)
 }
+type receiverIQSink struct{ write func([]float32) }
 
 // SetRecorderSink taps the continuous 48 kHz demodulator output before the
 // independent speaker/WASAPI buffer. This prevents playback rebuffering from
@@ -152,6 +164,22 @@ func (receiver *Receiver) SetRecorderSink(write func([]float32, bool, bool)) {
 func (receiver *Receiver) publishRecorderAudio(samples []float32, squelchEnabled, squelchOpen bool) {
 	if sink := receiver.recorderSink.Load(); sink != nil && len(samples) > 0 {
 		sink.write(samples, squelchEnabled, squelchOpen)
+	}
+}
+
+// SetIQSink receives copies of the raw complex capture. It is intended for
+// narrowband archival/export tools and must return quickly.
+func (receiver *Receiver) SetIQSink(write func([]float32)) {
+	if write == nil {
+		receiver.iqSink.Store(nil)
+		return
+	}
+	receiver.iqSink.Store(&receiverIQSink{write: write})
+}
+func (receiver *Receiver) SampleRate() float64 { return receiver.config.SampleRate }
+func (receiver *Receiver) publishIQ(samples []float32) {
+	if sink := receiver.iqSink.Load(); sink != nil && len(samples) > 0 {
+		sink.write(samples)
 	}
 }
 
@@ -202,6 +230,9 @@ func NewReceiver(config Config) *Receiver {
 	receiver.aprs = aprs.New(config.SampleRate, config.APRSExecutable, config.APRSConfig, config.APRSWorkingDirectory)
 	receiver.sstv = sstv.New(config.SSTVExecutable, config.SSTVOutputDirectory)
 	receiver.tetra = tetra.New(config.SampleRate, config.TETRACodec, receiver.enqueueDigitalAudio)
+	receiver.tetrapol = tetrapol.New(config.SampleRate)
+	receiver.tetrapolRuntime = &tetrapolruntime.Pipeline{}
+	receiver.tetrapolAudioEnabled.Store(true)
 	receiver.subtone = dsp.NewSubtoneDetector()
 	receiver.averagingMs.Store(120)
 	receiver.deemphasisUs.Store(50)
@@ -404,6 +435,7 @@ func (receiver *Receiver) Close() {
 		if receiver.tetra != nil {
 			receiver.tetra.Close()
 		}
+		_ = receiver.StopTETRAPOLRuntime()
 		receiver.stopCaptureLocked()
 	})
 }
@@ -483,6 +515,9 @@ func (receiver *Receiver) SetDemodulator(mode string, tunedHz int64, bandwidthHz
 	if receiver.tetra != nil {
 		receiver.tetra.SetTuningOffset(float64(tunedHz - receiver.centerHz.Load()))
 	}
+	if receiver.tetrapol != nil {
+		receiver.tetrapol.SetTuningOffset(float64(tunedHz - receiver.centerHz.Load()))
+	}
 }
 
 func (receiver *Receiver) DMRStatus() dmr.Status {
@@ -516,6 +551,7 @@ func (receiver *Receiver) StopDigitalVoice() {
 // It stops every IQ/audio consumer first and only then clears the shared audio
 // ring, preventing a late decoder tail from surviving the retune.
 func (receiver *Receiver) StopAllDecoders() {
+	_ = receiver.StopTETRAPOLRuntime()
 	if receiver.dmr != nil {
 		receiver.dmr.Stop()
 	}
@@ -542,6 +578,9 @@ func (receiver *Receiver) StopAllDecoders() {
 	}
 	if receiver.tetra != nil {
 		receiver.tetra.Configure(false)
+	}
+	if receiver.tetrapol != nil {
+		receiver.tetrapol.Configure(false)
 	}
 	receiver.mu.Lock()
 	receiver.audioRead, receiver.audioWrite, receiver.audioCount = 0, 0, 0
@@ -807,6 +846,7 @@ func (receiver *Receiver) run() {
 			continue
 		}
 		receiver.processAudio(readBuffer[:read*2])
+		receiver.publishIQ(readBuffer[:read*2])
 		if receiver.rtl433 != nil {
 			receiver.rtl433.ProcessIQ(readBuffer[:read*2])
 		}
@@ -824,6 +864,9 @@ func (receiver *Receiver) run() {
 		}
 		if receiver.tetra != nil {
 			receiver.tetra.ProcessIQ(readBuffer[:read*2])
+		}
+		if receiver.tetrapol != nil {
+			receiver.tetrapol.ProcessIQ(readBuffer[:read*2])
 		}
 		rms, peak, invalid := iqStats(readBuffer[:read*2])
 		receiver.mu.Lock()

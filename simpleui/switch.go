@@ -47,6 +47,8 @@ func (toggle *Switch) SetTrackColors(off, on rl.Color) {
 	toggle.onColor = on
 }
 
+func (toggle *Switch) ClearTrackColors() { toggle.customColors = false }
+
 // SetActive changes the state without emitting OnChange.
 func (toggle *Switch) SetActive(active bool) {
 	toggle.active = active

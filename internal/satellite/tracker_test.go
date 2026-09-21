@@ -40,10 +40,37 @@ func TestFallbackContainsISSAndQO100(t *testing.T) {
 	}
 }
 
+func TestSGP4ReferencePosition(t *testing.T) {
+	sat, err := makeSatellite("VANGUARD 1",
+		"1 00005U 58002B   00179.78495062  .00000023  00000-0  28098-4 0  4753",
+		"2 00005  34.2682 348.7242 1859667 331.7664  19.3264 10.82419157413667", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lat, lon, alt := position(sat, sat.Elements.Epoch)
+	// Vallado SGP4 verification case 00005 at tsince=0, converted to WGS-84
+	// geodetic coordinates. This guards against reverting to two-body Kepler.
+	if math.Abs(lat-0.00041105) > 0.001 || math.Abs(lon-149.9589313) > 0.001 || math.Abs(alt-782.53488) > 0.1 {
+		t.Fatalf("SGP4 reference mismatch: lat=%.9f lon=%.9f alt=%.6f", lat, lon, alt)
+	}
+}
+
+func TestCatalogRefreshAge(t *testing.T) {
+	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
+	tracker := &Tracker{catalogSaved: now.Add(-13 * time.Hour)}
+	if !tracker.NeedsRefresh(now) {
+		t.Fatal("13-hour-old catalog should be refreshed")
+	}
+	tracker.catalogSaved = now.Add(-time.Hour)
+	if tracker.NeedsRefresh(now) {
+		t.Fatal("one-hour-old catalog should still be current")
+	}
+}
+
 func TestPredictPassReturnsOrderedApproachData(t *testing.T) {
 	iss := fallbackCatalog()[0]
 	station := Station{Name: "Madrid", Latitude: 40.4168, Longitude: -3.7038, AltitudeMeters: 657}
-	prediction := predictPass(iss.Elements, station, iss.Elements.Epoch)
+	prediction := predictPass(iss, station, iss.Elements.Epoch)
 	if !prediction.Found || prediction.Continuous {
 		t.Fatalf("expected an ISS pass, got %+v", prediction)
 	}
@@ -58,7 +85,7 @@ func TestPredictPassReturnsOrderedApproachData(t *testing.T) {
 func TestPredictPassClassifiesGeostationaryVisibility(t *testing.T) {
 	qo100 := fallbackCatalog()[1]
 	station := Station{Name: "Madrid", Latitude: 40.4168, Longitude: -3.7038, AltitudeMeters: 657}
-	prediction := predictPass(qo100.Elements, station, qo100.Elements.Epoch)
+	prediction := predictPass(qo100, station, qo100.Elements.Epoch)
 	if !prediction.Found || !prediction.Continuous {
 		t.Fatalf("expected continuous geostationary state, got %+v", prediction)
 	}

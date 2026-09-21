@@ -4,6 +4,10 @@ Generated with the built-in image_gen tool. Style reference: menu-sstv.png.
 Files: menu-radiosonde.png, menu-aprs.png, menu-rtl433.png, menu-recorder.png, menu-ais.png, menu-aircraft.png.
 Original generated PNGs copied without image processing, preserving alpha.
 
+Additional generated assets: menu-tetrapol.png, menu-omnirig.png and
+menu-digital-auto.png. These use the same dark gunmetal, cyan/violet lighting
+and transparent-background direction, with silhouettes designed for 80x80.
+
 ## Prompt set
 
 ### radiosonde

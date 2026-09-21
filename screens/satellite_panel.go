@@ -287,7 +287,7 @@ func (p *SatellitePanel) SetVisible(v bool) {
 }
 func (p *SatellitePanel) Enter() {
 	p.writeSnapshot(true)
-	if len(p.tracker.Satellites()) <= 2 {
+	if p.tracker.NeedsRefresh(time.Now()) {
 		p.update()
 	} else {
 		p.startTransmitterRefresh()

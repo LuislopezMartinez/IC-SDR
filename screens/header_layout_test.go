@@ -46,6 +46,10 @@ func TestSquelchAndHeaderSwitchLayout(t *testing.T) {
 	if screen.viewButton.Bounds().X+screen.viewButton.Bounds().Width > screen.themeButton.Bounds().X {
 		t.Fatal("view and style controls overlap")
 	}
+	rig := screen.rigButton.Bounds()
+	if rig.X < frequencyPanelX || rig.X+rig.Width > frequencyDividerX || rig.Y < frequencyPanelY || rig.Y+rig.Height > frequencyPanelY+frequencyPanelH {
+		t.Fatalf("RIG button is outside SPAN panel: %+v", rig)
+	}
 	if screen.mode.Bounds().X+screen.mode.Bounds().Width > screen.filter.Bounds().X ||
 		screen.filter.Bounds().X+screen.filter.Bounds().Width > screen.band.Bounds().X ||
 		screen.band.Bounds().X+screen.band.Bounds().Width > frequencyPanelX {

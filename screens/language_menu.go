@@ -6,9 +6,13 @@ import (
 	"go-zero/simpleui"
 )
 
-func languageButtonBounds() rl.Rectangle { return rl.Rectangle{X: 820, Y: 63, Width: 250, Height: 42} }
+func languageButtonBounds() rl.Rectangle {
+	modal := toolMenuModalBounds()
+	return rl.Rectangle{X: modal.X + modal.Width - 270, Y: modal.Y + 8, Width: 250, Height: 42}
+}
 func languageRowBounds(i int) rl.Rectangle {
-	return rl.Rectangle{X: 820, Y: 115 + float32(i)*48, Width: 250, Height: 42}
+	button := languageButtonBounds()
+	return rl.Rectangle{X: button.X, Y: button.Y + 52 + float32(i)*48, Width: 250, Height: 42}
 }
 func (menu *ToolMenu) languageInput(input simpleui.Input) bool {
 	if menu.languageOpen && rl.IsKeyPressed(rl.KeyEscape) {
@@ -43,7 +47,8 @@ func (menu *ToolMenu) languageInput(input simpleui.Input) bool {
 			simpleui.PlayActivationFeedback()
 		}
 	}
-	if input.Pressed && !rl.CheckCollisionPointRec(input.Pointer, rl.Rectangle{X: 810, Y: 110, Width: 270, Height: float32(min(len(langs), 12))*48 + 10}) {
+	button := languageButtonBounds()
+	if input.Pressed && !rl.CheckCollisionPointRec(input.Pointer, rl.Rectangle{X: button.X - 10, Y: button.Y + 47, Width: 270, Height: float32(min(len(langs), 12))*48 + 10}) {
 		menu.languageOpen = false
 	}
 	return true
@@ -62,7 +67,7 @@ func (menu *ToolMenu) drawLanguages() {
 	if !menu.languageOpen {
 		return
 	}
-	drawPanel(810, 110, 270, float32(min(len(langs), 12))*48+10)
+	drawPanel(b.X-10, b.Y+47, 270, float32(min(len(langs), 12))*48+10)
 	for i, l := range langs {
 		if i < menu.languageOffset || i >= menu.languageOffset+12 {
 			continue

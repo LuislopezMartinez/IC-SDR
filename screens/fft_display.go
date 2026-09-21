@@ -146,6 +146,16 @@ func (panel *FFTDisplay) SetVisible(visible bool) {
 }
 
 func (panel *FFTDisplay) Sync() {
+	panel.averagingMs = panel.screen.fftAveragingMs
+	panel.refreshFPS = panel.screen.fftRefreshFPS
+	panel.peakHold = panel.screen.fftPeakHold
+	panel.peakDecay = panel.screen.fftPeakDecay
+	panel.window = panel.screen.fftWindow
+	panel.average.SetValue(float32(panel.averagingMs))
+	panel.refresh.SetValue(float32(panel.refreshFPS))
+	panel.peak.SetActive(panel.peakHold)
+	panel.decay.SetValue(panel.peakDecay)
+	panel.decay.SetEnabled(panel.peakHold)
 	panel.speed.SetValue(float32(panel.screen.waterfallSettings.LinesPerSecond))
 	panel.contrast.SetValue(float32(panel.screen.waterfallSettings.Contrast))
 	panel.waterfallRange.SetValues(panel.screen.waterfallSettings.MinimumDBm, panel.screen.waterfallSettings.MaximumDBm)

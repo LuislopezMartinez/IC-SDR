@@ -26,6 +26,7 @@ var filterCatalog = map[string][]FilterPreset{
 	i18n.Source("text.7866f9f32e66"): {{i18n.Source("text.c4006a8004b9"), i18n.Source("text.fc09f45c8252"), 1800000}, {i18n.Source("text.eaef6ac938cc"), i18n.Source("text.780cd5dd50e5"), 2000000}, {i18n.Source("text.5e6f400c402d"), i18n.Source("text.22c9628a35db"), 1500000}, {i18n.Source("text.7cd5885327fd"), i18n.Source("text.4fd9b0cb33bf"), 2000000}},
 	i18n.Source("text.72c048cb5100"): {{i18n.Source("text.c4006a8004b9"), i18n.Source("text.fc09f45c8252"), 1800000}, {i18n.Source("text.eaef6ac938cc"), i18n.Source("text.780cd5dd50e5"), 2000000}, {i18n.Source("text.5e6f400c402d"), i18n.Source("text.22c9628a35db"), 1500000}, {i18n.Source("text.7cd5885327fd"), i18n.Source("text.4fd9b0cb33bf"), 2000000}},
 	i18n.Source("text.f69d86a86926"): {{i18n.Source("text.c4006a8004b9"), i18n.Source("text.a334ab1b51eb"), 25000}, {i18n.Source("text.eaef6ac938cc"), i18n.Source("text.e3b19dc5779f"), 22000}, {i18n.Source("text.5e6f400c402d"), i18n.Source("text.754a0dc3b606"), 18000}, {i18n.Source("text.7cd5885327fd"), i18n.Source("text.4fd9b0cb33bf"), 25000}},
+	tetrapolToolID:                   {{i18n.Source("text.c4006a8004b9"), i18n.Source("text.32c5fd24567a"), 15000}, {i18n.Source("text.eaef6ac938cc"), i18n.Source("text.e630ba82d84a"), 12500}, {i18n.Source("text.5e6f400c402d"), i18n.Source("text.754a0dc3b606"), 10000}, {i18n.Source("text.7cd5885327fd"), i18n.Source("text.4fd9b0cb33bf"), 12500}},
 }
 
 type FilterSelector struct {
@@ -62,7 +63,13 @@ func filterMode(mode string) string {
 }
 func (selector *FilterSelector) Current(mode string) FilterPreset {
 	key := filterMode(mode)
-	return filterCatalog[key][selector.selected[key]]
+	presets := filterCatalog[key]
+	if len(presets) == 0 {
+		key = i18n.Source("text.0896d612d497")
+		presets = filterCatalog[key]
+	}
+	index := min(max(selector.selected[key], 0), len(presets)-1)
+	return presets[index]
 }
 
 // SelectPreset changes the remembered preset for a mode without opening the
@@ -82,6 +89,9 @@ func (selector *FilterSelector) OpenForMode(mode string) func() {
 }
 func (selector *FilterSelector) Open(mode string) {
 	selector.mode = filterMode(mode)
+	if len(filterCatalog[selector.mode]) == 0 {
+		selector.mode = i18n.Source("text.0896d612d497")
+	}
 	selector.originalIndex = selector.selected[selector.mode]
 	selector.originalCustom = filterCatalog[selector.mode][3].BandwidthHz
 	selector.open = true

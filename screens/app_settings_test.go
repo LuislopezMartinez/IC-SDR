@@ -72,3 +72,37 @@ func TestInvalidAppSettingsKeepDefaults(t *testing.T) {
 		t.Fatalf("invalid settings replaced defaults: %#v", screen)
 	}
 }
+
+func TestBandDisplayProfilesRestoreVisualSettingsIndependently(t *testing.T) {
+	screen := NewMainScreen(nil)
+	// The constructor restores the developer's portable settings; pin the band
+	// under test so this unit test is independent of DATA/config/settings.json.
+	screen.bandCategory, screen.bandName = "HAM", "20 m"
+	screen.spanHz, screen.tuningStepHz = 100_000, 1_000
+	screen.spectrumMinimumDB, screen.spectrumMaximumDB = -96, -16
+	screen.fftAveragingMs, screen.fftRefreshFPS = 180, 25
+	screen.fftPeakHold, screen.fftPeakDecay, screen.fftWindow = false, 7, "FLAT TOP"
+	screen.waterfallSettings = WaterfallSettings{LinesPerSecond: 22, Contrast: 144, ColorOffsetDB: -21, MinimumDBm: -105, MaximumDBm: -20, Palette: "VIRIDIS"}
+	screen.rememberBandDisplayProfile()
+
+	screen.bandName = "40 m"
+	screen.spanHz, screen.tuningStepHz = 50_000, 500
+	screen.spectrumMinimumDB, screen.spectrumMaximumDB = -58, -4
+	screen.waterfallSettings = WaterfallSettings{LinesPerSecond: 12, Contrast: 90, ColorOffsetDB: -8, MinimumDBm: -72, MaximumDBm: -5, Palette: "FIRE"}
+	screen.rememberBandDisplayProfile()
+
+	screen.bandName = "20 m"
+	screen.spanHz, screen.tuningStepHz = 2_000_000, 100
+	screen.spectrumMinimumDB, screen.spectrumMaximumDB = -37, 0
+	screen.restoreBandDisplayProfile()
+
+	if screen.spanHz != 100_000 || screen.tuningStepHz != 1_000 {
+		t.Fatalf("restored 20 m raster = %d/%d", screen.spanHz, screen.tuningStepHz)
+	}
+	if screen.spectrumMinimumDB != -96 || screen.spectrumMaximumDB != -16 || screen.fftAveragingMs != 180 || screen.fftRefreshFPS != 25 || screen.fftPeakHold || screen.fftPeakDecay != 7 || screen.fftWindow != "FLAT TOP" {
+		t.Fatalf("restored 20 m spectrum profile is incomplete")
+	}
+	if got := screen.waterfallSettings; got.LinesPerSecond != 22 || got.Contrast != 144 || got.ColorOffsetDB != -21 || got.MinimumDBm != -105 || got.MaximumDBm != -20 || got.Palette != "VIRIDIS" {
+		t.Fatalf("restored waterfall = %#v", got)
+	}
+}

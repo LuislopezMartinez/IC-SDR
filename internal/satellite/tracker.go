@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	sgp4 "github.com/joshuaferrara/go-satellite"
 )
 
 type Station struct {
@@ -42,6 +44,7 @@ type Satellite struct {
 	Line1, Line2 string
 	Signals      []Signal
 	Elements     Elements
+	propagator   sgp4.Satellite
 }
 
 type Point struct{ Latitude, Longitude float64 }
@@ -83,6 +86,7 @@ type Tracker struct {
 	station         Station
 	selected        int
 	source          string
+	catalogSaved    time.Time
 	cachePath       string
 	transmitterPath string
 }
@@ -107,6 +111,11 @@ func (t *Tracker) Station() Station     { t.mu.RLock(); defer t.mu.RUnlock(); re
 func (t *Tracker) SetStation(s Station) { t.mu.Lock(); t.station = s; t.mu.Unlock() }
 func (t *Tracker) Select(norad int)     { t.mu.Lock(); t.selected = norad; t.mu.Unlock() }
 func (t *Tracker) Selected() int        { t.mu.RLock(); defer t.mu.RUnlock(); return t.selected }
+func (t *Tracker) NeedsRefresh(at time.Time) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.catalogSaved.IsZero() || at.Sub(t.catalogSaved) > 12*time.Hour
+}
 func (t *Tracker) Satellites() []Satellite {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -138,7 +147,9 @@ func (t *Tracker) Refresh(ctx context.Context) error {
 		}
 		for _, sat := range list {
 			remoteCount++
-			if old, ok := seen[sat.NORAD]; !ok || priority(sat.Group) < priority(old.Group) {
+			// A downloaded entry must replace the built-in fallback even when both
+			// belong to the same group (notably ISS and QO-100).
+			if old, ok := seen[sat.NORAD]; !ok || priority(sat.Group) <= priority(old.Group) {
 				seen[sat.NORAD] = sat
 			}
 		}
@@ -166,6 +177,7 @@ func (t *Tracker) Refresh(ctx context.Context) error {
 	}
 	t.satellites = list
 	t.attachSignalsLocked()
+	t.catalogSaved = time.Now()
 	t.source = i18n.Source("text.24d9c1aa922f") + time.Now().Format(i18n.Source("text.492d2649cc8c"))
 	t.mu.Unlock()
 	if remoteTransmitters != nil {
@@ -202,7 +214,7 @@ func (t *Tracker) Snapshot(at time.Time) Snapshot {
 	t.mu.RUnlock()
 	states := make([]State, 0, len(sats))
 	for _, sat := range sats {
-		lat, lon, alt := position(sat.Elements, at)
+		lat, lon, alt := position(sat, at)
 		az, el, rng := lookAngles(station, lat, lon, alt)
 		sig := Signal{Name: i18n.Source("text.9c4ca15347d4"), Mode: "--"}
 		if len(sat.Signals) > 0 {
@@ -211,10 +223,10 @@ func (t *Tracker) Snapshot(at time.Time) Snapshot {
 		state := State{Name: sat.Name, Group: sat.Group, NORAD: sat.NORAD, Signal: sig.Name, Mode: sig.Mode, DownlinkHz: sig.DownlinkHz, Latitude: lat, Longitude: lon, AltitudeKM: alt, Azimuth: az, Elevation: el, RangeKM: rng, Visible: el >= 0}
 		if sat.NORAD == selected {
 			for m := -45; m <= 90; m += 5 {
-				la, lo, _ := position(sat.Elements, at.Add(time.Duration(m)*time.Minute))
+				la, lo, _ := position(sat, at.Add(time.Duration(m)*time.Minute))
 				state.Trajectory = append(state.Trajectory, Point{la, lo})
 			}
-			state.NextPass = predictPass(sat.Elements, station, at)
+			state.NextPass = predictPass(sat, station, at)
 		}
 		states = append(states, state)
 	}
@@ -223,11 +235,11 @@ func (t *Tracker) Snapshot(at time.Time) Snapshot {
 
 // predictPass finds the next useful closest approach above the observer's
 // horizon. A currently setting pass is skipped because its TCA has elapsed.
-func predictPass(elements Elements, station Station, now time.Time) PassPrediction {
+func predictPass(sat Satellite, station Station, now time.Time) PassPrediction {
 	const step = 30 * time.Second
 	end := now.Add(48 * time.Hour)
 	look := func(at time.Time) (float64, float64) {
-		lat, lon, alt := position(elements, at)
+		lat, lon, alt := position(sat, at)
 		_, elevation, distance := lookAngles(station, lat, lon, alt)
 		return elevation, distance
 	}
@@ -277,7 +289,7 @@ func predictPass(elements Elements, station Station, now time.Time) PassPredicti
 		}
 		previousTime, previousElevation = at, currentElevation
 	}
-	if math.Abs(elements.MeanMotion-1) < .1 {
+	if math.Abs(sat.Elements.MeanMotion-1) < .1 {
 		return PassPrediction{Found: true, Continuous: true}
 	}
 	return PassPrediction{}
@@ -369,36 +381,24 @@ func makeSatellite(name, l1, l2, group string) (Satellite, error) {
 	arg, _ := strconv.ParseFloat(f[5], 64)
 	ma, _ := strconv.ParseFloat(f[6], 64)
 	mm, _ := strconv.ParseFloat(f[7], 64)
-	return Satellite{Name: strings.TrimSpace(name), Group: group, NORAD: norad, Line1: l1, Line2: l2, Elements: Elements{epoch, inc, raan, ecc, arg, ma, mm}}, nil
+	return Satellite{Name: strings.TrimSpace(name), Group: group, NORAD: norad, Line1: l1, Line2: l2, Elements: Elements{epoch, inc, raan, ecc, arg, ma, mm}, propagator: sgp4.TLEToSat(l1, l2, sgp4.GravityWGS72)}, nil
 }
 
-func position(e Elements, at time.Time) (lat, lon, alt float64) {
-	const mu = 398600.4418
-	n := e.MeanMotion * 2 * math.Pi / 86400
-	if n <= 0 {
+func position(s Satellite, at time.Time) (lat, lon, alt float64) {
+	if s.Line1 == "" || s.Line2 == "" {
 		return
 	}
-	a := math.Cbrt(mu / (n * n))
-	M := radians(e.MeanAnomaly) + n*at.Sub(e.Epoch).Seconds()
-	E := M
-	for i := 0; i < 8; i++ {
-		E = M + e.Eccentricity*math.Sin(E)
+	propagator := s.propagator
+	if propagator.Line1 == "" {
+		propagator = sgp4.TLEToSat(s.Line1, s.Line2, sgp4.GravityWGS72)
 	}
-	x := a * (math.Cos(E) - e.Eccentricity)
-	y := a * math.Sqrt(1-e.Eccentricity*e.Eccentricity) * math.Sin(E)
-	r := math.Hypot(x, y)
-	nu := math.Atan2(y, x)
-	u := nu + radians(e.ArgumentPerigee)
-	inc, raan := radians(e.Inclination), radians(e.RAAN)
-	xi := r * (math.Cos(raan)*math.Cos(u) - math.Sin(raan)*math.Sin(u)*math.Cos(inc))
-	yi := r * (math.Sin(raan)*math.Cos(u) + math.Cos(raan)*math.Sin(u)*math.Cos(inc))
-	zi := r * math.Sin(u) * math.Sin(inc)
-	theta := gmst(at)
-	xe := math.Cos(theta)*xi + math.Sin(theta)*yi
-	ye := -math.Sin(theta)*xi + math.Cos(theta)*yi
-	lon = degrees(math.Atan2(ye, xe))
-	lat = degrees(math.Atan2(zi, math.Hypot(xe, ye)))
-	alt = r - 6371.0
+	at = at.UTC()
+	sec := at.Second()
+	eci, _ := sgp4.Propagate(propagator, at.Year(), int(at.Month()), at.Day(), at.Hour(), at.Minute(), sec)
+	gmst := sgp4.GSTimeFromDate(at.Year(), int(at.Month()), at.Day(), at.Hour(), at.Minute(), sec)
+	alt, _, lla := sgp4.ECIToLLA(eci, gmst)
+	lla = sgp4.LatLongDeg(lla)
+	lat, lon = lla.Latitude, lla.Longitude
 	return
 }
 
@@ -455,7 +455,13 @@ func (t *Tracker) loadCache() error {
 	if json.Unmarshal(data, &c) != nil || len(c.Satellites) == 0 {
 		return errors.New(i18n.Source("text.0658bf1241e5"))
 	}
+	for i := range c.Satellites {
+		if c.Satellites[i].Line1 != "" && c.Satellites[i].Line2 != "" {
+			c.Satellites[i].propagator = sgp4.TLEToSat(c.Satellites[i].Line1, c.Satellites[i].Line2, sgp4.GravityWGS72)
+		}
+	}
 	t.satellites = c.Satellites
+	t.catalogSaved = c.Saved
 	t.source = i18n.Source("text.ce583e32f0db") + c.Saved.Format(i18n.Source("text.492d2649cc8c"))
 	return nil
 }

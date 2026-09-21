@@ -50,7 +50,7 @@ func NewRTL433Panel(screen *MainScreen) *RTL433Panel {
 	for i, definition := range definitions {
 		button := simpleui.NewButton("rtl433Preset"+strconv.Itoa(i), 40+float32(i)*130, 660, 118, 42, definition.label, uiControlFontSize)
 		hz := definition.hz
-		button.OnClick(func() { p.selectFrequency(hz) })
+		button.OnClick(func() { p.selectFrequency(hz, true) })
 		p.presets = append(p.presets, button)
 		p.controls = append(p.controls, button)
 	}
@@ -119,27 +119,27 @@ func (p *RTL433Panel) Close() {
 		_ = p.viewer.Process.Kill()
 	}
 }
-func (p *RTL433Panel) selectFrequency(hz int64) {
+func (p *RTL433Panel) selectFrequency(hz int64, recenterCapture bool) {
 	if hz < 1_000 {
 		return
 	}
 	p.targetHz = hz
 	p.screen.rtl433FrequencyHz = hz
-	// RTL_433 owns the workspace: dial, cursor and decoded interval share the
-	// same visual center. IQ correction deals with the residual DC component.
 	p.screen.frequencyHz = hz
-	p.screen.centerFrequencyHz = hz
-	p.screen.spanHz = max(int64(1_000_000), int64(p.bandwidthHz))
-	p.screen.centerMode = true
-	if p.screen.vfoModeSwitch != nil {
-		p.screen.vfoModeSwitch.SetActive(false)
+	if recenterCapture || p.screen.centerMode {
+		p.screen.centerFrequencyHz = hz
+		p.screen.spanHz = max(p.screen.spanHz, max(int64(1_000_000), int64(p.bandwidthHz)))
+	} else {
+		p.screen.centerFrequencyHz = fixedCenterForRTL433(p.screen.centerFrequencyHz, hz, p.screen.spanHz, p.bandwidthHz)
 	}
 	if p.screen.receiver != nil {
 		p.screen.receiver.SetCenterFrequency(p.screen.centerFrequencyHz)
 		p.screen.receiver.SetDemodulator(p.screen.mode.SelectedText(), hz, p.screen.demodBandwidthHz)
 		p.screen.receiver.ConfigureRTL433(true, hz, p.bandwidthHz)
 	}
-	p.screen.waterfall.Reset()
+	if p.screen.waterfall != nil {
+		p.screen.waterfall.Reset()
+	}
 	p.screen.markSettingsDirty()
 	p.stylePresets()
 	p.styleWidths()
@@ -148,7 +148,8 @@ func (p *RTL433Panel) selectFrequency(hz int64) {
 func (p *RTL433Panel) selectBandwidth(width int) {
 	p.bandwidthHz = width
 	p.screen.rtl433BandwidthHz = width
-	p.selectFrequency(p.targetHz)
+	p.screen.spanHz = max(p.screen.spanHz, max(int64(1_000_000), int64(width)))
+	p.selectFrequency(p.targetHz, false)
 	p.feedback = i18n.Source("text.6a15345420ac") + rtl433WidthLabel(width)
 	p.feedbackUntil = time.Now().Add(2 * time.Second)
 }
@@ -204,7 +205,7 @@ func (p *RTL433Panel) Tick() {
 			p.feedback = i18n.Source("text.c140aaefea05")
 			p.feedbackUntil = time.Now().Add(2 * time.Second)
 		} else if rl.GetTime() >= p.pendingApplyAt {
-			p.selectFrequency(p.pendingHz)
+			p.selectFrequency(p.pendingHz, false)
 			p.feedback = i18n.Source("text.76ed2f1acd7c")
 			p.feedbackUntil = time.Now().Add(2 * time.Second)
 		}
@@ -213,10 +214,7 @@ func (p *RTL433Panel) Tick() {
 	// change they make into the same delayed preview used by the FFT gestures.
 	if p.screen.activeTool == i18n.Source("text.8be70e7cb2c4") && !remoteLocked && !p.pending && p.screen.frequencyHz != p.targetHz {
 		candidate := p.screen.frequencyHz
-		p.screen.frequencyHz, p.screen.centerFrequencyHz, p.screen.centerMode = p.targetHz, p.targetHz, true
-		if p.screen.vfoModeSwitch != nil {
-			p.screen.vfoModeSwitch.SetActive(false)
-		}
+		p.screen.frequencyHz = p.targetHz
 		if p.screen.receiver != nil {
 			p.screen.receiver.SetCenterFrequency(p.targetHz)
 			p.screen.receiver.SetDemodulator(p.screen.mode.SelectedText(), p.targetHz, p.screen.demodBandwidthHz)
@@ -244,6 +242,21 @@ func (p *RTL433Panel) Tick() {
 		}
 		p.pressedRow = -1
 	}
+}
+
+func fixedCenterForRTL433(centerHz, targetHz, spanHz int64, bandwidthHz int) int64 {
+	if spanHz <= 0 {
+		return targetHz
+	}
+	guard := max(int64(bandwidthHz)/2, int64(0))
+	usableOffset := max(spanHz/2-guard, int64(0))
+	if targetHz < centerHz-usableOffset {
+		return targetHz + usableOffset
+	}
+	if targetHz > centerHz+usableOffset {
+		return targetHz - usableOffset
+	}
+	return centerHz
 }
 
 func rtl433TableRowAt(mouse rl.Vector2, count int) int {

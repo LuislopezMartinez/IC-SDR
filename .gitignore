@@ -16,6 +16,7 @@ DATA/config/web.json
 DATA/config/language.json
 DATA/config/sdr-device.json
 DATA/config/distance-locations.json
+DATA/config/satellite-station.json
 
 # Editor and operating-system files
 .DS_Store

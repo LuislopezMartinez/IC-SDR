@@ -17,58 +17,78 @@ import (
 const appSettingsVersion = 1
 
 type persistedAppSettings struct {
-	RadiosondeFamily      string                `json:"radiosondeFamily,omitempty"`
-	RadiosondeFrequencyHz int64                 `json:"radiosondeFrequencyHz,omitempty"`
-	Version               int                   `json:"version"`
-	Theme                 string                `json:"theme,omitempty"`
-	BandCategory          string                `json:"bandCategory"`
-	BandName              string                `json:"bandName"`
-	Mode                  string                `json:"mode"`
-	FrequencyHz           int64                 `json:"frequencyHz"`
-	CenterFrequencyHz     int64                 `json:"centerFrequencyHz"`
-	SpanHz                int64                 `json:"spanHz"`
-	TuningStepHz          int64                 `json:"tuningStepHz"`
-	CenterMode            bool                  `json:"centerMode"`
-	ActiveTool            string                `json:"activeTool,omitempty"`
-	ViewMode              int                   `json:"viewMode,omitempty"`
-	ScanCenterToMemory    *bool                 `json:"scanCenterToMemory,omitempty"`
-	ScanResume            string                `json:"scanResumeMode,omitempty"`
-	ScanPolicy            string                `json:"scanSignalPolicy,omitempty"`
-	ScanDwellMs           int                   `json:"scanDwellMs,omitempty"`
-	ScanMinimumHz         int64                 `json:"scanMinimumHz,omitempty"`
-	ScanMaximumHz         int64                 `json:"scanMaximumHz,omitempty"`
-	SquelchEnabled        *bool                 `json:"squelchEnabled,omitempty"`
-	SquelchThreshold      int                   `json:"squelchThreshold,omitempty"`
-	SquelchHoldMs         int                   `json:"squelchHoldMs,omitempty"`
-	SquelchCloseMs        int                   `json:"squelchCloseMs,omitempty"`
-	SpectrumMinimumDB     float32               `json:"spectrumMinimumDb,omitempty"`
-	SpectrumMaximumDB     float32               `json:"spectrumMaximumDb,omitempty"`
-	FFTAveragingMs        int                   `json:"fftAveragingMs,omitempty"`
-	FFTRefreshFPS         int                   `json:"fftRefreshFps,omitempty"`
-	FFTPeakHold           *bool                 `json:"fftPeakHold,omitempty"`
-	FFTPeakDecay          float32               `json:"fftPeakDecay,omitempty"`
-	FFTWindow             string                `json:"fftWindow,omitempty"`
-	WaterfallSpeed        int                   `json:"waterfallSpeed,omitempty"`
-	WaterfallContrast     int                   `json:"waterfallContrast,omitempty"`
-	WaterfallOffsetDB     int                   `json:"waterfallOffsetDb,omitempty"`
-	WaterfallMinimum      float32               `json:"waterfallMinimumDb,omitempty"`
-	WaterfallMaximum      float32               `json:"waterfallMaximumDb,omitempty"`
-	WaterfallPalette      string                `json:"waterfallPalette,omitempty"`
-	MemoryViewEnabled     *bool                 `json:"memoryViewEnabled,omitempty"`
-	RecorderSkipSilence   *bool                 `json:"recorderSkipSilence,omitempty"`
-	RecorderFormat        string                `json:"recorderFormat,omitempty"`
-	Volume                *float32              `json:"volume,omitempty"`
-	Muted                 *bool                 `json:"muted,omitempty"`
-	DMRAutoCenter         *bool                 `json:"dmrAutoCenter,omitempty"`
-	DMRAudioSlot          string                `json:"dmrAudioSlot,omitempty"`
-	RTL433FrequencyHz     int64                 `json:"rtl433FrequencyHz,omitempty"`
-	RTL433BandwidthHz     int                   `json:"rtl433BandwidthHz,omitempty"`
-	APRSView              string                `json:"aprsView,omitempty"`
-	SubtoneMode           string                `json:"subtoneMode,omitempty"`
-	SSTVAutomatic         *bool                 `json:"sstvAutomatic,omitempty"`
-	SSTVMode              string                `json:"sstvMode,omitempty"`
-	SSTVCandidateModes    [4]string             `json:"sstvCandidateModes,omitempty"`
-	Hardware              *sdr.HardwareSettings `json:"hardware,omitempty"`
+	RadiosondeFamily      string                        `json:"radiosondeFamily,omitempty"`
+	RadiosondeFrequencyHz int64                         `json:"radiosondeFrequencyHz,omitempty"`
+	Version               int                           `json:"version"`
+	Theme                 string                        `json:"theme,omitempty"`
+	BandCategory          string                        `json:"bandCategory"`
+	BandName              string                        `json:"bandName"`
+	Mode                  string                        `json:"mode"`
+	FrequencyHz           int64                         `json:"frequencyHz"`
+	CenterFrequencyHz     int64                         `json:"centerFrequencyHz"`
+	SpanHz                int64                         `json:"spanHz"`
+	TuningStepHz          int64                         `json:"tuningStepHz"`
+	CenterMode            bool                          `json:"centerMode"`
+	RigMuteOnTX           bool                          `json:"rigMuteOnTX,omitempty"`
+	ActiveTool            string                        `json:"activeTool,omitempty"`
+	ViewMode              int                           `json:"viewMode,omitempty"`
+	ScanCenterToMemory    *bool                         `json:"scanCenterToMemory,omitempty"`
+	ScanResume            string                        `json:"scanResumeMode,omitempty"`
+	ScanPolicy            string                        `json:"scanSignalPolicy,omitempty"`
+	ScanDwellMs           int                           `json:"scanDwellMs,omitempty"`
+	ScanMinimumHz         int64                         `json:"scanMinimumHz,omitempty"`
+	ScanMaximumHz         int64                         `json:"scanMaximumHz,omitempty"`
+	SquelchEnabled        *bool                         `json:"squelchEnabled,omitempty"`
+	SquelchThreshold      int                           `json:"squelchThreshold,omitempty"`
+	SquelchHoldMs         int                           `json:"squelchHoldMs,omitempty"`
+	SquelchCloseMs        int                           `json:"squelchCloseMs,omitempty"`
+	SpectrumMinimumDB     float32                       `json:"spectrumMinimumDb,omitempty"`
+	SpectrumMaximumDB     float32                       `json:"spectrumMaximumDb,omitempty"`
+	FFTAveragingMs        int                           `json:"fftAveragingMs,omitempty"`
+	FFTRefreshFPS         int                           `json:"fftRefreshFps,omitempty"`
+	FFTPeakHold           *bool                         `json:"fftPeakHold,omitempty"`
+	FFTPeakDecay          float32                       `json:"fftPeakDecay,omitempty"`
+	FFTWindow             string                        `json:"fftWindow,omitempty"`
+	WaterfallSpeed        int                           `json:"waterfallSpeed,omitempty"`
+	WaterfallContrast     int                           `json:"waterfallContrast,omitempty"`
+	WaterfallOffsetDB     int                           `json:"waterfallOffsetDb,omitempty"`
+	WaterfallMinimum      float32                       `json:"waterfallMinimumDb,omitempty"`
+	WaterfallMaximum      float32                       `json:"waterfallMaximumDb,omitempty"`
+	WaterfallPalette      string                        `json:"waterfallPalette,omitempty"`
+	MemoryViewEnabled     *bool                         `json:"memoryViewEnabled,omitempty"`
+	RecorderSkipSilence   *bool                         `json:"recorderSkipSilence,omitempty"`
+	RecorderFormat        string                        `json:"recorderFormat,omitempty"`
+	Volume                *float32                      `json:"volume,omitempty"`
+	Muted                 *bool                         `json:"muted,omitempty"`
+	DMRAutoCenter         *bool                         `json:"dmrAutoCenter,omitempty"`
+	DMRAudioSlot          string                        `json:"dmrAudioSlot,omitempty"`
+	RTL433FrequencyHz     int64                         `json:"rtl433FrequencyHz,omitempty"`
+	RTL433BandwidthHz     int                           `json:"rtl433BandwidthHz,omitempty"`
+	APRSView              string                        `json:"aprsView,omitempty"`
+	SubtoneMode           string                        `json:"subtoneMode,omitempty"`
+	SSTVAutomatic         *bool                         `json:"sstvAutomatic,omitempty"`
+	SSTVMode              string                        `json:"sstvMode,omitempty"`
+	SSTVCandidateModes    [4]string                     `json:"sstvCandidateModes,omitempty"`
+	TETRAPOLBand          string                        `json:"tetrapolBand,omitempty"`
+	TETRAPOLDirection     string                        `json:"tetrapolDirection,omitempty"`
+	Hardware              *sdr.HardwareSettings         `json:"hardware,omitempty"`
+	BandDisplayProfiles   map[string]bandDisplayProfile `json:"bandDisplayProfiles,omitempty"`
+}
+
+// bandDisplayProfile contains display and raster preferences that are useful
+// to restore when returning to a particular allocation. Frequency, mode and
+// decoder choice remain managed by the normal band and memory workflows.
+type bandDisplayProfile struct {
+	SpanHz            int64             `json:"spanHz"`
+	TuningStepHz      int64             `json:"tuningStepHz"`
+	SpectrumMinimumDB float32           `json:"spectrumMinimumDb"`
+	SpectrumMaximumDB float32           `json:"spectrumMaximumDb"`
+	FFTAveragingMs    int               `json:"fftAveragingMs"`
+	FFTRefreshFPS     int               `json:"fftRefreshFps"`
+	FFTPeakHold       bool              `json:"fftPeakHold"`
+	FFTPeakDecay      float32           `json:"fftPeakDecay"`
+	FFTWindow         string            `json:"fftWindow"`
+	Waterfall         WaterfallSettings `json:"waterfall"`
 }
 
 func defaultAppSettingsPath() string {
@@ -224,13 +244,112 @@ func loadAppSettings(path string, screen *MainScreen) {
 			screen.sstvCandidateModes[i] = mode
 		}
 	}
+	if settings.TETRAPOLBand == "VHF" || settings.TETRAPOLBand == "UHF" {
+		screen.tetrapolBand = settings.TETRAPOLBand
+	}
+	if settings.TETRAPOLDirection == "UP" || settings.TETRAPOLDirection == "DOWN" {
+		screen.tetrapolDirection = settings.TETRAPOLDirection
+	}
 	if settings.Hardware != nil {
 		hardware := *settings.Hardware
 		screen.savedHardware = &hardware
 	}
+	screen.bandDisplayProfiles = settings.BandDisplayProfiles
+	if screen.bandDisplayProfiles == nil {
+		screen.bandDisplayProfiles = make(map[string]bandDisplayProfile)
+	}
+	screen.restoreBandDisplayProfile()
 	screen.centerMode = settings.CenterMode
+	screen.rigMuteOnTX = settings.RigMuteOnTX
 	if screen.centerMode {
 		screen.centerFrequencyHz = screen.frequencyHz
+	}
+}
+
+func bandDisplayProfileKey(category, name string) string {
+	return category + "\x1f" + name
+}
+
+func (screen *MainScreen) rememberBandDisplayProfile() {
+	if !validBand(screen.bandCategory, screen.bandName) {
+		return
+	}
+	if screen.bandDisplayProfiles == nil {
+		screen.bandDisplayProfiles = make(map[string]bandDisplayProfile)
+	}
+	screen.bandDisplayProfiles[bandDisplayProfileKey(screen.bandCategory, screen.bandName)] = bandDisplayProfile{
+		SpanHz: screen.spanHz, TuningStepHz: screen.tuningStepHz,
+		SpectrumMinimumDB: screen.spectrumMinimumDB, SpectrumMaximumDB: screen.spectrumMaximumDB,
+		FFTAveragingMs: screen.fftAveragingMs, FFTRefreshFPS: screen.fftRefreshFPS,
+		FFTPeakHold: screen.fftPeakHold, FFTPeakDecay: screen.fftPeakDecay, FFTWindow: screen.fftWindow,
+		Waterfall: screen.waterfallSettings,
+	}
+}
+
+// restoreBandDisplayProfile overlays the per-band profile onto the selected
+// band's defaults. A missing profile deliberately leaves those defaults alone.
+func (screen *MainScreen) restoreBandDisplayProfile() {
+	if !validBand(screen.bandCategory, screen.bandName) {
+		return
+	}
+	profile, ok := screen.bandDisplayProfiles[bandDisplayProfileKey(screen.bandCategory, screen.bandName)]
+	if !ok {
+		return
+	}
+	if validSpan(profile.SpanHz) {
+		screen.spanHz = profile.SpanHz
+	}
+	if validTuningStep(profile.TuningStepHz) {
+		screen.tuningStepHz = profile.TuningStepHz
+	}
+	if profile.SpectrumMinimumDB >= -140 && profile.SpectrumMaximumDB <= 20 && profile.SpectrumMaximumDB-profile.SpectrumMinimumDB >= 10 {
+		screen.spectrumMinimumDB, screen.spectrumMaximumDB = profile.SpectrumMinimumDB, profile.SpectrumMaximumDB
+	}
+	if profile.FFTAveragingMs >= 10 && profile.FFTAveragingMs <= 300 {
+		screen.fftAveragingMs = profile.FFTAveragingMs
+	}
+	if profile.FFTRefreshFPS >= 5 && profile.FFTRefreshFPS <= 60 {
+		screen.fftRefreshFPS = profile.FFTRefreshFPS
+	}
+	if profile.FFTPeakDecay >= 1 && profile.FFTPeakDecay <= 10 {
+		screen.fftPeakHold, screen.fftPeakDecay = profile.FFTPeakHold, profile.FFTPeakDecay
+	}
+	if validFFTWindow(profile.FFTWindow) {
+		screen.fftWindow = profile.FFTWindow
+	}
+	waterfall := profile.Waterfall
+	if waterfall.LinesPerSecond >= 5 && waterfall.LinesPerSecond <= 60 {
+		screen.waterfallSettings.LinesPerSecond = waterfall.LinesPerSecond
+	}
+	if waterfall.Contrast >= 25 && waterfall.Contrast <= 200 {
+		screen.waterfallSettings.Contrast = waterfall.Contrast
+	}
+	if waterfall.ColorOffsetDB >= -80 && waterfall.ColorOffsetDB <= 40 {
+		screen.waterfallSettings.ColorOffsetDB = waterfall.ColorOffsetDB
+	}
+	if waterfall.MinimumDBm >= -140 && waterfall.MaximumDBm <= 20 && waterfall.MaximumDBm-waterfall.MinimumDBm >= 10 {
+		screen.waterfallSettings.MinimumDBm, screen.waterfallSettings.MaximumDBm = waterfall.MinimumDBm, waterfall.MaximumDBm
+	}
+	if validWaterfallPalette(waterfall.Palette) {
+		screen.waterfallSettings.Palette = waterfall.Palette
+	}
+	if screen.waterfall != nil {
+		screen.waterfall.settings = &screen.waterfallSettings
+		screen.waterfall.InvalidateColors()
+	}
+	if screen.receiver != nil {
+		screen.receiver.SetSpectrumAveraging(screen.fftAveragingMs)
+		screen.receiver.SetFFTWindow(screen.fftWindow)
+	}
+	if screen.stepSelector != nil {
+		screen.stepSelector.SetSelected(screen.tuningStepHz)
+	}
+	screen.syncSquelchToSpectrumRange()
+	if screen.fftDisplay != nil {
+		screen.fftDisplay.Sync()
+	}
+	if screen.wfOffsetSlider != nil {
+		screen.refreshWaterfallControls()
 	}
 }
 
@@ -244,6 +363,7 @@ func (screen *MainScreen) flushSettings(force bool) {
 		return
 	}
 	mode := screen.savedMode
+	screen.rememberBandDisplayProfile()
 	if screen.mode != nil && screen.mode.SelectedText() != "" {
 		mode = screen.mode.SelectedText()
 	}
@@ -252,7 +372,7 @@ func (screen *MainScreen) flushSettings(force bool) {
 		Theme:        screen.themeName,
 		BandCategory: screen.bandCategory, BandName: screen.bandName,
 		Mode: mode, FrequencyHz: screen.frequencyHz, CenterFrequencyHz: screen.centerFrequencyHz,
-		SpanHz: screen.spanHz, TuningStepHz: screen.tuningStepHz, CenterMode: screen.centerMode,
+		SpanHz: screen.spanHz, TuningStepHz: screen.tuningStepHz, CenterMode: screen.centerMode, RigMuteOnTX: screen.rigMuteOnTX,
 		ActiveTool: screen.activeTool, ViewMode: screen.viewMode,
 		SquelchEnabled: boolSetting(screen.squelchEnabled), SquelchThreshold: screen.squelchThreshold,
 		SquelchHoldMs: screen.squelchHoldMs, SquelchCloseMs: screen.squelchCloseMs,
@@ -276,6 +396,9 @@ func (screen *MainScreen) flushSettings(force bool) {
 		SSTVAutomatic:         boolSetting(screen.sstvAutomatic),
 		SSTVMode:              screen.sstvMode,
 		SSTVCandidateModes:    screen.sstvCandidateModes,
+		TETRAPOLBand:          screen.tetrapolBand,
+		TETRAPOLDirection:     screen.tetrapolDirection,
+		BandDisplayProfiles:   screen.bandDisplayProfiles,
 	}
 	if screen.rtl433Panel != nil {
 		settings.RTL433FrequencyHz = screen.rtl433Panel.targetHz
@@ -374,7 +497,7 @@ func validBand(category, name string) bool {
 }
 
 func validDemodMode(mode string) bool {
-	for _, candidate := range []string{"AM", i18n.Source("text.0896d612d497"), i18n.Source("text.6b742bac3eb4"), i18n.Source("text.61f0acff1735"), i18n.Source("text.6323db4948ad"), "CW", i18n.Source("text.2604864ce4d3"), i18n.Source("text.7866f9f32e66"), i18n.Source("text.72c048cb5100"), i18n.Source("text.f69d86a86926")} {
+	for _, candidate := range []string{"AM", i18n.Source("text.0896d612d497"), i18n.Source("text.6b742bac3eb4"), i18n.Source("text.61f0acff1735"), i18n.Source("text.6323db4948ad"), "CW", i18n.Source("text.2604864ce4d3"), i18n.Source("text.7866f9f32e66"), i18n.Source("text.72c048cb5100"), i18n.Source("text.f69d86a86926"), tetrapolToolID} {
 		if mode == candidate {
 			return true
 		}

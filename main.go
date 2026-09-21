@@ -135,6 +135,8 @@ func main() {
 		APRSWorkingDirectory:      resources.Path("tools", "aprs", "runtime"),
 		SSTVExecutable:            resources.Path("tools", "sstv", "runtime", "bin", "sstv_decoder_runner.exe"),
 		TETRACodec:                resources.Path("tools", "tetra", "runtime", "bin", "libtetradec.dll"),
+		TETRAPOLKitExecutable:     resources.Path("tools", "tetrapol", "runtime", "bin", "tetrapol_dump.exe"),
+		TETRAPOLRPCELPExecutable:  resources.Path("tools", "tetrapol", "runtime", "bin", "rpcelp.exe"),
 		SSTVOutputDirectory:       resources.WritablePath("captures", "sstv"),
 		StartupLog:                startupStep,
 	})

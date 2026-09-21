@@ -65,9 +65,13 @@ func TestRadiosondeMenuBounds(t *testing.T) {
 	if !validTool("RADIOSONDE") {
 		t.Fatal("radiosonde tool is not registered")
 	}
+	modal := toolMenuModalBounds()
+	if modal.X != (designWidth-modal.Width)/2 || modal.Y != (designHeight-modal.Height)/2 {
+		t.Fatalf("tool menu is not centered: %+v", modal)
+	}
 	for i := range toolMenuItems {
 		a := menu.itemBounds(i)
-		if a.X < 190 || a.X+a.Width > 1090 {
+		if a.X < modal.X || a.X+a.Width > modal.X+modal.Width {
 			t.Fatalf("tool %s outside menu: %+v", toolMenuItems[i].id, a)
 		}
 		for j := 0; j < i; j++ {

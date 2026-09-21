@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.8.0'
+    [string]$Version = '0.9.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,6 +12,10 @@ $digitalVoiceRuntime = Join-Path $projectRoot 'DATA\tools\digital_voice\runtime'
 $digitalVoiceManifestPath = Join-Path $digitalVoiceRuntime 'runtime-version.json'
 $audioRuntime = Join-Path $projectRoot 'DATA\tools\audio\runtime'
 $audioManifestPath = Join-Path $audioRuntime 'runtime-version.json'
+$tetrapolRuntime = Join-Path $projectRoot 'DATA\tools\tetrapol\runtime'
+$tetrapolManifestPath = Join-Path $tetrapolRuntime 'runtime-version.json'
+$omniRigRuntime = Join-Path $projectRoot 'DATA\runtime\windows-x64\omnirig'
+$omniRigManifestPath = Join-Path $omniRigRuntime 'runtime-version.json'
 
 if ($distRoot -ne $expectedDist -or -not $distRoot.StartsWith($projectRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Ruta de distribución no segura: $distRoot"
@@ -47,6 +51,48 @@ if (-not (Test-Path -LiteralPath $lameExe)) { throw "Falta LAME: $lameExe" }
 $lameExeHash = (Get-FileHash -LiteralPath $lameExe -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($lameExeHash -ne $audioManifest.executableSha256.ToLowerInvariant()) {
     throw "El ejecutable LAME no coincide con el manifiesto: $lameExeHash"
+}
+
+if (-not (Test-Path -LiteralPath $tetrapolManifestPath)) {
+    throw "Falta el manifiesto de TETRAPOL: $tetrapolManifestPath"
+}
+$tetrapolManifest = Get-Content -LiteralPath $tetrapolManifestPath -Raw | ConvertFrom-Json
+$tetrapolDumpExe = Join-Path $tetrapolRuntime $tetrapolManifest.tetrapolKit.executable
+$tetrapolRPCELPExe = Join-Path $tetrapolRuntime $tetrapolManifest.rpcelp.executable
+foreach ($required in @($tetrapolDumpExe, $tetrapolRPCELPExe)) {
+    if (-not (Test-Path -LiteralPath $required)) { throw "Falta un componente requerido de TETRAPOL: $required" }
+}
+foreach ($dll in $tetrapolManifest.tetrapolKit.dlls) {
+    $required = Join-Path (Split-Path $tetrapolDumpExe -Parent) $dll
+    if (-not (Test-Path -LiteralPath $required)) { throw "Falta una DLL requerida de TETRAPOL: $required" }
+}
+$tetrapolDumpHash = (Get-FileHash -LiteralPath $tetrapolDumpExe -Algorithm SHA256).Hash.ToLowerInvariant()
+$tetrapolRPCELPHash = (Get-FileHash -LiteralPath $tetrapolRPCELPExe -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($tetrapolDumpHash -ne $tetrapolManifest.tetrapolKit.executableSha256.ToLowerInvariant()) {
+    throw "tetrapol_dump no coincide con el manifiesto: $tetrapolDumpHash"
+}
+if ($tetrapolRPCELPHash -ne $tetrapolManifest.rpcelp.executableSha256.ToLowerInvariant()) {
+    throw "RP-CELP no coincide con el manifiesto: $tetrapolRPCELPHash"
+}
+
+if (-not (Test-Path -LiteralPath $omniRigManifestPath)) {
+    throw "Falta el manifiesto de OmniRig portable: $omniRigManifestPath"
+}
+$omniRigManifest = Get-Content -LiteralPath $omniRigManifestPath -Raw | ConvertFrom-Json
+if ($omniRigManifest.version -ne '1.20') {
+    throw "Versión de OmniRig no admitida: $($omniRigManifest.version). Se esperaba 1.20."
+}
+$omniRigExe = Join-Path $omniRigRuntime $omniRigManifest.executable
+$omniRigProfiles = Join-Path $omniRigRuntime 'Rigs'
+foreach ($required in @($omniRigExe, (Join-Path $omniRigRuntime 'LICENSE.txt'), $omniRigProfiles)) {
+    if (-not (Test-Path -LiteralPath $required)) { throw "Falta un componente requerido de OmniRig: $required" }
+}
+if (@(Get-ChildItem -LiteralPath $omniRigProfiles -Filter '*.ini' -File).Count -eq 0) {
+    throw "OmniRig portable no contiene perfiles de radio en $omniRigProfiles"
+}
+$omniRigExeHash = (Get-FileHash -LiteralPath $omniRigExe -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($omniRigExeHash -ne $omniRigManifest.executableSha256.ToLowerInvariant()) {
+    throw "OmniRig.exe no coincide con el manifiesto: $omniRigExeHash"
 }
 
 # Windows locks the executable, runtime DLLs and startup.log while IC-SDR is
@@ -102,6 +148,7 @@ $copies = @(
     @{ Source = 'DATA\tools\aprs\config'; Destination = 'DATA\tools\aprs\config' },
     @{ Source = 'DATA\tools\sstv\runtime'; Destination = 'DATA\tools\sstv\runtime' },
     @{ Source = 'DATA\tools\tetra\runtime'; Destination = 'DATA\tools\tetra\runtime' },
+    @{ Source = 'DATA\tools\tetrapol\runtime'; Destination = 'DATA\tools\tetrapol\runtime' },
     @{ Source = 'DATA\data\ic-sdr-settings.json'; Destination = 'DATA\data\ic-sdr-settings.json' }
 )
 

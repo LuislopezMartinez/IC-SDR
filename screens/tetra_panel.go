@@ -12,6 +12,7 @@ import (
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
+	"go-zero/internal/iqcapture"
 	"go-zero/internal/resources"
 	"go-zero/internal/tetra"
 	"go-zero/simpleui"
@@ -39,6 +40,8 @@ type TETRAPanel struct {
 	listenSlot                                                  int
 	clearOnly                                                   bool
 	viewerTopmost                                               bool
+	iqWriter                                                    *iqcapture.Writer
+	iqCapture                                                   *simpleui.Button
 }
 
 const tetraChannelBandwidthHz = 25_000
@@ -88,6 +91,10 @@ func NewTETRAPanel(screen *MainScreen) *TETRAPanel {
 		}
 	})
 	p.controls = append(p.controls, p.topmostSwitch)
+	p.iqCapture = simpleui.NewButton("tetraWavecomIQ", 35, toolY+218, 245, 32, "CAPTURAR IQ WAVECOM", 12)
+	p.iqCapture.SetColors(colors.blue, colors.border, colors.text)
+	p.iqCapture.OnClick(p.toggleWavecomIQ)
+	p.controls = append(p.controls, p.iqCapture)
 	for i, b := range []struct {
 		name string
 		hz   int64
@@ -145,6 +152,7 @@ func (p *TETRAPanel) Enter() {
 	}
 }
 func (p *TETRAPanel) Leave() {
+	p.stopWavecomIQ()
 	p.enabled = false
 	p.apply()
 }
@@ -195,10 +203,46 @@ func (p *TETRAPanel) applyAudioPolicy() {
 	}
 }
 func (p *TETRAPanel) Close() {
+	p.stopWavecomIQ()
 	p.enabled = false
 	p.apply()
 	if p.viewer != nil && p.viewer.Process != nil {
 		_ = p.viewer.Process.Kill()
+	}
+}
+func (p *TETRAPanel) toggleWavecomIQ() {
+	if p.iqWriter != nil {
+		p.stopWavecomIQ()
+		p.feedback = "Captura IQ Wavecom guardada."
+		return
+	}
+	if p.screen.receiver == nil {
+		p.feedback = "SDR no disponible para captura IQ."
+		return
+	}
+	dir := resources.WritablePath("captures", "tetrapol")
+	name := fmt.Sprintf("tetrapol_%s_%dHz_iq.wav", time.Now().Format("20060102-150405"), p.screen.frequencyHz)
+	w, err := iqcapture.New(filepath.Join(dir, name), p.screen.centerFrequencyHz, p.screen.frequencyHz, p.screen.receiver.SampleRate())
+	if err != nil {
+		p.feedback = err.Error()
+		return
+	}
+	p.iqWriter = w
+	p.screen.receiver.SetIQSink(w.Write)
+	p.iqCapture.SetLabel("DETENER IQ WAVECOM")
+	p.feedback = "Capturando IQ 128 kS/s para Wavecom."
+}
+func (p *TETRAPanel) stopWavecomIQ() {
+	if p.iqWriter == nil {
+		return
+	}
+	if p.screen.receiver != nil {
+		p.screen.receiver.SetIQSink(nil)
+	}
+	_ = p.iqWriter.Close()
+	p.iqWriter = nil
+	if p.iqCapture != nil {
+		p.iqCapture.SetLabel("CAPTURAR IQ WAVECOM")
 	}
 }
 func (p *TETRAPanel) Tick() {

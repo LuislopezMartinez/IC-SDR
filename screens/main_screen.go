@@ -2,6 +2,8 @@ package screens
 
 import (
 	"go-zero/internal/i18n"
+	"go-zero/internal/omnirig"
+	"go-zero/internal/resources"
 
 	"fmt"
 	"math"
@@ -89,12 +91,24 @@ type MainScreen struct {
 	menuButton             *simpleui.Button
 	viewButton             *simpleui.Button
 	themeButton            *simpleui.Button
+	rigButton              *simpleui.Button
+	rigClient              *omnirig.Client
+	rigControlMode         int
+	rigLastFrequencyHz     int64
+	rigLastProgramHz       int64
+	rigLastMode            string
+	rigLastProgramMode     string
+	rigStatus              string
+	rigMuteOnTX            bool
+	rigMuteApplied         bool
+	rigTXSince             time.Time
 	themeName              string
 	filterSelector         *FilterSelector
 	bandSelector           *BandSelector
 	stepSelector           *StepSelector
 	bandCategory           string
 	bandName               string
+	bandDisplayProfiles    map[string]bandDisplayProfile
 	frequencyHz            int64 // tuned VFO frequency
 	centerFrequencyHz      int64 // center of the SDR IQ capture
 	spanHz                 int64
@@ -110,6 +124,7 @@ type MainScreen struct {
 	memViewSwitch          *simpleui.Switch
 	volume                 float32
 	muted                  bool
+	muteSwitch             *simpleui.Switch
 	squelchEnabled         bool
 	squelchThreshold       int
 	squelchSwitch          *simpleui.Switch
@@ -177,6 +192,10 @@ type MainScreen struct {
 	radiosondeFrequencyHz  int64
 	sstvPanel              *SSTVPanel
 	tetraPanel             *TETRAPanel
+	tetrapolPanel          *TETRAPOLPanel
+	omniRigPanel           *OmniRigPanel
+	tetrapolBand           string
+	tetrapolDirection      string
 	utilitiesSidebar       *UtilitiesSidebar
 	sstvAutomatic          bool
 	sstvMode               string
@@ -239,6 +258,7 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		demodBandwidthHz:       9_000,
 		bandCategory:           i18n.Source("text.4fae663ae96a"),
 		bandName:               "20 m",
+		bandDisplayProfiles:    make(map[string]bandDisplayProfile),
 		savedMode:              i18n.Source("text.61f0acff1735"),
 		dmrAutoCenter:          true,
 		dmrAudioSlot:           i18n.Source("text.6ea56fae9eac"),
@@ -249,8 +269,11 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		sstvMode:               "R36",
 		sstvCandidateModes:     [4]string{"R36", "R72", "M1", "S1"},
 		subtoneMode:            i18n.Source("text.6ea56fae9eac"),
+		tetrapolBand:           "UHF",
+		tetrapolDirection:      "DOWN",
 		settingsPath:           defaultAppSettingsPath(),
 		sMeter:                 &SMeter{},
+		rigClient:              omnirig.New(resources.Path("runtime", "windows-x64")),
 	}
 	loadAppSettings(screen.settingsPath, screen)
 	screen.webConfigPath = defaultWebConfigPath()
@@ -267,7 +290,7 @@ func (screen *MainScreen) CreateControls() {
 	}
 	screen.filterSelector = NewFilterSelector(screen.selectFilter)
 	screen.mode = simpleui.NewDropdown("mode", 134, 16, 110, 48, i18n.Source("text.ac6c84ed1369"),
-		[]string{"AM", i18n.Source("text.0896d612d497"), i18n.Source("text.6b742bac3eb4"), i18n.Source("text.61f0acff1735"), i18n.Source("text.6323db4948ad"), "CW", i18n.Source("text.2604864ce4d3"), i18n.Source("text.7866f9f32e66"), i18n.Source("text.72c048cb5100"), i18n.Source("text.f69d86a86926")}, 16)
+		[]string{"AM", i18n.Source("text.0896d612d497"), i18n.Source("text.6b742bac3eb4"), i18n.Source("text.61f0acff1735"), i18n.Source("text.6323db4948ad"), "CW", i18n.Source("text.2604864ce4d3"), i18n.Source("text.7866f9f32e66"), i18n.Source("text.72c048cb5100"), i18n.Source("text.f69d86a86926"), tetrapolToolID}, 16)
 	for index, item := range screen.mode.Items() {
 		if item == screen.savedMode {
 			screen.mode.SetSelected(index)
@@ -276,14 +299,7 @@ func (screen *MainScreen) CreateControls() {
 	}
 	screen.mode.SetMaxVisibleItems(6)
 	screen.mode.OnChange(func(_ int, mode string) {
-		screen.savedMode = mode
-		screen.selectFilter(screen.filterSelector.Current(mode))
-		if mode == i18n.Source("text.2604864ce4d3") && screen.activeTool != i18n.Source("text.7a1580c49e45") {
-			screen.selectTool(i18n.Source("text.93239b223632"))
-		} else if mode != i18n.Source("text.2604864ce4d3") && screen.activeTool == i18n.Source("text.93239b223632") {
-			screen.selectTool(i18n.Source("text.a42c60257b01"))
-		}
-		screen.markSettingsDirty()
+		screen.applyModeSelection(mode)
 	})
 
 	initialFilter := screen.filterSelector.Current(screen.mode.SelectedText())
@@ -331,6 +347,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.syncSquelchToSpectrumRange()
 
 	mute := simpleui.NewSwitch("mute", 338, 111, 166, 28, i18n.Source("text.699ea8f5b381"), screen.muted, uiMinimumFontSize)
+	screen.muteSwitch = mute
 	screen.volumeLabel = simpleui.NewLabel("volumeLabel", 338, 148, 58, 22, fmt.Sprintf(i18n.Source("text.594875f2c60c"), screen.volume), uiMinimumFontSize)
 	screen.volumeLabel.SetColor(colors.cyan)
 	screen.volumeSlider = simpleui.NewSlider("volume", 397, 149, 107, 22, 0, 100, screen.volume)
@@ -343,15 +360,7 @@ func (screen *MainScreen) CreateControls() {
 	})
 	mute.OnChange(func(active bool) {
 		screen.muted = active
-		screen.audioPlayer.SetMuted(active)
-		screen.volumeSlider.SetEnabled(!active)
-		if active {
-			screen.volumeLabel.SetText(i18n.Source("text.03b0c21a17ef"))
-			screen.volumeLabel.SetColor(colors.red)
-		} else {
-			screen.volumeLabel.SetText(fmt.Sprintf(i18n.Source("text.594875f2c60c"), screen.volume))
-			screen.volumeLabel.SetColor(colors.cyan)
-		}
+		screen.refreshMuteState()
 		screen.markSettingsDirty()
 	})
 
@@ -380,6 +389,9 @@ func (screen *MainScreen) CreateControls() {
 	screen.memViewSwitch.OnChange(screen.setMemoryView)
 	spanDown := simpleui.NewButton("spanDown", frequencyPanelX+16, frequencyPanelY+36, 36, 32, "-", 16)
 	spanUp := simpleui.NewButton("spanUp", frequencyPanelX+58, frequencyPanelY+36, 36, 32, "+", 16)
+	screen.rigButton = simpleui.NewButton("omniRig", frequencyPanelX+58, frequencyPanelY+7, 36, 22, "RIG", 10)
+	screen.rigButton.OnClick(screen.cycleRigControl)
+	screen.updateRigButtonColor()
 	screen.menuButton = simpleui.NewButton("menu", 24, 16, 102, 48, i18n.Source("text.e10d09208b67"), 13)
 	screen.menuButton.SetColors(rl.Color{R: 13, G: 92, B: 164, A: 255}, rl.Color{R: 17, G: 185, B: 240, A: 255}, rl.White)
 	screen.menuButton.SetMenuIcon(true)
@@ -426,6 +438,8 @@ func (screen *MainScreen) CreateControls() {
 	screen.satellitePanel = NewSatellitePanel(screen)
 	screen.sstvPanel = NewSSTVPanel(screen)
 	screen.tetraPanel = NewTETRAPanel(screen)
+	screen.tetrapolPanel = NewTETRAPOLPanel(screen)
+	screen.omniRigPanel = NewOmniRigPanel(screen)
 	screen.webPanel = NewWebPanel(screen)
 	if screen.rtl433FrequencyHz >= 1_000 {
 		screen.rtl433Panel.targetHz = screen.rtl433FrequencyHz
@@ -452,6 +466,7 @@ func (screen *MainScreen) CreateControls() {
 	compactToolControls(screen.waterfallControls)
 	compactToolControls(screen.fftDisplay.controls)
 	compactToolControls(screen.audioPanel.controls)
+	compactToolControls(screen.recorderPanel.toolControls)
 	compactToolControls(screen.dmrPanel.controls)
 	compactToolControls(screen.aprsPanel.controls)
 	compactToolControls(screen.rtl433Panel.controls)
@@ -465,7 +480,7 @@ func (screen *MainScreen) CreateControls() {
 		screen.mode, screen.filter, screen.band,
 		squelch, screen.squelchLabel, screen.squelchSlider, holdLabel, holdSlider, closeLabel, closeSlider,
 		mute, screen.volumeLabel, screen.volumeSlider, screen.vfoModeSwitch, screen.memViewSwitch,
-		spanDown, spanUp, screen.menuButton, screen.viewButton, screen.step, screen.stepDown, screen.stepUp, screen.themeButton,
+		spanDown, spanUp, screen.rigButton, screen.menuButton, screen.viewButton, screen.step, screen.stepDown, screen.stepUp, screen.themeButton,
 	} {
 		simpleui.Add(element)
 	}
@@ -515,6 +530,12 @@ func (screen *MainScreen) CreateControls() {
 	for _, element := range screen.tetraPanel.controls {
 		simpleui.Add(element)
 	}
+	for _, element := range screen.tetrapolPanel.controls {
+		simpleui.Add(element)
+	}
+	for _, element := range screen.omniRigPanel.controls {
+		simpleui.Add(element)
+	}
 	for _, element := range screen.webPanel.controls {
 		simpleui.Add(element)
 	}
@@ -561,8 +582,14 @@ func (screen *MainScreen) CreateControls() {
 	if screen.activeTool == i18n.Source("text.f69d86a86926") {
 		screen.tetraPanel.Enter()
 	}
+	if screen.activeTool == tetrapolToolID {
+		screen.tetrapolPanel.Enter()
+	}
 	if screen.activeTool == i18n.Source("text.a8cbb160caa6") {
 		screen.digitalVoicePanel.Enter()
+	}
+	if screen.activeTool == omniRigToolID && screen.rigClient != nil {
+		screen.rigClient.Start()
 	}
 	if screen.receiver != nil {
 		screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
@@ -585,6 +612,7 @@ func (screen *MainScreen) Draw() {
 		}
 	}
 	screen.flushSettings(false)
+	screen.updateRigControl()
 	screen.sdrHeader.Tick()
 	screen.recorderPanel.Tick()
 	// Valid DMR voice frames are already gated by DSDcc; the RF squelch must
@@ -629,11 +657,15 @@ func (screen *MainScreen) Draw() {
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.Tick()
 	}
+	if screen.tetrapolPanel != nil {
+		screen.tetrapolPanel.Tick()
+	}
 	if screen.digitalVoicePanel != nil {
 		screen.digitalVoicePanel.Tick()
 	}
 	screen.updateFrequencyInteraction()
 	screen.updateSpectrumDrag()
+	screen.updateWaterfallTune()
 	if screen.receiver != nil && rl.GetTime() >= screen.nextSpectrumUpdate {
 		screen.stats = screen.receiver.Snapshot(screen.spectrum)
 		if screen.stats.FFTBlocks > 0 {
@@ -664,6 +696,9 @@ func (screen *MainScreen) Draw() {
 }
 
 func (screen *MainScreen) Close() {
+	if screen.rigClient != nil {
+		screen.rigClient.Stop()
+	}
 	if screen.webServer != nil {
 		_ = screen.webServer.Close()
 	}
@@ -700,6 +735,9 @@ func (screen *MainScreen) Close() {
 	}
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.Close()
+	}
+	if screen.tetrapolPanel != nil {
+		screen.tetrapolPanel.Close()
 	}
 	if screen.digitalVoicePanel != nil {
 		screen.digitalVoicePanel.Close()
@@ -1100,12 +1138,20 @@ func (screen *MainScreen) drawLowerWorkspace() {
 		return
 	}
 	drawPanel(toolContentX, toolY, toolContentRight-toolContentX, toolH)
-	if screen.activeTool == i18n.Source("text.f69d86a86926") && !screen.waterfallVisible {
+	if screen.activeTool == i18n.Source("text.f69d86a86926") {
 		screen.tetraPanel.DrawPanel()
+		return
+	}
+	if screen.activeTool == tetrapolToolID {
+		screen.tetrapolPanel.DrawPanel()
 		return
 	}
 	if screen.activeTool == i18n.Source("text.918191dc299c") {
 		screen.webPanel.DrawPanel()
+		return
+	}
+	if screen.activeTool == omniRigToolID {
+		screen.omniRigPanel.DrawPanel()
 		return
 	}
 	drawCompactedTool(func() {
@@ -1284,11 +1330,19 @@ func (screen *MainScreen) selectTool(tool string) {
 	if previous == i18n.Source("text.f69d86a86926") && tool != i18n.Source("text.f69d86a86926") && screen.tetraPanel != nil {
 		screen.tetraPanel.Leave()
 	}
+	if previous == tetrapolToolID && tool != tetrapolToolID && screen.tetrapolPanel != nil {
+		screen.tetrapolPanel.Leave()
+	}
 	if previous == i18n.Source("text.bcdc9d50f2be") && tool != i18n.Source("text.bcdc9d50f2be") && screen.satellitePanel != nil {
 		screen.satellitePanel.Leave()
 	}
 	if previous == i18n.Source("text.a8cbb160caa6") && tool != i18n.Source("text.a8cbb160caa6") && screen.digitalVoicePanel != nil {
 		screen.digitalVoicePanel.Leave()
+	}
+	if previous == omniRigToolID && tool != omniRigToolID && screen.rigControlMode == rigOff && screen.rigClient != nil {
+		// The CAT tool starts Omni-Rig for read-only discovery even while link
+		// control is off. Release that background COM session on leaving it.
+		screen.rigClient.Stop()
 	}
 	// A tool can be selected while VIEW 2 is active and while the menu owns the
 	// mouse release. Discard any gesture begun on the old geometry, then publish
@@ -1328,6 +1382,11 @@ func (screen *MainScreen) selectTool(tool string) {
 	}
 	if screen.toolMenu != nil {
 		screen.toolMenu.selected = tool
+	}
+	if tool == omniRigToolID && screen.rigClient != nil {
+		// Populate RIG 1/RIG 2 model and status without enabling frequency or
+		// mode synchronization. updateRigControl remains gated by rigControlMode.
+		screen.rigClient.Start()
 	}
 	screen.setWaterfallControlsVisible(tool == i18n.Source("text.9b6bb9932898"))
 	if tool == i18n.Source("text.9b6bb9932898") {
@@ -1403,6 +1462,15 @@ func (screen *MainScreen) selectTool(tool string) {
 			screen.tetraPanel.Enter()
 		}
 	}
+	if screen.tetrapolPanel != nil {
+		screen.tetrapolPanel.SetVisible(tool == tetrapolToolID)
+		if tool == tetrapolToolID && previous != tetrapolToolID {
+			screen.tetrapolPanel.Enter()
+		}
+	}
+	if screen.omniRigPanel != nil {
+		screen.omniRigPanel.SetVisible(tool == omniRigToolID)
+	}
 	if screen.satellitePanel != nil {
 		screen.satellitePanel.SetVisible(tool == i18n.Source("text.bcdc9d50f2be"))
 		if tool == i18n.Source("text.bcdc9d50f2be") && previous != i18n.Source("text.bcdc9d50f2be") {
@@ -1472,6 +1540,12 @@ func (screen *MainScreen) setViewMode(mode int) {
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.f69d86a86926"))
 	}
+	if screen.tetrapolPanel != nil {
+		screen.tetrapolPanel.SetVisible(showTool && screen.activeTool == tetrapolToolID)
+	}
+	if screen.omniRigPanel != nil {
+		screen.omniRigPanel.SetVisible(showTool && screen.activeTool == omniRigToolID)
+	}
 	if screen.satellitePanel != nil {
 		screen.satellitePanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.bcdc9d50f2be"))
 	}
@@ -1531,6 +1605,9 @@ func (screen *MainScreen) stopAllDecodersForBandChange() {
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.Leave()
 	}
+	if screen.tetrapolPanel != nil {
+		screen.tetrapolPanel.Leave()
+	}
 	if screen.receiver != nil {
 		screen.receiver.StopAllDecoders()
 	}
@@ -1543,6 +1620,7 @@ func (screen *MainScreen) stopAllDecodersForBandChange() {
 }
 
 func (screen *MainScreen) selectBand(band BandDefinition) {
+	screen.rememberBandDisplayProfile()
 	screen.stopAllDecodersForBandChange()
 	screen.setFrequencyDigitExponent(-1)
 	screen.bandCategory = band.Category
@@ -1553,6 +1631,7 @@ func (screen *MainScreen) selectBand(band BandDefinition) {
 	screen.centerFrequencyHz = band.FrequencyHz
 	screen.spanHz = band.SpanHz
 	screen.tuningStepHz = recommendedStepForBand(band)
+	screen.restoreBandDisplayProfile()
 	if screen.stepSelector != nil {
 		screen.stepSelector.SetSelected(screen.tuningStepHz)
 	}
@@ -1666,6 +1745,7 @@ func (screen *MainScreen) updateFrequencyInteraction() {
 		if screen.vfoModeSwitch != nil {
 			screen.vfoModeSwitch.SetActive(true)
 		}
+		previousFrequency := screen.frequencyHz
 		centerChanged := screen.tuneFixedBySteps(steps)
 		if screen.receiver != nil {
 			if centerChanged {
@@ -1673,6 +1753,7 @@ func (screen *MainScreen) updateFrequencyInteraction() {
 			}
 			screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 		}
+		screen.resetTETRAAfterManualSpectrumTune(previousFrequency)
 	}
 }
 
@@ -1909,16 +1990,18 @@ func (screen *MainScreen) updateSpectrumDrag() {
 		screen.nextDragRetune = 0
 	}
 	released := rl.IsMouseButtonReleased(rl.MouseButtonLeft)
-	// In FIX mode a short click selects the RF position under the pointer while
-	// the IQ capture (and therefore the FFT) remains stationary. A real drag
-	// keeps the existing spectrum-pan behaviour.
-	if screen.draggingSpectrum && released && !screen.centerMode && float32(math.Abs(float64(mouse.X-screen.dragStartX))) < 6 {
+	// A short click tunes the pointed RF position. CENTER moves the IQ capture
+	// with the VFO; FIX leaves it stationary. A real drag pans the spectrum.
+	if screen.draggingSpectrum && released && float32(math.Abs(float64(mouse.X-screen.dragStartX))) < 6 {
 		previousFrequency := screen.frequencyHz
 		fraction := min(max((mouse.X-x)/width, 0), 1)
-		screen.tuneFixedAtFraction(fraction)
+		screen.tuneAtFraction(fraction)
 		screen.resetTETRAAfterManualSpectrumTune(previousFrequency)
 		screen.draggingSpectrum = false
 		if screen.receiver != nil {
+			if screen.centerMode {
+				screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
+			}
 			screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 		}
 		return
@@ -1950,11 +2033,48 @@ func (screen *MainScreen) updateSpectrumDrag() {
 	}
 }
 
-func (screen *MainScreen) resetTETRAAfterManualSpectrumTune(previousFrequency int64) {
-	if screen.frequencyHz == previousFrequency || screen.activeTool != i18n.Source("text.f69d86a86926") || screen.tetraPanel == nil {
+// updateWaterfallTune mirrors the short-click behaviour of the spectrum. The
+// waterfall and spectrum share the same horizontal RF scale, so the selected
+// channel must be identical whichever view the user clicks.
+func (screen *MainScreen) updateWaterfallTune() {
+	if screen.overlayOpen() || !rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
 		return
 	}
-	screen.tetraPanel.resetAfterManualTune()
+	x, y, width, height := screen.waterfallGeometry()
+	mouse := simpleui.MousePosition()
+	if mouse.X < x || mouse.X > x+width || mouse.Y < y || mouse.Y > y+height {
+		return
+	}
+	if screen.scanPanel != nil && screen.scanPanel.running {
+		screen.scanPanel.ToggleRunning()
+	}
+	previousFrequency := screen.frequencyHz
+	fraction := min(max((mouse.X-x)/width, 0), 1)
+	screen.tuneAtFraction(fraction)
+	if screen.activeTool == i18n.Source("text.8be70e7cb2c4") && screen.rtl433Panel != nil {
+		screen.rtl433Panel.previewFrequency(screen.frequencyHz)
+		screen.frequencyHz = previousFrequency
+		return
+	}
+	screen.resetTETRAAfterManualSpectrumTune(previousFrequency)
+	if screen.receiver != nil {
+		if screen.centerMode {
+			screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
+		}
+		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
+	}
+}
+
+func (screen *MainScreen) resetTETRAAfterManualSpectrumTune(previousFrequency int64) {
+	if screen.frequencyHz == previousFrequency {
+		return
+	}
+	if screen.activeTool == i18n.Source("text.f69d86a86926") && screen.tetraPanel != nil {
+		screen.tetraPanel.resetAfterManualTune()
+	}
+	if screen.activeTool == tetrapolToolID && screen.tetrapolPanel != nil {
+		screen.tetrapolPanel.resetAfterManualTune()
+	}
 }
 
 func (screen *MainScreen) tuneFixedAtFraction(fraction float32) {
@@ -1966,6 +2086,13 @@ func (screen *MainScreen) tuneFixedAtFraction(fraction float32) {
 	}
 	screen.frequencyHz = max(clickedHz, 1_000)
 	screen.markSettingsDirty()
+}
+
+func (screen *MainScreen) tuneAtFraction(fraction float32) {
+	screen.tuneFixedAtFraction(fraction)
+	if screen.centerMode {
+		screen.centerFrequencyHz = screen.frequencyHz
+	}
 }
 
 func wheelSteps(wheel float32) int64 {

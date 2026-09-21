@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.8.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.8.0)**
+**Versión actual: [v0.9.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.9.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -44,6 +44,25 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.9.0
+
+- Nuevo monitor **TETRAPOL** experimental: perfiles VHF/UHF, canales CCH/TCH,
+  enlace ascendente o descendente, seguimiento de tráfico y registro de eventos.
+- Reproducción de audio únicamente para comunicaciones identificadas como no
+  cifradas, y captura de IQ WAV a 128 kS/s con metadatos para análisis externo.
+- Integración **OmniRig CAT** para RIG1/RIG2: seguimiento de frecuencia,
+  sincronización bidireccional, modos de radio y silenciamiento de audio en TX.
+- Predicción de satélites con SGP4 y renovación periódica del catálogo orbital.
+- Perfiles por banda que conservan span, paso, escalas, FFT y ajustes de cascada.
+- Sintonía directa coherente en espectro y cascada; RTL_433 en modo FIX solo
+  recentra la captura cuando el canal queda fuera de la zona útil.
+- Correcciones de estabilidad en cambios manuales de frecuencia, filtros,
+  persistencia de preferencias y disposición de controles.
+
+> [!NOTE]
+> Las funciones TETRAPOL e IQ se destinan exclusivamente a la recepción y el
+> análisis autorizados de señales.
 
 ## Novedades de v0.8.0
 

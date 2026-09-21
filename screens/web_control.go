@@ -485,7 +485,7 @@ func (screen *MainScreen) setRemoteFrequency(hz int64) {
 		return
 	}
 	if screen.activeTool == i18n.Source("text.8be70e7cb2c4") && screen.rtl433Panel != nil {
-		screen.rtl433Panel.selectFrequency(hz)
+		screen.rtl433Panel.selectFrequency(hz, true)
 		return
 	}
 	if screen.scanPanel != nil && screen.scanPanel.running {
