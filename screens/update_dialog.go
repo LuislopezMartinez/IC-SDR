@@ -2,6 +2,7 @@ package screens
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -13,28 +14,29 @@ import (
 // never delayed by the network.
 type UpdateDialog struct {
 	simpleui.BaseElement
-	mu                     sync.Mutex
-	open, checking, manual bool
-	release                update.Release
-	message                string
-	check, later           *simpleui.Button
+	mu                                 sync.Mutex
+	open, checking, installing, manual bool
+	installable                        bool
+	release                            update.Release
+	message                            string
+	check, later                       *simpleui.Button
 }
 
 func NewUpdateDialog() *UpdateDialog {
 	d := &UpdateDialog{BaseElement: simpleui.NewBaseElement("updateDialog", 0, 0, designWidth, designHeight)}
 	d.check = simpleui.NewButton("installUpdate", 545, 545, 245, 45, "ACTUALIZAR", 15)
 	d.later = simpleui.NewButton("laterUpdate", 810, 545, 245, 45, "MÁS TARDE", 15)
-	d.check.OnClick(func() { d.Check(true) })
+	d.check.OnClick(d.install)
 	d.later.OnClick(func() { d.mu.Lock(); d.open = false; d.mu.Unlock() })
 	return d
 }
 func (d *UpdateDialog) Check(manual bool) {
 	d.mu.Lock()
-	if d.checking {
+	if d.checking || d.installing {
 		d.mu.Unlock()
 		return
 	}
-	d.checking, d.manual, d.open, d.message = true, manual, manual, "Buscando actualizaciones…"
+	d.checking, d.installable, d.manual, d.open, d.message = true, false, manual, manual, "Buscando actualizaciones…"
 	d.mu.Unlock()
 	go func() {
 		release, available, err := update.Check(context.Background())
@@ -42,6 +44,7 @@ func (d *UpdateDialog) Check(manual bool) {
 		defer d.mu.Unlock()
 		d.checking = false
 		d.release = release
+		d.installable = available
 		if err != nil {
 			if d.manual {
 				d.open = true
@@ -59,19 +62,57 @@ func (d *UpdateDialog) Check(manual bool) {
 		}
 	}()
 }
+
+func (d *UpdateDialog) install() {
+	d.mu.Lock()
+	if d.checking || d.installing || !d.installable {
+		d.mu.Unlock()
+		return
+	}
+	d.installing = true
+	d.message = "Preparando la descarga…"
+	release := d.release
+	d.mu.Unlock()
+
+	go func() {
+		err := update.Prepare(context.Background(), release, func(downloaded, total int64) {
+			d.mu.Lock()
+			if total > 0 {
+				d.message = fmt.Sprintf("Descargando actualización… %.0f %%", float64(downloaded)*100/float64(total))
+			} else {
+				d.message = fmt.Sprintf("Descargando actualización… %.1f MB", float64(downloaded)/(1024*1024))
+			}
+			d.mu.Unlock()
+		})
+		d.mu.Lock()
+		if err != nil {
+			d.installing = false
+			d.message = "No se ha podido preparar la actualización: " + err.Error()
+			d.mu.Unlock()
+			return
+		}
+		d.message = "Actualización preparada. Cerrando IC-SDR…"
+		d.mu.Unlock()
+		simpleui.RequestClose()
+	}()
+}
+
 func (d *UpdateDialog) OverlayOpen() bool          { d.mu.Lock(); defer d.mu.Unlock(); return d.open }
 func (d *UpdateDialog) Update(simpleui.Input) bool { return false }
 func (d *UpdateDialog) UpdateOverlay(input simpleui.Input) bool {
 	if !d.OverlayOpen() {
 		return false
 	}
+	d.mu.Lock()
+	busy := d.checking || d.installing
+	d.mu.Unlock()
+	if busy {
+		return true
+	}
 	if rl.IsKeyPressed(rl.KeyEscape) {
 		d.mu.Lock()
 		d.open = false
 		d.mu.Unlock()
-		return true
-	}
-	if d.checking {
 		return true
 	}
 	if d.check.Update(input) || d.later.Update(input) {
@@ -95,7 +136,7 @@ func (d *UpdateDialog) DrawOverlay() {
 	if d.release.Notes != "" {
 		drawCenteredStyled("Consulta las notas de la versión antes de instalar.", rl.Rectangle{X: 490, Y: 465, Width: 620, Height: 30}, 13, simpleui.FontRegular, colors.muted)
 	}
-	if d.checking || d.release.PackageURL == "" {
+	if d.checking || d.installing || !d.installable {
 		d.later.SetLabel("CERRAR")
 		d.later.SetBounds(rl.Rectangle{X: 677, Y: 545, Width: 245, Height: 45})
 		d.later.Draw()

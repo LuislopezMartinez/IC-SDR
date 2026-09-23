@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.9.1'
+    [string]$Version = '0.9.2'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -131,9 +131,12 @@ if (-not $SkipTests) {
 }
 
 $exePath = Join-Path $distRoot 'IC-SDR-Go.exe'
+$updaterPath = Join-Path $distRoot 'IC-SDR-Updater.exe'
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Versión no válida: $Version" }
 & go build -trimpath -ldflags "-s -w -H=windowsgui -X go-zero/internal/update.CurrentVersion=$Version" -o $exePath .
 if ($LASTEXITCODE -ne 0) { throw 'No se pudo compilar IC-SDR-Go.exe.' }
+& go build -trimpath -ldflags "-s -w -H=windowsgui" -o $updaterPath ./cmd/updater
+if ($LASTEXITCODE -ne 0) { throw 'No se pudo compilar IC-SDR-Updater.exe.' }
 
 $copies = @(
     @{ Source = 'DATA\runtime\windows-x64'; Destination = 'DATA\runtime\windows-x64' },

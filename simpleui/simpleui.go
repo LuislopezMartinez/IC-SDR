@@ -1,6 +1,10 @@
 package simpleui
 
-import "go-zero/internal/i18n"
+import (
+	"sync/atomic"
+
+	"go-zero/internal/i18n"
+)
 
 import rl "github.com/gen2brain/raylib-go/raylib"
 
@@ -48,9 +52,14 @@ func SetMaximizeKey(key int32) {
 
 var activationFeedback func()
 var lifecycleLogger func(string, ...any)
+var closeRequested atomic.Bool
 
 func SetActivationFeedback(handler func())            { activationFeedback = handler }
 func SetLifecycleLogger(handler func(string, ...any)) { lifecycleLogger = handler }
+
+// RequestClose ends the window loop after the current frame, allowing deferred
+// shutdown handlers to release devices and persist settings normally.
+func RequestClose() { closeRequested.Store(true) }
 
 func traceLifecycle(message string, args ...any) {
 	if lifecycleLogger != nil {
@@ -123,6 +132,7 @@ func Run(draw func()) {
 	}
 	ensureNotStarted("Run")
 	runtime.started = true
+	closeRequested.Store(false)
 
 	traceLifecycle(i18n.Source("text.8f7d1a989b96"))
 	rl.SetConfigFlags(runtime.windowFlags)
@@ -151,7 +161,7 @@ func Run(draw func()) {
 	}()
 
 	traceLifecycle(i18n.Source("text.a75cdd388bc1"))
-	for !rl.WindowShouldClose() {
+	for !closeRequested.Load() && !rl.WindowShouldClose() {
 		handleWindowShortcuts()
 		runtime.canvas.Begin(runtime.background)
 		defaultManager.Update(currentInput())
