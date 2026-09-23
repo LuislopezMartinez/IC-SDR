@@ -75,7 +75,14 @@ func (slider *Slider) Update(input Input) bool {
 		}
 	}
 	if slider.hovered && input.Wheel != 0 {
+		previous := slider.value
 		slider.setValue(slider.value+input.Wheel*slider.step, true)
+		// A wheel step is a complete, discrete edit. Unlike pointer dragging it
+		// has no later mouse-button release, so commit it immediately for
+		// controls that defer hardware updates until OnRelease.
+		if slider.value != previous && slider.onRelease != nil {
+			slider.onRelease(slider.value)
+		}
 	}
 	return slider.hovered || slider.dragging
 }

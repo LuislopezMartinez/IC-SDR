@@ -35,6 +35,8 @@ type AudioPanel struct {
 	dragStartLow, dragStartHigh     int
 }
 
+const audioSpectrumRefreshSeconds = 1.0 / 60.0
+
 func NewAudioPanel(screen *MainScreen) *AudioPanel {
 	p := &AudioPanel{screen: screen, lowCut: 100, highCut: 4000, eqEnabled: true, profile: i18n.Source("text.db2cb3fe28e2"), deemphasisUs: 50, pbtLow: 100, pbtHigh: 3250}
 	for i := range p.spectrum {
@@ -134,9 +136,15 @@ func (p *AudioPanel) SetVisible(visible bool) {
 }
 func (p *AudioPanel) UpdateSpectrum() {
 	p.handleGraphInput()
+	if p.screen.activeTool != i18n.Source("text.a42c60257b01") || p.screen.viewMode != 1 {
+		return
+	}
 	if p.screen.audioPlayer != nil && rl.GetTime() >= p.nextSpectrum {
 		p.screen.audioPlayer.Spectrum(p.spectrum[:])
-		p.nextSpectrum = rl.GetTime() + .05
+		// Follow the UI frame rate. The audio callback publishes fresh samples
+		// every 25 ms, so this displays every new block instead of skipping every
+		// other block as the former 50 ms limiter did.
+		p.nextSpectrum = rl.GetTime() + audioSpectrumRefreshSeconds
 	}
 }
 

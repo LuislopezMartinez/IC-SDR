@@ -28,6 +28,7 @@ type UtilitiesSidebar struct {
 	previous  *simpleui.Button
 	next      *simpleui.Button
 	recall    *simpleui.Button
+	hotkey    *simpleui.Button
 	add       *simpleui.Button
 	edit      *simpleui.Button
 	remove    *simpleui.Button
@@ -79,7 +80,9 @@ func NewUtilitiesSidebar(screen *MainScreen) *UtilitiesSidebar {
 	p.groupEdit = button("utilityMemoryGroupEdit", i18n.Source("text.762217dca4c2"), 250, 442, 84, 32, screen.memoryPanel.openGroupModal)
 	p.previous = button("utilityMemoryPrevious", "◄", 24, 700, 48, 31, func() { p.moveMemory(-1) })
 	p.next = button("utilityMemoryNext", "►", 78, 700, 48, 31, func() { p.moveMemory(1) })
-	p.recall = button("utilityMemoryRecall", i18n.Source("text.4089163c4819"), 182, 700, 152, 31, screen.memoryPanel.tuneSelected)
+	p.hotkey = button("utilityMemoryHotkey", "TECLA F…", 132, 700, 96, 31, screen.memoryPanel.openHotkeyModal)
+	p.hotkey.SetColors(rl.Color{R: 20, G: 85, B: 125, A: 255}, colors.blue, colors.text)
+	p.recall = button("utilityMemoryRecall", i18n.Source("text.4089163c4819"), 234, 700, 100, 31, screen.memoryPanel.tuneSelected)
 	p.edit = button("utilityMemoryEdit", i18n.Source("text.762217dca4c2"), 24, 737, 150, 31, screen.memoryPanel.editSelection)
 	p.remove = button("utilityMemoryDelete", i18n.Source("text.b243b05a8aa4"), 182, 737, 152, 31, screen.memoryPanel.openDeleteModal)
 	p.remove.SetColors(actionClearFill, colors.red, colors.text)
@@ -142,6 +145,7 @@ func (p *UtilitiesSidebar) Draw() {
 	memory := p.screen.memoryPanel
 	canEditGroup := memory.selectedGroup != "" && memory.selectedGroup != i18n.Source("text.201f15dab8b3") && memory.selectedGroup != i18n.Source("text.445a7d952a48")
 	p.groupEdit.SetEnabled(canEditGroup)
+	p.hotkey.SetEnabled(memory.selected >= 0 && memory.selected < len(memory.memories))
 	if !slices.Equal(p.groupPick.Items(), memory.groups) {
 		p.groupPick.SetItems(memory.groups)
 	}
@@ -187,9 +191,10 @@ func (p *UtilitiesSidebar) Draw() {
 func (p *UtilitiesSidebar) drawMemoryTable(memory *MemoryPanel) {
 	x, y, w, rowH := float32(24), float32(481), float32(310), float32(29)
 	rl.DrawRectangleLinesEx(rl.Rectangle{X: x, Y: y, Width: w, Height: 213}, 1, colors.border)
-	simpleui.DrawTextStyled(i18n.Source("text.af1acd1a0fa8"), x+7, y+8, 13, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawTextStyled(i18n.Source("text.1ce0cee583e6"), x+92, y+8, 13, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawTextStyled("MHz", x+215, y+8, 13, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled("KEY", x+7, y+8, 11, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(i18n.Source("text.af1acd1a0fa8"), x+45, y+8, 11, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(i18n.Source("text.1ce0cee583e6"), x+110, y+8, 11, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled("MHz", x+230, y+8, 11, simpleui.FontSemiBold, colors.cyan)
 	indices := memory.filteredIndices()
 	memory.scrollOffset = min(max(memory.scrollOffset, 0), max(len(indices)-6, 0))
 	end := min(memory.scrollOffset+6, len(indices))
@@ -202,9 +207,10 @@ func (p *UtilitiesSidebar) drawMemoryTable(memory *MemoryPanel) {
 			rl.DrawRectangleRec(rl.Rectangle{X: x + 1, Y: yy - 4, Width: w - 2, Height: rowH}, selection)
 			groupText, rowText = selectionText, selectionText
 		}
-		simpleui.DrawText(trimMemory(memoryGroup(m), 9), x+7, yy, 13, groupText)
-		simpleui.DrawText(trimMemory(m.Name, 14), x+92, yy, 13, rowText)
-		simpleui.DrawText(fmt.Sprintf("%.5f", float64(m.FrequencyHz)/1e6), x+215, yy, 13, rowText)
+		simpleui.DrawText(memoryHotkeyLabel(m.Hotkey), x+7, yy, 12, colors.blue)
+		simpleui.DrawText(trimMemory(memoryGroup(m), 7), x+45, yy, 12, groupText)
+		simpleui.DrawText(trimMemory(m.Name, 13), x+110, yy, 12, rowText)
+		simpleui.DrawText(fmt.Sprintf("%.5f", float64(m.FrequencyHz)/1e6), x+230, yy, 12, rowText)
 	}
 }
 

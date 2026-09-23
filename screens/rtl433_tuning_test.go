@@ -28,8 +28,18 @@ func TestRTL433CenterTuneRecentersAndPreservesMode(t *testing.T) {
 	}
 }
 
-func TestRTL433FixedCenterPansOnlyWhenDecoderWouldLeaveCapture(t *testing.T) {
-	if got := fixedCenterForRTL433(433_000_000, 433_400_000, 1_000_000, 500_000); got != 433_150_000 {
-		t.Fatalf("minimal capture pan = %d, want 433150000", got)
+func TestRTL433FixedCenterIgnoresDecoderWidthInsideVisibleSpectrum(t *testing.T) {
+	for _, span := range []int64{50_000, 100_000, 250_000, 500_000, 1_000_000, 2_000_000} {
+		center := int64(433_925_000)
+		target := center + span/4
+		if got := fixedCenterForRTL433(center, target, span); got != center {
+			t.Fatalf("span %d recentered an in-view FIX tune: got %d, want %d", span, got, center)
+		}
+	}
+}
+
+func TestRTL433FixedCenterPansOnlyAfterTargetLeavesVisibleSpectrum(t *testing.T) {
+	if got := fixedCenterForRTL433(433_000_000, 433_600_000, 1_000_000); got != 433_100_000 {
+		t.Fatalf("minimal capture pan = %d, want 433100000", got)
 	}
 }

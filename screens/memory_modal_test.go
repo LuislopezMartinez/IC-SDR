@@ -123,3 +123,44 @@ func TestEditingMemoryUpdatesToolAndLegacyMemoryRemainsCompatible(t *testing.T) 
 		t.Fatalf("legacy memory incompatible: %+v %v", legacy, err)
 	}
 }
+
+func TestMemoryHotkeyAssignmentReplacesConflictAndPersists(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "memories.json")
+	panel := &MemoryPanel{
+		memories: []MemoryEntry{{Name: "PMR-01", Hotkey: 3}, {Name: "PMR-02"}},
+		selected: 1, pendingHotkey: 3, path: path,
+	}
+	panel.commitHotkey()
+	if panel.memories[0].Hotkey != 0 || panel.memories[1].Hotkey != 3 {
+		t.Fatalf("conflicting shortcut was not replaced: %+v", panel.memories)
+	}
+	var saved []MemoryEntry
+	data, err := os.ReadFile(path)
+	if err != nil || json.Unmarshal(data, &saved) != nil || len(saved) != 2 || saved[1].Hotkey != 3 {
+		t.Fatalf("shortcut was not persisted: %s, err=%v", data, err)
+	}
+}
+
+func TestMemoryHotkeyNormalizationKeepsFirstValidAssignment(t *testing.T) {
+	panel := &MemoryPanel{memories: []MemoryEntry{
+		{Name: "A", Hotkey: 1}, {Name: "B", Hotkey: 1}, {Name: "C", Hotkey: 13}, {Name: "D", Hotkey: 12},
+	}}
+	if !panel.normalizeMemoryHotkeys() {
+		t.Fatal("invalid shortcuts were not detected")
+	}
+	got := []int{panel.memories[0].Hotkey, panel.memories[1].Hotkey, panel.memories[2].Hotkey, panel.memories[3].Hotkey}
+	want := []int{1, 0, 0, 12}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("normalized shortcuts=%v want=%v", got, want)
+		}
+	}
+}
+
+func TestDuplicatedMemoryDoesNotCopyFunctionKey(t *testing.T) {
+	panel := &MemoryPanel{memories: []MemoryEntry{{Name: "ORIGINAL", Hotkey: 7}}, selected: 0, path: filepath.Join(t.TempDir(), "memories.json")}
+	panel.duplicateSelected()
+	if len(panel.memories) != 2 || panel.memories[0].Hotkey != 7 || panel.memories[1].Hotkey != 0 {
+		t.Fatalf("duplicated shortcut conflict: %+v", panel.memories)
+	}
+}

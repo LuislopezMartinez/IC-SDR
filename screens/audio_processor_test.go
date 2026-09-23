@@ -43,6 +43,12 @@ func TestAudioSpectrumFindsTone(t *testing.T) {
 	}
 }
 
+func TestAudioSpectrumRefreshTracksDisplayFrameRate(t *testing.T) {
+	if audioSpectrumRefreshSeconds > 1.0/55.0 {
+		t.Fatalf("audio spectrum refresh interval %.4f s is not real-time", audioSpectrumRefreshSeconds)
+	}
+}
+
 func TestNormalAudioProfileRemainsLinearBelowLimiter(t *testing.T) {
 	processor := NewAudioProcessor()
 	processor.Configure(20, 16000, false, [5]float32{}, i18n.Source("text.db2cb3fe28e2"))

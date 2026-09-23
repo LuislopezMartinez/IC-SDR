@@ -91,7 +91,10 @@ func NewTETRAPanel(screen *MainScreen) *TETRAPanel {
 		}
 	})
 	p.controls = append(p.controls, p.topmostSwitch)
-	p.iqCapture = simpleui.NewButton("tetraWavecomIQ", 35, toolY+218, 245, 32, "CAPTURAR IQ WAVECOM", 12)
+	// TETRA already uses coordinates in the compact content area beside the
+	// permanent utilities sidebar. Keep the Wavecom capture action there too;
+	// x=35 placed it underneath the recorder controls in the sidebar.
+	p.iqCapture = simpleui.NewButton("tetraWavecomIQ", toolContentX, toolY+218, 245, 32, "CAPTURAR IQ WAVECOM", 12)
 	p.iqCapture.SetColors(colors.blue, colors.border, colors.text)
 	p.iqCapture.OnClick(p.toggleWavecomIQ)
 	p.controls = append(p.controls, p.iqCapture)

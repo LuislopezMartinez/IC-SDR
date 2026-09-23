@@ -29,6 +29,31 @@ func TestVerticalSliderMapsTopToMaximum(t *testing.T) {
 	closeTo(t, slider.Value(), 10)
 }
 
+func TestSliderWheelChangesAndCommitsValue(t *testing.T) {
+	slider := NewSlider("rf-gain", 0, 0, 200, 30, 0, 9, 4)
+	changed, committed := float32(-1), float32(-1)
+	slider.OnChange(func(value float32) { changed = value })
+	slider.OnRelease(func(value float32) { committed = value })
+
+	slider.Update(Input{Pointer: rl.Vector2{X: 100, Y: 15}, PointerInCanvas: true, Wheel: 1})
+
+	closeTo(t, slider.Value(), 5)
+	closeTo(t, changed, 5)
+	closeTo(t, committed, 5)
+}
+
+func TestSliderWheelDoesNotCommitAtRangeLimit(t *testing.T) {
+	slider := NewSlider("rf-gain", 0, 0, 200, 30, 0, 9, 9)
+	commits := 0
+	slider.OnRelease(func(float32) { commits++ })
+
+	slider.Update(Input{Pointer: rl.Vector2{X: 100, Y: 15}, PointerInCanvas: true, Wheel: 1})
+
+	if commits != 0 {
+		t.Fatalf("wheel committed %d unchanged values, want 0", commits)
+	}
+}
+
 func TestRangeSliderEnforcesMinimumGap(t *testing.T) {
 	slider := NewRangeSlider("range", 0, 0, 300, 30, -140, 0, -100, -20)
 	slider.SetMinimumGap(10)

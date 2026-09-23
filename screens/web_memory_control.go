@@ -19,6 +19,9 @@ func errInvalidMemory(memory MemoryEntry) bool {
 	if len(memory.Description) > 500 || len(memory.Group) > 40 || len(memory.CTCSSHz) > 24 || len(memory.DCSCode) > 24 || len(memory.Tool) > 64 {
 		return true
 	}
+	if memory.Hotkey < 0 || memory.Hotkey > 12 {
+		return true
+	}
 	if memory.Group == "" || strings.EqualFold(memory.Group, i18n.Source("text.201f15dab8b3")) {
 		return true
 	}
@@ -62,6 +65,13 @@ func (screen *MainScreen) applyWebMemoryControl(command webControlCommand) {
 		memory.Tool = storableMemoryTool(screen.activeTool)
 		memory.Name = strings.TrimSpace(memory.Name)
 		memory.Group = strings.TrimSpace(memory.Group)
+		if memory.Hotkey > 0 {
+			for index := range panel.memories {
+				if index != command.MemoryIndex && panel.memories[index].Hotkey == memory.Hotkey {
+					panel.memories[index].Hotkey = 0
+				}
+			}
+		}
 		if command.MemoryIndex < 0 {
 			panel.memories = append(panel.memories, memory)
 			panel.selected = len(panel.memories) - 1

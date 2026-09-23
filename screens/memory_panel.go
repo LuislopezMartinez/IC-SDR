@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"go-zero/internal/resources"
 	"go-zero/simpleui"
@@ -39,6 +40,7 @@ type MemoryEntry struct {
 	CTCSSHz           string `json:"ctcssHz,omitempty"`
 	DCSCode           string `json:"dcsCode,omitempty"`
 	Tool              string `json:"tool,omitempty"`
+	Hotkey            int    `json:"hotkey,omitempty"`
 }
 
 type MemoryPanel struct {
@@ -73,6 +75,9 @@ type MemoryPanel struct {
 	editField                                                                  int
 	editBuffer                                                                 string
 	editError                                                                  string
+	pendingHotkey                                                              int
+	shortcutFeedback                                                           string
+	shortcutFeedbackUntil                                                      time.Time
 }
 
 var memoryGroupPalette = []rl.Color{
@@ -386,7 +391,9 @@ func (p *MemoryPanel) SetMarkersVisible(visible bool) {
 func (p *MemoryPanel) load() {
 	data, err := os.ReadFile(p.path)
 	if err == nil && json.Unmarshal(data, &p.memories) == nil {
-		if p.normalizeMemoryModes() {
+		modesChanged := p.normalizeMemoryModes()
+		hotkeysChanged := p.normalizeMemoryHotkeys()
+		if modesChanged || hotkeysChanged {
 			p.save()
 		}
 		p.rebuildGroups()
@@ -420,7 +427,27 @@ func (p *MemoryPanel) load() {
 		p.memories = append(p.memories, MemoryEntry{Name: m.Name, FrequencyHz: m.FrequencyHz, Mode: m.Mode, FilterBandwidthHz: bw, StepHz: m.StepHz, ScanEnabled: m.ScanEnabled, Group: m.Group, Priority: m.Priority})
 	}
 	p.normalizeMemoryModes()
+	p.normalizeMemoryHotkeys()
 	p.rebuildGroups()
+}
+
+// normalizeMemoryHotkeys keeps persisted files forwards-compatible and makes
+// the first occurrence win if a hand-edited file assigns one key twice.
+func (p *MemoryPanel) normalizeMemoryHotkeys() bool {
+	changed := false
+	used := [13]bool{}
+	for index := range p.memories {
+		hotkey := p.memories[index].Hotkey
+		if hotkey < 0 || hotkey > 12 || hotkey > 0 && used[hotkey] {
+			p.memories[index].Hotkey = 0
+			changed = true
+			continue
+		}
+		if hotkey > 0 {
+			used[hotkey] = true
+		}
+	}
+	return changed
 }
 
 // Older IC-SDR settings could contain a DMR-labelled channel stored as NFM.
@@ -576,9 +603,79 @@ func (p *MemoryPanel) duplicateSelected() {
 	}
 	m := p.memories[p.selected]
 	m.Name += i18n.Source("text.b675cdc576ce")
+	m.Hotkey = 0
 	p.memories = append(p.memories, m)
 	p.selected = len(p.memories) - 1
 	p.save()
+}
+
+func (p *MemoryPanel) openHotkeyModal() {
+	if p.selected < 0 || p.selected >= len(p.memories) {
+		return
+	}
+	p.pendingHotkey = p.memories[p.selected].Hotkey
+	p.modal, p.modalPressed = "hotkey", 0
+}
+
+func (p *MemoryPanel) commitHotkey() {
+	if p.selected < 0 || p.selected >= len(p.memories) || p.pendingHotkey < 0 || p.pendingHotkey > 12 {
+		p.closeModal()
+		return
+	}
+	if p.pendingHotkey > 0 {
+		for index := range p.memories {
+			if index != p.selected && p.memories[index].Hotkey == p.pendingHotkey {
+				p.memories[index].Hotkey = 0
+			}
+		}
+	}
+	p.memories[p.selected].Hotkey = p.pendingHotkey
+	p.save()
+	p.closeModal()
+}
+
+func (p *MemoryPanel) memoryIndexForHotkey(hotkey int) int {
+	for index := range p.memories {
+		if p.memories[index].Hotkey == hotkey {
+			return index
+		}
+	}
+	return -1
+}
+
+func memoryHotkeyLabel(hotkey int) string {
+	if hotkey < 1 || hotkey > 12 {
+		return ""
+	}
+	return fmt.Sprintf("F%d", hotkey)
+}
+
+var memoryFunctionKeys = [...]int32{
+	rl.KeyF1, rl.KeyF2, rl.KeyF3, rl.KeyF4, rl.KeyF5, rl.KeyF6,
+	rl.KeyF7, rl.KeyF8, rl.KeyF9, rl.KeyF10, rl.KeyF11, rl.KeyF12,
+}
+
+func pressedMemoryHotkey() int {
+	for index, key := range memoryFunctionKeys {
+		if rl.IsKeyPressed(key) {
+			return index + 1
+		}
+	}
+	return 0
+}
+
+func (p *MemoryPanel) activateHotkey(hotkey int) bool {
+	index := p.memoryIndexForHotkey(hotkey)
+	if index < 0 {
+		return false
+	}
+	p.selected = index
+	memory := p.memories[index]
+	p.recall(memory)
+	p.shortcutFeedback = fmt.Sprintf("%s  →  %s  ·  %.6f MHz", memoryHotkeyLabel(hotkey), memory.Name, float64(memory.FrequencyHz)/1e6)
+	p.shortcutFeedbackUntil = time.Now().Add(2500 * time.Millisecond)
+	simpleui.PlayActivationFeedback()
+	return true
 }
 func (p *MemoryPanel) openDeleteModal() {
 	if p.selected < 0 || p.selected >= len(p.memories) {
@@ -605,14 +702,28 @@ func (p *MemoryPanel) closeModal() {
 	p.pendingDeleteIndex = -1
 	p.duplicateNames = nil
 	p.pendingGroup = ""
+	p.pendingHotkey = 0
 	p.pendingEditIndex, p.editField, p.editBuffer, p.editError = -1, 0, "", ""
 }
 
 func (p *MemoryPanel) Update(simpleui.Input) bool { return false }
-func (p *MemoryPanel) Draw()                      {}
-func (p *MemoryPanel) OverlayOpen() bool          { return p.modal != "" }
+func (p *MemoryPanel) Draw() {
+	if p.shortcutFeedback == "" || !time.Now().Before(p.shortcutFeedbackUntil) || p.modal != "" {
+		return
+	}
+	bounds := rl.Rectangle{X: 590, Y: 218, Width: 500, Height: 32}
+	background := colors.panel
+	background.A = 248
+	rl.DrawRectangleRounded(bounds, .18, 7, background)
+	rl.DrawRectangleRoundedLinesEx(bounds, .18, 7, 2, colors.blue)
+	drawCentered(p.shortcutFeedback, bounds, 13, simpleui.EnsureTextContrast(colors.text, background))
+}
+func (p *MemoryPanel) OverlayOpen() bool { return p.modal != "" }
 
 func (p *MemoryPanel) modalCancelBounds() rl.Rectangle {
+	if p.modal == "hotkey" {
+		return rl.Rectangle{X: 520, Y: 605, Width: 220, Height: 52}
+	}
 	if p.memoryEditorOpen() {
 		return rl.Rectangle{X: 520, Y: 715, Width: 220, Height: 52}
 	}
@@ -623,6 +734,9 @@ func (p *MemoryPanel) modalCancelBounds() rl.Rectangle {
 }
 
 func (p *MemoryPanel) modalConfirmBounds() rl.Rectangle {
+	if p.modal == "hotkey" {
+		return rl.Rectangle{X: 860, Y: 605, Width: 220, Height: 52}
+	}
 	if p.memoryEditorOpen() {
 		return rl.Rectangle{X: 860, Y: 715, Width: 220, Height: 52}
 	}
@@ -639,6 +753,15 @@ func (p *MemoryPanel) UpdateOverlay(input simpleui.Input) bool {
 	if rl.IsKeyPressed(rl.KeyEscape) {
 		p.closeModal()
 		return true
+	}
+	if p.modal == "hotkey" {
+		if hotkey := pressedMemoryHotkey(); hotkey > 0 {
+			p.pendingHotkey = hotkey
+		}
+		if rl.IsKeyPressed(rl.KeyEnter) {
+			p.commitHotkey()
+			return true
+		}
 	}
 	if p.modal == "new-group" || p.modal == "group" {
 		if rl.IsKeyPressed(rl.KeyBackspace) && len([]rune(p.pendingGroup)) > 0 {
@@ -691,6 +814,19 @@ func (p *MemoryPanel) UpdateOverlay(input simpleui.Input) bool {
 	}
 	if input.Pressed {
 		p.modalPressed = 0
+		if p.modal == "hotkey" {
+			for hotkey, bounds := range p.hotkeyBounds() {
+				if input.Over(bounds) {
+					p.pendingHotkey = hotkey + 1
+					p.modalPressed = 20 + hotkey
+					return true
+				}
+			}
+			if input.Over(p.hotkeyClearBounds()) {
+				p.pendingHotkey = 0
+				return true
+			}
+		}
 		if p.modal == "group" || p.modal == "new-group" {
 			for i, bounds := range p.groupColorBounds() {
 				if input.Over(bounds) {
@@ -763,6 +899,8 @@ func (p *MemoryPanel) UpdateOverlay(input simpleui.Input) bool {
 				p.commitNewGroup()
 			} else if p.modal == "edit" {
 				p.commitEdit()
+			} else if p.modal == "hotkey" {
+				p.commitHotkey()
 			} else {
 				p.confirmDelete()
 			}
@@ -782,6 +920,8 @@ func (p *MemoryPanel) DrawOverlay() {
 		modal = rl.Rectangle{X: 440, Y: 105, Width: 720, Height: 690}
 	} else if p.modal == "group" {
 		modal = rl.Rectangle{X: 440, Y: 170, Width: 720, Height: 560}
+	} else if p.modal == "hotkey" {
+		modal = rl.Rectangle{X: 440, Y: 190, Width: 720, Height: 495}
 	}
 	rl.DrawRectangleRounded(modal, .035, 8, colors.panel)
 	accent := colors.green
@@ -796,6 +936,8 @@ func (p *MemoryPanel) DrawOverlay() {
 		accent, title, confirm = memoryGroupPalette[p.pendingGroupColor], i18n.Source("text.7ca334259cca"), i18n.Source("text.01d1411b0dca")
 	} else if p.modal == "new-group" {
 		accent, title, confirm = memoryGroupPalette[p.pendingGroupColor], i18n.Source("text.7f4619516851"), i18n.Source("text.eae39f79e0ed")
+	} else if p.modal == "hotkey" {
+		accent, title, confirm = colors.blue, "ASIGNAR ACCESO RÁPIDO", "GUARDAR"
 	}
 	if p.modal == "edit" {
 		accent, title, confirm = colors.cyan, i18n.Source("text.022752339a74"), i18n.Source("text.01d1411b0dca")
@@ -808,6 +950,8 @@ func (p *MemoryPanel) DrawOverlay() {
 		titleBounds.Y = 126
 	} else if p.modal == "group" {
 		titleBounds.Y = 192
+	} else if p.modal == "hotkey" {
+		titleBounds.Y = 214
 	}
 	drawCentered(title, titleBounds, 22, accent)
 	if p.memoryEditorOpen() {
@@ -816,11 +960,57 @@ func (p *MemoryPanel) DrawOverlay() {
 		p.drawGroupModalContent()
 	} else if p.modal == "new-group" {
 		p.drawNewGroupModalContent()
+	} else if p.modal == "hotkey" {
+		p.drawHotkeyModalContent()
 	} else {
 		p.drawDeleteModalContent()
 	}
 	drawModalAction(p.modalCancelBounds(), i18n.Source("text.b1a5fe65d180"), colors.border, p.modalPressed == 1)
 	drawModalAction(p.modalConfirmBounds(), confirm, accent, p.modalPressed == 2)
+}
+
+func (p *MemoryPanel) hotkeyBounds() []rl.Rectangle {
+	bounds := make([]rl.Rectangle, 12)
+	for index := range bounds {
+		bounds[index] = rl.Rectangle{X: 500 + float32(index%6)*100, Y: 355 + float32(index/6)*58, Width: 86, Height: 44}
+	}
+	return bounds
+}
+
+func (p *MemoryPanel) hotkeyClearBounds() rl.Rectangle {
+	return rl.Rectangle{X: 660, Y: 510, Width: 280, Height: 42}
+}
+
+func (p *MemoryPanel) drawHotkeyModalContent() {
+	if p.selected < 0 || p.selected >= len(p.memories) {
+		return
+	}
+	memory := p.memories[p.selected]
+	drawCentered(fmt.Sprintf("%s   %.6f MHz", memory.Name, float64(memory.FrequencyHz)/1e6), rl.Rectangle{X: 490, Y: 265, Width: 620, Height: 32}, 18, colors.text)
+	simpleui.DrawText("Pulsa una tecla F1–F12 o selecciónala:", 500, 318, 14, colors.muted)
+	conflict := -1
+	if p.pendingHotkey > 0 {
+		conflict = p.memoryIndexForHotkey(p.pendingHotkey)
+		if conflict == p.selected {
+			conflict = -1
+		}
+	}
+	for index, bounds := range p.hotkeyBounds() {
+		hotkey := index + 1
+		accent, active := colors.border, hotkey == p.pendingHotkey
+		if active {
+			accent = colors.blue
+		}
+		drawModalAction(bounds, memoryHotkeyLabel(hotkey), accent, active)
+	}
+	message, messageColor := "La tecla funciona desde cualquier herramienta mientras IC-SDR tenga el foco.", colors.muted
+	if conflict >= 0 {
+		message = fmt.Sprintf("%s está asignada a %s; GUARDAR reemplazará esa asignación.", memoryHotkeyLabel(p.pendingHotkey), p.memories[conflict].Name)
+		messageColor = colors.orange
+	}
+	drawCentered(message, rl.Rectangle{X: 480, Y: 472, Width: 640, Height: 24}, 12, messageColor)
+	clearActive := p.pendingHotkey == 0
+	drawModalAction(p.hotkeyClearBounds(), "SIN TECLA / LIBERAR", colors.border, clearActive)
 }
 
 func (p *MemoryPanel) memoryEditorOpen() bool { return p.modal == "edit" || p.modal == "create" }
@@ -1132,8 +1322,8 @@ func (p *MemoryPanel) DrawPanel() {
 		drawMemoryText(fmt.Sprintf("%d", count), 205, y, countColor)
 	}
 	drawPanel(245, memoryPanelTop, 1100, memoryPanelH)
-	headers := []string{i18n.Source("text.ee71241ebf18"), i18n.Source("text.1ce0cee583e6"), i18n.Source("text.1fdfd3b541f0"), i18n.Source("text.ab06b3638fb5"), i18n.Source("text.dfd6401027c8"), i18n.Source("text.78e75a25d809"), i18n.Source("text.22ffd0cc81da")}
-	xs := []float32{255, 300, 600, 800, 900, 1030, 1180}
+	headers := []string{i18n.Source("text.ee71241ebf18"), "TECLA", i18n.Source("text.1ce0cee583e6"), i18n.Source("text.1fdfd3b541f0"), i18n.Source("text.ab06b3638fb5"), i18n.Source("text.dfd6401027c8"), i18n.Source("text.78e75a25d809"), i18n.Source("text.22ffd0cc81da")}
+	xs := []float32{255, 300, 355, 630, 820, 920, 1040, 1180}
 	for i, h := range headers {
 		drawColumnHeader(h, xs[i], memoryHeaderY, colors.text)
 	}
@@ -1161,11 +1351,12 @@ func (p *MemoryPanel) DrawPanel() {
 			star = "★"
 		}
 		drawMemoryText(active, 257, yy, activeColor)
-		drawMemoryText(trimMemory(m.Name, 20), 300, yy, groupColor)
-		drawMemoryText(fmt.Sprintf("%.6f", float64(m.FrequencyHz)/1e6), 600, yy, rowText)
-		drawMemoryText(m.Mode, 800, yy, rowText)
-		drawMemoryText(formatFilterBandwidth(m.FilterBandwidthHz), 900, yy, rowText)
-		drawMemoryText(formatStep(m.StepHz), 1030, yy, rowText)
+		drawMemoryText(memoryHotkeyLabel(m.Hotkey), 300, yy, colors.blue)
+		drawMemoryText(trimMemory(m.Name, 18), 355, yy, groupColor)
+		drawMemoryText(fmt.Sprintf("%.6f", float64(m.FrequencyHz)/1e6), 630, yy, rowText)
+		drawMemoryText(m.Mode, 820, yy, rowText)
+		drawMemoryText(formatFilterBandwidth(m.FilterBandwidthHz), 920, yy, rowText)
+		drawMemoryText(formatStep(m.StepHz), 1040, yy, rowText)
 		drawMemoryText(star, 1180, yy, starColor)
 	}
 	if len(indices) > memoryVisibleRows {
@@ -1180,6 +1371,14 @@ func (p *MemoryPanel) DrawPanel() {
 func (p *MemoryPanel) Tick() {
 	if p.screen.webServer != nil && p.screen.webServer.RemoteActive() {
 		return
+	}
+	if p.modal == "" && !p.screen.overlayOpen() && rl.IsWindowFocused() &&
+		!rl.IsKeyDown(rl.KeyLeftControl) && !rl.IsKeyDown(rl.KeyRightControl) &&
+		!rl.IsKeyDown(rl.KeyLeftAlt) && !rl.IsKeyDown(rl.KeyRightAlt) &&
+		!rl.IsKeyDown(rl.KeyLeftShift) && !rl.IsKeyDown(rl.KeyRightShift) {
+		if hotkey := pressedMemoryHotkey(); hotkey > 0 {
+			p.activateHotkey(hotkey)
+		}
 	}
 	if p.modal != "" || p.screen.activeTool != i18n.Source("text.70b71a34c2de") || p.screen.viewMode != 1 {
 		return

@@ -39,6 +39,13 @@ func SetCanvasFilter(filter rl.TextureFilterMode) {
 	runtime.canvasFilter = filter
 }
 
+// SetMaximizeKey changes the optional single-key maximize shortcut. Pass zero
+// when the application owns every function key for its own shortcuts.
+func SetMaximizeKey(key int32) {
+	ensureNotStarted("SetMaximizeKey")
+	runtime.maximizeKey = key
+}
+
 var activationFeedback func()
 var lifecycleLogger func(string, ...any)
 

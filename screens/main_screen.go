@@ -354,7 +354,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.volumeSlider.SetStep(1)
 	screen.volumeSlider.OnChange(func(value float32) {
 		screen.volume = value
-		screen.audioPlayer.SetVolume(value / 100)
+		screen.audioPlayer.SetVolume(volumePercentToGain(value))
 		screen.volumeLabel.SetText(fmt.Sprintf(i18n.Source("text.594875f2c60c"), value))
 		screen.markSettingsDirty()
 	})
@@ -457,7 +457,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.recorderPanel = NewRecorderPanel(screen, screen.recorder)
 	screen.utilitiesSidebar = NewUtilitiesSidebar(screen)
 	screen.digitalVoicePanel = NewDigitalVoicePanel(screen)
-	screen.audioPlayer.SetVolume(screen.volume / 100)
+	screen.audioPlayer.SetVolume(volumePercentToGain(screen.volume))
 	screen.audioPlayer.SetMuted(screen.muted)
 
 	// Every tool except TETRA still describes its layout in the original

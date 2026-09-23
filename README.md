@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.9.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.9.0)**
+**Versión actual: [v0.9.1](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.9.1)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -44,6 +44,18 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.9.1
+
+- Accesos rápidos F1–F12 asignables a memorias, con reasignación segura,
+  confirmación visual y disponibilidad desde cualquier herramienta.
+- Control de volumen con curva logarítmica para un ajuste más fino a niveles
+  bajos y medios, y espectro de audio más fluido y optimizado.
+- RTL_433 en modo FIX conserva la captura mientras la frecuencia siga visible
+  y desplaza solo lo imprescindible.
+- Corregida la posición del control de captura IQ Wavecom en el panel TETRA.
+- Los deslizadores aplican correctamente los cambios hechos con la rueda del
+  ratón. Ajustes adicionales de interfaz, persistencia y pruebas.
 
 ## Novedades de v0.9.0
 

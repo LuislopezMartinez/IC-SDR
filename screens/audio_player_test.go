@@ -14,6 +14,30 @@ func TestDMRUsesBurstSizedPrebuffer(t *testing.T) {
 	}
 }
 
+func TestVolumePercentToGainUsesDecibelCurve(t *testing.T) {
+	tests := []struct {
+		percent float32
+		want    float32
+	}{
+		{percent: -10, want: 0},
+		{percent: 0, want: 0},
+		{percent: 50, want: .1},
+		{percent: 100, want: 1},
+		{percent: 120, want: 1},
+	}
+	for _, test := range tests {
+		if got := volumePercentToGain(test.percent); math.Abs(float64(got-test.want)) > 1e-6 {
+			t.Errorf("volumePercentToGain(%v) = %v, want %v", test.percent, got, test.want)
+		}
+	}
+
+	lowStep := volumePercentToGain(20) - volumePercentToGain(10)
+	highStep := volumePercentToGain(100) - volumePercentToGain(90)
+	if lowStep >= highStep {
+		t.Fatalf("low-volume step %v is not finer than high-volume step %v", lowStep, highStep)
+	}
+}
+
 func TestAudioPlayerConsumesLargestPostProcessedPeak(t *testing.T) {
 	player := &AudioPlayer{}
 	player.publishAudioPeak([]float32{.2, -.7, .4})

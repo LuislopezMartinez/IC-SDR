@@ -130,7 +130,7 @@ func (p *RTL433Panel) selectFrequency(hz int64, recenterCapture bool) {
 		p.screen.centerFrequencyHz = hz
 		p.screen.spanHz = max(p.screen.spanHz, max(int64(1_000_000), int64(p.bandwidthHz)))
 	} else {
-		p.screen.centerFrequencyHz = fixedCenterForRTL433(p.screen.centerFrequencyHz, hz, p.screen.spanHz, p.bandwidthHz)
+		p.screen.centerFrequencyHz = fixedCenterForRTL433(p.screen.centerFrequencyHz, hz, p.screen.spanHz)
 	}
 	if p.screen.receiver != nil {
 		p.screen.receiver.SetCenterFrequency(p.screen.centerFrequencyHz)
@@ -244,17 +244,21 @@ func (p *RTL433Panel) Tick() {
 	}
 }
 
-func fixedCenterForRTL433(centerHz, targetHz, spanHz int64, bandwidthHz int) int64 {
+func fixedCenterForRTL433(centerHz, targetHz, spanHz int64) int64 {
 	if spanHz <= 0 {
 		return targetHz
 	}
-	guard := max(int64(bandwidthHz)/2, int64(0))
-	usableOffset := max(spanHz/2-guard, int64(0))
-	if targetHz < centerHz-usableOffset {
-		return targetHz + usableOffset
+	// FIX describes the RF capture position, independently of the bandwidth
+	// requested by rtl_433. Using half of the decoder width as an edge guard
+	// made narrow spans recentre on every tune because the guard consumed the
+	// entire visible interval. Keep the capture stationary while the selected
+	// carrier remains visible, and pan only the minimum amount once it leaves.
+	halfSpan := spanHz / 2
+	if targetHz < centerHz-halfSpan {
+		return targetHz + halfSpan
 	}
-	if targetHz > centerHz+usableOffset {
-		return targetHz - usableOffset
+	if targetHz > centerHz+halfSpan {
+		return targetHz - halfSpan
 	}
 	return centerHz
 }

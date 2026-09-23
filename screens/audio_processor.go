@@ -37,11 +37,15 @@ type AudioProcessor struct {
 	previousInput, highpass, lowpass1, lowpass2 float32
 	limiterGain                                 float32
 	ring                                        [512]float32
+	spectrumWindow                              [512]float64
 	ringWrite, ringCount                        int
 }
 
 func NewAudioProcessor() *AudioProcessor {
 	p := &AudioProcessor{lowCut: 100, highCut: 4000, eqEnabled: true, profile: i18n.Source("text.db2cb3fe28e2"), limiterGain: 1}
+	for index := range p.spectrumWindow {
+		p.spectrumWindow[index] = .5 - .5*math.Cos(2*math.Pi*float64(index)/float64(len(p.spectrumWindow)-1))
+	}
 	p.configureEQ()
 	return p
 }
@@ -135,12 +139,21 @@ func (p *AudioProcessor) Spectrum(destination []float32) {
 	for bin := range destination {
 		frequency := 16000 * float64(bin) / float64(max(len(destination)-1, 1))
 		var real, imaginary float64
+		phaseStep := -2 * math.Pi * frequency / audioSampleRate
+		stepReal, stepImaginary := math.Cos(phaseStep), math.Sin(phaseStep)
+		oscillatorReal, oscillatorImaginary := 1.0, 0.0
 		for n := 0; n < count; n++ {
 			sample := float64(snapshot[(write-count+n+len(snapshot))%len(snapshot)])
-			window := .5 - .5*math.Cos(2*math.Pi*float64(n)/float64(count-1))
-			phase := -2 * math.Pi * frequency * float64(n) / audioSampleRate
-			real += sample * window * math.Cos(phase)
-			imaginary += sample * window * math.Sin(phase)
+			window := p.spectrumWindow[n]
+			if count != len(snapshot) {
+				window = .5 - .5*math.Cos(2*math.Pi*float64(n)/float64(count-1))
+			}
+			windowed := sample * window
+			real += windowed * oscillatorReal
+			imaginary += windowed * oscillatorImaginary
+			nextReal := oscillatorReal*stepReal - oscillatorImaginary*stepImaginary
+			oscillatorImaginary = oscillatorReal*stepImaginary + oscillatorImaginary*stepReal
+			oscillatorReal = nextReal
 		}
 		magnitude := 2 * math.Hypot(real, imaginary) / float64(count)
 		destination[bin] = float32(max(20*math.Log10(magnitude+1e-7), -80))

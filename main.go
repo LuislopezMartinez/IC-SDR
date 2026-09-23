@@ -95,6 +95,9 @@ func main() {
 	simpleui.SetTextScale(1.25)
 	simpleui.SetTitle(i18n.Source("text.29b8efd09a7c"))
 	simpleui.SetMinimumSize(960, 540)
+	// F1-F12 are available for user-assigned memory shortcuts. In particular,
+	// do not reserve F11 for window maximization in the main receiver window.
+	simpleui.SetMaximizeKey(0)
 
 	// Same baseline as the original RSP1B profile in the reference capture.
 	// In particular, restoring -14 dBFS avoids the driver's common -30 dB AGC

@@ -13,6 +13,12 @@ import (
 
 const audioSampleRate = 48_000
 
+// volumeFloorDB is the attenuation at the first audible end of the volume
+// control. The slider remains 0..100 for display and persistence, while the
+// audio gain follows a decibel curve that gives much finer control at low and
+// medium listening levels.
+const volumeFloorDB = -40.0
+
 const (
 	// WASAPI requests two periods of roughly 30 ms immediately after Play.
 	// Keep 100 ms queued so both initial callbacks and ordinary DSP jitter are
@@ -220,6 +226,15 @@ func playbackPrebufferSamples(digital bool) int {
 		return digitalPrebufferSamples
 	}
 	return analogPrebufferSamples
+}
+
+func volumePercentToGain(percent float32) float32 {
+	percent = min(max(percent, 0), 100)
+	if percent == 0 {
+		return 0
+	}
+	decibels := volumeFloorDB * (1 - float64(percent)/100)
+	return float32(math.Pow(10, decibels/20))
 }
 
 // publishAudioPeak retains the largest post-processed audio sample produced
