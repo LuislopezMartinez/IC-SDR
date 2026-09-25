@@ -60,6 +60,10 @@ type persistedAppSettings struct {
 	RecorderFormat        string                        `json:"recorderFormat,omitempty"`
 	Volume                *float32                      `json:"volume,omitempty"`
 	Muted                 *bool                         `json:"muted,omitempty"`
+	AudioNotchEnabled     *bool                         `json:"audioNotchEnabled,omitempty"`
+	AudioNotchFrequencyHz int                           `json:"audioNotchFrequencyHz,omitempty"`
+	AudioNotchWidthHz     int                           `json:"audioNotchWidthHz,omitempty"`
+	AudioNotchDepthDB     float32                       `json:"audioNotchDepthDb,omitempty"`
 	DMRAutoCenter         *bool                         `json:"dmrAutoCenter,omitempty"`
 	DMRAudioSlot          string                        `json:"dmrAudioSlot,omitempty"`
 	RTL433FrequencyHz     int64                         `json:"rtl433FrequencyHz,omitempty"`
@@ -208,6 +212,18 @@ func loadAppSettings(path string, screen *MainScreen) {
 	}
 	if settings.Muted != nil {
 		screen.muted = *settings.Muted
+	}
+	if settings.AudioNotchEnabled != nil {
+		screen.audioNotchEnabled = *settings.AudioNotchEnabled
+	}
+	if settings.AudioNotchFrequencyHz >= 80 && settings.AudioNotchFrequencyHz <= 12_000 {
+		screen.audioNotchFrequencyHz = settings.AudioNotchFrequencyHz
+	}
+	if settings.AudioNotchWidthHz >= 20 && settings.AudioNotchWidthHz <= 2_000 {
+		screen.audioNotchWidthHz = settings.AudioNotchWidthHz
+	}
+	if settings.AudioNotchDepthDB >= -60 && settings.AudioNotchDepthDB <= -6 {
+		screen.audioNotchDepthDB = settings.AudioNotchDepthDB
 	}
 	if settings.DMRAutoCenter != nil {
 		screen.dmrAutoCenter = *settings.DMRAutoCenter
@@ -386,6 +402,8 @@ func (screen *MainScreen) flushSettings(force bool) {
 		RecorderSkipSilence: boolSetting(screen.recorderSkipSilence),
 		RecorderFormat:      screen.recorderFormat,
 		Volume:              float32Setting(screen.volume), Muted: boolSetting(screen.muted),
+		AudioNotchEnabled: boolSetting(screen.audioNotchEnabled), AudioNotchFrequencyHz: screen.audioNotchFrequencyHz,
+		AudioNotchWidthHz: screen.audioNotchWidthHz, AudioNotchDepthDB: screen.audioNotchDepthDB,
 		DMRAutoCenter: boolSetting(screen.dmrAutoCenter), DMRAudioSlot: screen.dmrAudioSlot,
 		RTL433FrequencyHz:     screen.rtl433FrequencyHz,
 		RadiosondeFamily:      screen.radiosondeFamily,

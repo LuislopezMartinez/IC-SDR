@@ -283,7 +283,13 @@ func (player *AudioPlayer) SetMuted(muted bool) {
 func (player *AudioPlayer) ConfigureProcessing(lowCut, highCut int, enabled bool, gains [5]float32, profile string) {
 	player.processor.Configure(lowCut, highCut, enabled, gains, profile)
 }
+func (player *AudioPlayer) ConfigureNotch(enabled bool, frequencyHz, widthHz int, depthDB float32) {
+	player.processor.ConfigureNotch(enabled, frequencyHz, widthHz, depthDB)
+}
 func (player *AudioPlayer) Spectrum(destination []float32) { player.processor.Spectrum(destination) }
+func (player *AudioPlayer) SpectrumBeforeNotch(destination []float32) {
+	player.processor.SpectrumBeforeNotch(destination)
+}
 func (player *AudioPlayer) SetRecorder(recorder *AudioRecorder) {
 	if player.receiver == nil {
 		return

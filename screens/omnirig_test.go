@@ -88,3 +88,15 @@ func TestTuneFromRigRecentersCenterMode(t *testing.T) {
 		t.Fatalf("CENTER did not follow RIG: tuned=%d center=%d", screen.frequencyHz, screen.centerFrequencyHz)
 	}
 }
+
+func TestRigFrequencyConfirmationAllowsCATRounding(t *testing.T) {
+	if !rigFrequencyConfirmed(145_500_020, 145_500_000) {
+		t.Fatal("20 Hz CAT rounding was not accepted")
+	}
+	if rigFrequencyConfirmed(145_500_100, 145_500_000) {
+		t.Fatal("a genuinely different radio frequency was accepted")
+	}
+	if rigFrequencyConfirmed(0, 145_500_000) {
+		t.Fatal("an unavailable radio frequency was accepted")
+	}
+}

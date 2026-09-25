@@ -98,6 +98,9 @@ type MainScreen struct {
 	rigLastProgramHz       int64
 	rigLastMode            string
 	rigLastProgramMode     string
+	rigPendingFrequencyHz  int64
+	rigPendingSince        time.Time
+	rigNextFrequencySend   time.Time
 	rigStatus              string
 	rigMuteOnTX            bool
 	rigMuteApplied         bool
@@ -177,6 +180,10 @@ type MainScreen struct {
 	fftPeakDecay           float32
 	fftWindow              string
 	audioPanel             *AudioPanel
+	audioNotchEnabled      bool
+	audioNotchFrequencyHz  int
+	audioNotchWidthHz      int
+	audioNotchDepthDB      float32
 	memoryPanel            *MemoryPanel
 	scanPanel              *ScanPanel
 	dmrPanel               *DMRPanel
@@ -233,6 +240,9 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		frequencyDigitExponent: -1,
 		centerMode:             true,
 		volume:                 62,
+		audioNotchFrequencyHz:  1_000,
+		audioNotchWidthHz:      120,
+		audioNotchDepthDB:      -35,
 		audioMeterDB:           -60,
 		squelchThreshold:       -100,
 		squelchHoldMs:          80,
@@ -460,12 +470,11 @@ func (screen *MainScreen) CreateControls() {
 	screen.audioPlayer.SetVolume(volumePercentToGain(screen.volume))
 	screen.audioPlayer.SetMuted(screen.muted)
 
-	// Every tool except TETRA still describes its layout in the original
+	// Legacy tools still describe their layout in the original
 	// full-width coordinate system. Fit its interactive controls beside the
 	// permanent utilities column using the same mapping as its drawn content.
 	compactToolControls(screen.waterfallControls)
 	compactToolControls(screen.fftDisplay.controls)
-	compactToolControls(screen.audioPanel.controls)
 	compactToolControls(screen.recorderPanel.toolControls)
 	compactToolControls(screen.dmrPanel.controls)
 	compactToolControls(screen.aprsPanel.controls)
@@ -1101,15 +1110,34 @@ func (screen *MainScreen) drawDemodulatedBandwidth(x, y, width, height float32) 
 	if visibleRight <= visibleLeft {
 		return
 	}
-	fill := rl.Color{R: colors.orange.R, G: colors.orange.G, B: colors.orange.B, A: 38}
+	bandColor := demodulatedBandwidthColor()
+	fill := bandColor
+	fill.A = 34
 	rl.DrawRectangleRec(rl.Rectangle{X: visibleLeft, Y: y + 1, Width: visibleRight - visibleLeft, Height: height - 27}, fill)
-	rl.DrawLineEx(rl.Vector2{X: visibleLeft, Y: y + 1}, rl.Vector2{X: visibleLeft, Y: y + height - 27}, 1, colors.orange)
-	rl.DrawLineEx(rl.Vector2{X: visibleRight, Y: y + 1}, rl.Vector2{X: visibleRight, Y: y + height - 27}, 1, colors.orange)
+	// A violet dashed outline cannot be mistaken for the solid, group-coloured
+	// memory markers. Do not invent an edge line when the real boundary is
+	// outside the currently visible FFT.
+	if left >= x && left <= x+width {
+		drawDemodulatedBandwidthBoundary(left, y+1, y+height-27, bandColor)
+	}
+	if right >= x && right <= x+width {
+		drawDemodulatedBandwidthBoundary(right, y+1, y+height-27, bandColor)
+	}
 	labelBandwidth := screen.demodBandwidthHz
 	if (mode == i18n.Source("text.61f0acff1735") || mode == i18n.Source("text.6323db4948ad")) && screen.audioPanel != nil && !screen.audioPanel.pbtBypassed {
 		labelBandwidth = screen.audioPanel.pbtHigh - screen.audioPanel.pbtLow
 	}
 	_ = labelBandwidth // Rendered together with the frequency in the cursor plate.
+}
+
+func demodulatedBandwidthColor() rl.Color {
+	return rl.Color{R: 190, G: 105, B: 255, A: 235}
+}
+
+func drawDemodulatedBandwidthBoundary(x, top, bottom float32, color rl.Color) {
+	for lineY := top; lineY < bottom; lineY += 11 {
+		rl.DrawLineEx(rl.Vector2{X: x, Y: lineY}, rl.Vector2{X: x, Y: min(lineY+6, bottom)}, 2, color)
+	}
 }
 
 func (screen *MainScreen) drawTuningCursorLabel(cursorX, y, graphX, graphWidth float32, markerColor rl.Color) {
@@ -1129,7 +1157,7 @@ func (screen *MainScreen) drawTuningCursorLabel(cursorX, y, graphX, graphWidth f
 	rl.DrawRectangleRounded(plate, .14, 8, plateBackground)
 	rl.DrawRectangleRoundedLinesEx(plate, .14, 8, 1.5, markerColor)
 	simpleui.DrawTextStyled(frequency, plate.X+(plate.Width-freqWidth)/2, plate.Y+6, frequencySize, simpleui.FontMono, simpleui.EnsureTextContrast(markerColor, plateBackground))
-	simpleui.DrawTextStyled(bandwidth, plate.X+(plate.Width-detailWidth)/2, plate.Y+29, detailSize, simpleui.FontSemiBold, simpleui.EnsureTextContrast(colors.orange, plateBackground))
+	simpleui.DrawTextStyled(bandwidth, plate.X+(plate.Width-detailWidth)/2, plate.Y+29, detailSize, simpleui.FontSemiBold, simpleui.EnsureTextContrast(demodulatedBandwidthColor(), plateBackground))
 }
 
 func (screen *MainScreen) drawLowerWorkspace() {
@@ -1154,13 +1182,15 @@ func (screen *MainScreen) drawLowerWorkspace() {
 		screen.omniRigPanel.DrawPanel()
 		return
 	}
+	if screen.activeTool == i18n.Source("text.a42c60257b01") {
+		screen.audioPanel.DrawPanel()
+		return
+	}
 	drawCompactedTool(func() {
 		if screen.waterfallVisible {
 			drawSmallText(i18n.Source("text.5a921a588ee1"), 40, toolY+12, colors.cyan)
 		} else if screen.activeTool == i18n.Source("text.94fa3fe96dde") {
 			screen.fftDisplay.DrawPanel()
-		} else if screen.activeTool == i18n.Source("text.a42c60257b01") {
-			screen.audioPanel.DrawPanel()
 		} else if screen.activeTool == i18n.Source("text.93239b223632") {
 			screen.dmrPanel.DrawPanel()
 		} else if screen.activeTool == i18n.Source("text.8be70e7cb2c4") {

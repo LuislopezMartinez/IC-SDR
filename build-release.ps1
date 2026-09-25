@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.9.2'
+    [string]$Version = '0.9.3'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -96,8 +96,9 @@ if ($omniRigExeHash -ne $omniRigManifest.executableSha256.ToLowerInvariant()) {
 }
 
 # Windows locks the executable, runtime DLLs and startup.log while IC-SDR is
-# running. Detect that state before copying user data or deleting anything so
-# a release attempt cannot leave a half-rebuilt portable directory.
+# running. Close only instances launched from this distribution before copying
+# user data or deleting anything so a release attempt cannot leave a
+# half-rebuilt portable directory.
 $runningFromDist = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
     try {
         $_.Path -and [System.IO.Path]::GetFullPath($_.Path).StartsWith($distRoot, [System.StringComparison]::OrdinalIgnoreCase)
@@ -107,7 +108,35 @@ $runningFromDist = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
 })
 if ($runningFromDist.Count -gt 0) {
     $processList = ($runningFromDist | ForEach-Object { "{0} (PID {1})" -f $_.ProcessName, $_.Id }) -join ', '
-    throw "IC-SDR sigue abierto y Windows mantiene bloqueada la distribución: $processList. Cierre la aplicación y vuelva a ejecutar build-release.ps1."
+    Write-Host "Cerrando IC-SDR antes de compilar: $processList"
+
+    foreach ($process in $runningFromDist) {
+        if ($process.MainWindowHandle -ne 0) {
+            [void]$process.CloseMainWindow()
+        }
+    }
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(3)
+    do {
+        Start-Sleep -Milliseconds 100
+        $stillRunning = @($runningFromDist | Where-Object { Get-Process -Id $_.Id -ErrorAction SilentlyContinue })
+    } while ($stillRunning.Count -gt 0 -and [DateTime]::UtcNow -lt $deadline)
+
+    if ($stillRunning.Count -gt 0) {
+        $forcedList = ($stillRunning | ForEach-Object { "{0} (PID {1})" -f $_.ProcessName, $_.Id }) -join ', '
+        Write-Host "La instancia no respondió al cierre normal; forzando cierre: $forcedList"
+        $stillRunning | Stop-Process -Force -ErrorAction Stop
+    }
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        Start-Sleep -Milliseconds 100
+        $lockedProcesses = @($runningFromDist | Where-Object { Get-Process -Id $_.Id -ErrorAction SilentlyContinue })
+    } while ($lockedProcesses.Count -gt 0 -and [DateTime]::UtcNow -lt $deadline)
+    if ($lockedProcesses.Count -gt 0) {
+        $lockedList = ($lockedProcesses | ForEach-Object { "{0} (PID {1})" -f $_.ProcessName, $_.Id }) -join ', '
+        throw "No se pudo cerrar IC-SDR antes de compilar: $lockedList."
+    }
 }
 
 $mutableData = @('cache', 'captures', 'config', 'exports', 'logs', 'recordings')

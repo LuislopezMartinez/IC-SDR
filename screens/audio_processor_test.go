@@ -86,3 +86,29 @@ func TestWideFMRetainsBroadcastAudioAboveSpeechBand(t *testing.T) {
 		t.Fatalf("WFM 10 kHz programme audio was removed: RMS %.4f", rms)
 	}
 }
+
+func TestAudioNotchAttenuatesSelectedToneAndPreservesAdjacentAudio(t *testing.T) {
+	measure := func(frequency float64, enabled bool) float64 {
+		processor := NewAudioProcessor()
+		processor.Configure(20, 16000, false, [5]float32{}, i18n.Source("text.db2cb3fe28e2"))
+		processor.ConfigureNotch(enabled, 1000, 120, -40)
+		samples := make([]float32, audioSampleRate)
+		for index := range samples {
+			samples[index] = float32(.4 * math.Sin(2*math.Pi*frequency*float64(index)/audioSampleRate))
+		}
+		processor.Process(samples)
+		var power float64
+		for _, sample := range samples[audioSampleRate/2:] {
+			power += float64(sample * sample)
+		}
+		return math.Sqrt(power / (audioSampleRate / 2))
+	}
+	selectedRatio := measure(1000, true) / measure(1000, false)
+	if selectedRatio > .04 {
+		t.Fatalf("notch retained too much selected tone: ratio %.4f", selectedRatio)
+	}
+	adjacentRatio := measure(2000, true) / measure(2000, false)
+	if adjacentRatio < .85 {
+		t.Fatalf("notch removed adjacent audio: ratio %.4f", adjacentRatio)
+	}
+}

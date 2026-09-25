@@ -1,6 +1,10 @@
 package screens
 
-import "testing"
+import (
+	"testing"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
+)
 
 func TestTuneFixedByStepsMovesVFOWithoutMovingCenter(t *testing.T) {
 	screen := NewMainScreen(nil)
@@ -133,6 +137,27 @@ func TestChangeTuningStepUsesAdjacentAvailableRaster(t *testing.T) {
 	screen.changeTuningStep(1)
 	if screen.tuningStepHz != tuningStepsHz[len(tuningStepsHz)-1] {
 		t.Fatalf("STEP moved above maximum to %d", screen.tuningStepHz)
+	}
+}
+
+func TestTuningStepsInclude500HzInAscendingOrder(t *testing.T) {
+	found := false
+	for index, step := range tuningStepsHz {
+		if index > 0 && tuningStepsHz[index-1] >= step {
+			t.Fatalf("tuning steps are not ascending at %d: %v", index, tuningStepsHz)
+		}
+		if step == 500 {
+			found = true
+		}
+	}
+	if !found || !validTuningStep(500) {
+		t.Fatal("500 Hz is not a selectable and persistent tuning step")
+	}
+
+	selector := NewStepSelector(500, nil)
+	lastStep := selector.stepBounds(len(tuningStepsHz) - 1)
+	if rl.CheckCollisionRecs(lastStep, selector.close.Bounds()) {
+		t.Fatalf("last STEP button overlaps close button: step=%+v close=%+v", lastStep, selector.close.Bounds())
 	}
 }
 

@@ -48,11 +48,9 @@ func NewScanPanel(screen *MainScreen) *ScanPanel {
 
 func (p *ScanPanel) Enter() {
 	low, high := p.screen.centerFrequencyHz-p.screen.spanHz/2, p.screen.centerFrequencyHz+p.screen.spanHz/2
-	if p.minimumHz >= p.maximumHz || p.minimumHz < low || p.maximumHz > high {
+	if p.minimumHz >= p.maximumHz {
 		p.minimumHz = low + p.screen.spanHz/10
 		p.maximumHz = high - p.screen.spanHz/10
-	} else if p.minimumHz >= p.maximumHz {
-		p.minimumHz, p.maximumHz = low, high
 	}
 }
 
@@ -349,9 +347,11 @@ func (p *ScanPanel) updateInput() {
 	// guides draggable on the FFT without activating the removed legacy panel.
 	if p.screen.activeTool != i18n.Source("text.7a1580c49e45") {
 		if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
-			p.beginGuideDrag(mouse)
+			if !p.handleOverlayClick(mouse) {
+				p.beginGuideDrag(mouse)
+			}
 		}
-		if p.dragTarget != 0 && rl.IsMouseButtonDown(rl.MouseButtonLeft) {
+		if (p.dragTarget == 1 || p.dragTarget == 2) && rl.IsMouseButtonDown(rl.MouseButtonLeft) {
 			p.dragGuide(mouse)
 		}
 		if rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
@@ -389,10 +389,12 @@ func (p *ScanPanel) updateInput() {
 			p.toggleChoiceMenu("policy")
 		default:
 			p.choiceMenu = ""
-			p.beginGuideDrag(mouse)
+			if !p.handleOverlayClick(mouse) {
+				p.beginGuideDrag(mouse)
+			}
 		}
 	}
-	if p.dragTarget != 0 && rl.IsMouseButtonDown(rl.MouseButtonLeft) {
+	if (p.dragTarget == 1 || p.dragTarget == 2) && rl.IsMouseButtonDown(rl.MouseButtonLeft) {
 		p.dragGuide(mouse)
 	}
 	if rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
@@ -526,9 +528,9 @@ func (p *ScanPanel) beginGuideDrag(mouse rl.Vector2) {
 	x, y, w, h := p.screen.spectrumGeometry()
 	minX := p.frequencyX(p.minimumHz, x, w)
 	maxX := p.frequencyX(p.maximumHz, x, w)
-	if mouse.Y >= y && mouse.Y <= y+h && float32(math.Abs(float64(mouse.X-minX))) < 14 {
+	if minX >= x && minX <= x+w && mouse.Y >= y && mouse.Y <= y+h && float32(math.Abs(float64(mouse.X-minX))) < 14 {
 		p.dragTarget = 1
-	} else if mouse.Y >= y && mouse.Y <= y+h && float32(math.Abs(float64(mouse.X-maxX))) < 14 {
+	} else if maxX >= x && maxX <= x+w && mouse.Y >= y && mouse.Y <= y+h && float32(math.Abs(float64(mouse.X-maxX))) < 14 {
 		p.dragTarget = 2
 	}
 }
@@ -544,18 +546,118 @@ func (p *ScanPanel) dragGuide(mouse rl.Vector2) {
 }
 func (p *ScanPanel) ConsumesSpectrumInput() bool { return p.running || p.dragTarget != 0 }
 
+const (
+	scanLimitInside = iota
+	scanLimitLeft
+	scanLimitRight
+)
+
+func scanLimitSide(hz, visibleLow, visibleHigh int64) int {
+	if hz < visibleLow {
+		return scanLimitLeft
+	}
+	if hz > visibleHigh {
+		return scanLimitRight
+	}
+	return scanLimitInside
+}
+
+func scanFitSpan(minimumHz, maximumHz int64) int64 {
+	width := max(int64(1), maximumHz-minimumHz)
+	required := int64(math.Ceil(float64(width) * 1.2))
+	for _, span := range []int64{50_000, 100_000, 250_000, 500_000, 1_000_000, 2_000_000} {
+		if span >= required {
+			return span
+		}
+	}
+	return 2_000_000
+}
+
+func scanFitButtonBounds(x, y, w float32) rl.Rectangle {
+	width := min(float32(210), max(float32(150), w-24))
+	return rl.Rectangle{X: x + (w-width)/2, Y: y + 8, Width: width, Height: 26}
+}
+
+func scanEdgeTagBounds(side, row int, x, y, w float32) rl.Rectangle {
+	width := min(float32(188), max(float32(128), w*.28))
+	bounds := rl.Rectangle{X: x + 8, Y: y + 43 + float32(row)*43, Width: width, Height: 36}
+	if side == scanLimitRight {
+		bounds.X = x + w - width - 8
+	}
+	return bounds
+}
+
+func (p *ScanPanel) handleOverlayClick(mouse rl.Vector2) bool {
+	x, y, w, _ := p.screen.spectrumGeometry()
+	low, high := p.screen.centerFrequencyHz-p.screen.spanHz/2, p.screen.centerFrequencyHz+p.screen.spanHz/2
+	minSide, maxSide := scanLimitSide(p.minimumHz, low, high), scanLimitSide(p.maximumHz, low, high)
+	if minSide == scanLimitInside && maxSide == scanLimitInside {
+		return false
+	}
+	if rl.CheckCollisionPointRec(mouse, scanFitButtonBounds(x, y, w)) {
+		p.fitSegmentToFFT()
+		p.dragTarget = 5
+		simpleui.PlayActivationFeedback()
+		return true
+	}
+	if minSide != scanLimitInside && rl.CheckCollisionPointRec(mouse, scanEdgeTagBounds(minSide, 0, x, y, w)) {
+		p.centerFFTAt(p.minimumHz)
+		p.dragTarget = 3
+		simpleui.PlayActivationFeedback()
+		return true
+	}
+	if maxSide != scanLimitInside && rl.CheckCollisionPointRec(mouse, scanEdgeTagBounds(maxSide, 1, x, y, w)) {
+		p.centerFFTAt(p.maximumHz)
+		p.dragTarget = 4
+		simpleui.PlayActivationFeedback()
+		return true
+	}
+	return false
+}
+
+func (p *ScanPanel) centerFFTAt(frequencyHz int64) {
+	p.screen.centerFrequencyHz = frequencyHz
+	p.screen.centerMode = false
+	p.syncModeSwitch()
+	if p.screen.receiver != nil {
+		p.screen.receiver.SetCenterFrequency(frequencyHz)
+	}
+	p.screen.waterfall.Reset()
+	p.screen.markSettingsDirty()
+}
+
+func (p *ScanPanel) fitSegmentToFFT() {
+	p.screen.spanHz = scanFitSpan(p.minimumHz, p.maximumHz)
+	p.centerFFTAt(p.minimumHz + (p.maximumHz-p.minimumHz)/2)
+}
+
 func (p *ScanPanel) DrawSpectrumOverlay(x, y, w, h float32) {
 	if !p.overlayVisible {
 		return
 	}
-	if p.overlayVisible {
-		minX, maxX := p.frequencyX(p.minimumHz, x, w), p.frequencyX(p.maximumHz, x, w)
-		minX, maxX = max(x, min(minX, x+w)), max(x, min(maxX, x+w))
-		rl.DrawRectangleRec(rl.Rectangle{X: minX, Y: y, Width: max(0, maxX-minX), Height: h - 26}, rl.Color{R: 25, G: 155, B: 220, A: 25})
+	low, high := p.screen.centerFrequencyHz-p.screen.spanHz/2, p.screen.centerFrequencyHz+p.screen.spanHz/2
+	minSide, maxSide := scanLimitSide(p.minimumHz, low, high), scanLimitSide(p.maximumHz, low, high)
+	minX, maxX := p.frequencyX(p.minimumHz, x, w), p.frequencyX(p.maximumHz, x, w)
+	visibleMinX, visibleMaxX := max(x, min(minX, x+w)), max(x, min(maxX, x+w))
+	if p.maximumHz >= low && p.minimumHz <= high {
+		rl.DrawRectangleRec(rl.Rectangle{X: visibleMinX, Y: y, Width: max(0, visibleMaxX-visibleMinX), Height: h - 26}, rl.Color{R: 25, G: 155, B: 220, A: 25})
+	}
+	if minSide == scanLimitInside {
 		rl.DrawLineEx(rl.Vector2{X: minX, Y: y}, rl.Vector2{X: minX, Y: y + h - 26}, 2, colors.cyan)
+		drawScanTag(fmt.Sprintf(i18n.Source("text.93f24c02fb1a"), float64(p.minimumHz)/1e6), minX, y+50, x, w)
+	} else {
+		drawScanContinuation(minSide, x, y, w, h)
+		drawScanEdgeTag(fmt.Sprintf(i18n.Source("text.93f24c02fb1a"), float64(p.minimumHz)/1e6), p.minimumHz, minSide, 0, low, high, x, y, w)
+	}
+	if maxSide == scanLimitInside {
 		rl.DrawLineEx(rl.Vector2{X: maxX, Y: y}, rl.Vector2{X: maxX, Y: y + h - 26}, 2, colors.cyan)
-		drawScanTag(fmt.Sprintf(i18n.Source("text.93f24c02fb1a"), float64(p.minimumHz)/1e6), minX, y+50)
-		drawScanTag(fmt.Sprintf(i18n.Source("text.68ab84e8e4f6"), float64(p.maximumHz)/1e6), maxX, y+78)
+		drawScanTag(fmt.Sprintf(i18n.Source("text.68ab84e8e4f6"), float64(p.maximumHz)/1e6), maxX, y+78, x, w)
+	} else {
+		drawScanContinuation(maxSide, x, y, w, h)
+		drawScanEdgeTag(fmt.Sprintf(i18n.Source("text.68ab84e8e4f6"), float64(p.maximumHz)/1e6), p.maximumHz, maxSide, 1, low, high, x, y, w)
+	}
+	if minSide != scanLimitInside || maxSide != scanLimitInside {
+		drawScanFitButton(scanFitButtonBounds(x, y, w))
 	}
 	if p.running && p.screen.activeTool != i18n.Source("text.7a1580c49e45") {
 		p.drawCompact(x+w-330, y+8)
@@ -564,14 +666,70 @@ func (p *ScanPanel) DrawSpectrumOverlay(x, y, w, h float32) {
 func (p *ScanPanel) frequencyX(hz int64, x, w float32) float32 {
 	return x + w*(.5+float32(hz-p.screen.centerFrequencyHz)/float32(p.screen.spanHz))
 }
-func drawScanTag(text string, x, y float32) {
+func drawScanTag(text string, markerX, y, chartX, chartW float32) {
 	width := simpleui.MeasureTextStyled(text, 12, simpleui.FontSemiBold).X + 16
-	bounds := rl.Rectangle{X: x - width/2, Y: y, Width: width, Height: 24}
+	centerX := min(max(markerX, chartX+width/2+4), chartX+chartW-width/2-4)
+	bounds := rl.Rectangle{X: centerX - width/2, Y: y, Width: width, Height: 24}
 	background := mixColor(colors.panel, colors.blue, .16)
 	textColor := simpleui.EnsureTextContrast(colors.cyan, background)
 	rl.DrawRectangleRounded(bounds, .2, 6, background)
 	rl.DrawRectangleRoundedLinesEx(bounds, .2, 6, 1, colors.cyan)
-	simpleui.DrawTextStyled(text, x-width/2+8, y+5, 12, simpleui.FontSemiBold, textColor)
+	simpleui.DrawTextStyled(text, bounds.X+8, y+5, 12, simpleui.FontSemiBold, textColor)
+}
+
+func drawScanContinuation(side int, x, y, w, h float32) {
+	lineX := x + 2
+	if side == scanLimitRight {
+		lineX = x + w - 2
+	}
+	for lineY := y + 38; lineY < y+h-26; lineY += 12 {
+		rl.DrawLineEx(rl.Vector2{X: lineX, Y: lineY}, rl.Vector2{X: lineX, Y: min(lineY+7, y+h-26)}, 2, colors.cyan)
+	}
+}
+
+func drawScanEdgeTag(text string, frequencyHz int64, side, row int, low, high int64, x, y, w float32) {
+	bounds := scanEdgeTagBounds(side, row, x, y, w)
+	background := mixColor(colors.panel, colors.blue, .22)
+	rl.DrawRectangleRounded(bounds, .18, 6, background)
+	rl.DrawRectangleRoundedLinesEx(bounds, .18, 6, 1.5, colors.cyan)
+	arrow := "<  "
+	if side == scanLimitRight {
+		arrow = "  >"
+	}
+	title := arrow + text
+	if side == scanLimitRight {
+		title = text + arrow
+	}
+	distance := frequencyHz - low
+	if side == scanLimitRight {
+		distance = frequencyHz - high
+	}
+	simpleui.DrawTextStyled(title, bounds.X+9, bounds.Y+4, 11, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(formatScanDistance(distance), bounds.X+9, bounds.Y+20, 10, simpleui.FontRegular, colors.muted)
+}
+
+func formatScanDistance(distanceHz int64) string {
+	sign := "+"
+	if distanceHz < 0 {
+		sign = "-"
+	}
+	abs := absInt64(distanceHz)
+	if abs >= 1_000_000 {
+		return fmt.Sprintf("%s%.3f MHz", sign, float64(abs)/1e6)
+	}
+	if abs >= 1_000 {
+		return fmt.Sprintf("%s%.1f kHz", sign, float64(abs)/1e3)
+	}
+	return fmt.Sprintf("%s%d Hz", sign, abs)
+}
+
+func drawScanFitButton(bounds rl.Rectangle) {
+	background := rl.Color{R: 12, G: 72, B: 100, A: 238}
+	rl.DrawRectangleRounded(bounds, .22, 7, background)
+	rl.DrawRectangleRoundedLinesEx(bounds, .22, 7, 1, colors.cyan)
+	text := "AJUSTAR FFT AL SEGMENTO"
+	measured := simpleui.MeasureTextStyled(text, 10, simpleui.FontSemiBold)
+	simpleui.DrawTextStyled(text, bounds.X+(bounds.Width-measured.X)/2, bounds.Y+8, 10, simpleui.FontSemiBold, simpleui.EnsureTextContrast(colors.text, background))
 }
 func (p *ScanPanel) drawCompact(x, y float32) {
 	bounds := rl.Rectangle{X: x, Y: y, Width: 315, Height: 28}

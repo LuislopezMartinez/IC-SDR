@@ -20,6 +20,52 @@ func (f *audioBiquad) configure(frequency, gainDB float64) {
 	f.a1, f.a2 = float32((-2*cosine)/a0), float32((1-alpha/a)/a0)
 }
 
+type audioNotchFilter struct {
+	b0, b1, b2, a1, a2           float32
+	targetB0, targetB1, targetB2 float32
+	targetA1, targetA2           float32
+	z1, z2, mix, targetMix       float32
+}
+
+func (filter *audioNotchFilter) configure(enabled bool, frequencyHz, widthHz int, depthDB float32) {
+	frequency := min(max(float64(frequencyHz), 80), audioSampleRate*.45)
+	width := min(max(float64(widthHz), 20), 2000)
+	q := max(frequency/width, .25)
+	w := 2 * math.Pi * frequency / audioSampleRate
+	alpha, cosine := math.Sin(w)/(2*q), math.Cos(w)
+	a0 := 1 + alpha
+	filter.targetB0 = float32(1 / a0)
+	filter.targetB1 = float32(-2 * cosine / a0)
+	filter.targetB2 = filter.targetB0
+	filter.targetA1 = filter.targetB1
+	filter.targetA2 = float32((1 - alpha) / a0)
+	if filter.b0 == 0 {
+		filter.b0, filter.b1, filter.b2 = filter.targetB0, filter.targetB1, filter.targetB2
+		filter.a1, filter.a2 = filter.targetA1, filter.targetA2
+	}
+	filter.targetMix = 0
+	if enabled {
+		depthDB = min(max(depthDB, -60), -6)
+		filter.targetMix = 1 - float32(math.Pow(10, float64(depthDB)/20))
+	}
+}
+
+func (filter *audioNotchFilter) process(input float32) float32 {
+	// Roughly 10 ms coefficient/mix transition prevents zipper noise while the
+	// notch is dragged over the live spectrum.
+	const smoothing = float32(.002)
+	filter.b0 += smoothing * (filter.targetB0 - filter.b0)
+	filter.b1 += smoothing * (filter.targetB1 - filter.b1)
+	filter.b2 += smoothing * (filter.targetB2 - filter.b2)
+	filter.a1 += smoothing * (filter.targetA1 - filter.a1)
+	filter.a2 += smoothing * (filter.targetA2 - filter.a2)
+	filter.mix += smoothing * (filter.targetMix - filter.mix)
+	filtered := input*filter.b0 + filter.z1
+	filter.z1 = input*filter.b1 + filter.z2 - filter.a1*filtered
+	filter.z2 = input*filter.b2 - filter.a2*filtered
+	return input + filter.mix*(filtered-input)
+}
+
 func (f *audioBiquad) process(input float32) float32 {
 	output := input*f.b0 + f.z1
 	f.z1 = input*f.b1 + f.z2 - f.a1*output
@@ -33,10 +79,12 @@ type AudioProcessor struct {
 	eqEnabled                                   bool
 	eqGains                                     [5]float32
 	eq                                          [5]audioBiquad
+	notch                                       audioNotchFilter
 	profile                                     string
 	previousInput, highpass, lowpass1, lowpass2 float32
 	limiterGain                                 float32
 	ring                                        [512]float32
+	preNotchRing                                [512]float32
 	spectrumWindow                              [512]float64
 	ringWrite, ringCount                        int
 }
@@ -47,6 +95,7 @@ func NewAudioProcessor() *AudioProcessor {
 		p.spectrumWindow[index] = .5 - .5*math.Cos(2*math.Pi*float64(index)/float64(len(p.spectrumWindow)-1))
 	}
 	p.configureEQ()
+	p.notch.configure(false, 1000, 120, -35)
 	return p
 }
 
@@ -55,6 +104,12 @@ func (p *AudioProcessor) Configure(lowCut, highCut int, eqEnabled bool, gains [5
 	p.lowCut, p.highCut = min(max(lowCut, 20), 4000), min(max(highCut, 250), 16000)
 	p.eqEnabled, p.eqGains, p.profile = eqEnabled, gains, profile
 	p.configureEQ()
+	p.mu.Unlock()
+}
+
+func (p *AudioProcessor) ConfigureNotch(enabled bool, frequencyHz, widthHz int, depthDB float32) {
+	p.mu.Lock()
+	p.notch.configure(enabled, frequencyHz, widthHz, depthDB)
 	p.mu.Unlock()
 }
 
@@ -93,6 +148,8 @@ func (p *AudioProcessor) process(samples []float32, wideFM bool) {
 				value = p.eq[band].process(value)
 			}
 		}
+		p.preNotchRing[p.ringWrite] = value
+		value = p.notch.process(value)
 		switch p.profile {
 		case i18n.Source("text.692233b9c713"):
 			value *= .82
@@ -130,6 +187,17 @@ func (p *AudioProcessor) Spectrum(destination []float32) {
 	p.mu.Lock()
 	count, snapshot, write := p.ringCount, p.ring, p.ringWrite
 	p.mu.Unlock()
+	calculateAudioSpectrum(destination, snapshot, count, write, p.spectrumWindow)
+}
+
+func (p *AudioProcessor) SpectrumBeforeNotch(destination []float32) {
+	p.mu.Lock()
+	count, snapshot, write := p.ringCount, p.preNotchRing, p.ringWrite
+	p.mu.Unlock()
+	calculateAudioSpectrum(destination, snapshot, count, write, p.spectrumWindow)
+}
+
+func calculateAudioSpectrum(destination []float32, snapshot [512]float32, count, write int, windowTable [512]float64) {
 	if count < 128 {
 		for i := range destination {
 			destination[i] = -80
@@ -144,7 +212,7 @@ func (p *AudioProcessor) Spectrum(destination []float32) {
 		oscillatorReal, oscillatorImaginary := 1.0, 0.0
 		for n := 0; n < count; n++ {
 			sample := float64(snapshot[(write-count+n+len(snapshot))%len(snapshot)])
-			window := p.spectrumWindow[n]
+			window := windowTable[n]
 			if count != len(snapshot) {
 				window = .5 - .5*math.Cos(2*math.Pi*float64(n)/float64(count-1))
 			}

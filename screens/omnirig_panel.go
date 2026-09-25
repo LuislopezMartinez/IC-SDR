@@ -88,6 +88,7 @@ func (panel *OmniRigPanel) selectRig(number int) {
 	panel.screen.rigLastMode = ""
 	panel.screen.rigLastProgramHz = panel.screen.frequencyHz
 	panel.screen.rigLastProgramMode = panel.screen.appModeForRig()
+	panel.screen.clearPendingRigFrequency()
 	panel.screen.setRigMuteApplied(false)
 	panel.screen.rigClient.SelectRig(number)
 	if panel.screen.rigControlMode != rigOff {

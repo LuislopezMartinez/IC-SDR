@@ -89,3 +89,35 @@ func TestMemoryViewStateControlsMarkerVisibility(t *testing.T) {
 		t.Fatal("MEM VIEW on did not restore FFT memory markers")
 	}
 }
+
+func TestScannerKeepsValidSegmentOutsideVisibleFFT(t *testing.T) {
+	screen := &MainScreen{centerFrequencyHz: 434_000_000, spanHz: 100_000}
+	panel := &ScanPanel{screen: screen, minimumHz: 433_800_000, maximumHz: 434_200_000}
+	panel.Enter()
+	if panel.minimumHz != 433_800_000 || panel.maximumHz != 434_200_000 {
+		t.Fatalf("Enter changed valid off-screen segment to %d..%d", panel.minimumHz, panel.maximumHz)
+	}
+}
+
+func TestScanLimitSide(t *testing.T) {
+	const low, high = int64(433_950_000), int64(434_050_000)
+	for _, test := range []struct {
+		hz   int64
+		want int
+	}{{433_900_000, scanLimitLeft}, {low, scanLimitInside}, {434_000_000, scanLimitInside}, {high, scanLimitInside}, {434_100_000, scanLimitRight}} {
+		if got := scanLimitSide(test.hz, low, high); got != test.want {
+			t.Errorf("scanLimitSide(%d) = %d, want %d", test.hz, got, test.want)
+		}
+	}
+}
+
+func TestScanFitSpanUsesSmallestSupportedSpanWithMargin(t *testing.T) {
+	for _, test := range []struct {
+		minimum, maximum int64
+		want             int64
+	}{{0, 40_000, 50_000}, {0, 80_000, 100_000}, {0, 200_000, 250_000}, {0, 400_000, 500_000}, {0, 800_000, 1_000_000}, {0, 1_500_000, 2_000_000}, {0, 3_000_000, 2_000_000}} {
+		if got := scanFitSpan(test.minimum, test.maximum); got != test.want {
+			t.Errorf("scanFitSpan(%d, %d) = %d, want %d", test.minimum, test.maximum, got, test.want)
+		}
+	}
+}

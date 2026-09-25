@@ -15,12 +15,19 @@ const (
 	rigBidirectional
 )
 
+const (
+	rigFrequencyConfirmationToleranceHz = int64(25)
+	rigFrequencyRetryInterval           = 500 * time.Millisecond
+	rigFrequencyConfirmationTimeout     = 5 * time.Second
+)
+
 func (screen *MainScreen) cycleRigControl() {
 	screen.rigControlMode = (screen.rigControlMode + 1) % 3
 	screen.rigLastFrequencyHz = 0
 	screen.rigLastMode = ""
 	screen.rigLastProgramHz = screen.frequencyHz
 	screen.rigLastProgramMode = screen.appModeForRig()
+	screen.clearPendingRigFrequency()
 	if screen.rigControlMode == rigOff {
 		screen.setRigMuteApplied(false)
 		screen.rigStatus = "Omni-Rig desactivado"
@@ -70,8 +77,33 @@ func (screen *MainScreen) updateRigControl() {
 		return
 	}
 	screen.updateRigTXMute(state)
+	now := time.Now()
+	programFrequencyChanged := screen.rigControlMode == rigBidirectional && screen.frequencyHz != screen.rigLastProgramHz
+	if programFrequencyChanged {
+		screen.rigPendingFrequencyHz = screen.frequencyHz
+		screen.rigPendingSince = now
+		screen.rigNextFrequencySend = time.Time{}
+	}
+	if screen.rigControlMode != rigBidirectional {
+		screen.clearPendingRigFrequency()
+	}
+	if screen.rigPendingFrequencyHz > 0 {
+		switch {
+		case rigFrequencyConfirmed(state.FrequencyHz, screen.rigPendingFrequencyHz):
+			screen.rigLastFrequencyHz = state.FrequencyHz
+			screen.clearPendingRigFrequency()
+		case now.Sub(screen.rigPendingSince) >= rigFrequencyConfirmationTimeout:
+			screen.rigStatus = "La radio no confirmó la sintonía CAT"
+			screen.clearPendingRigFrequency()
+		case screen.rigNextFrequencySend.IsZero() || !now.Before(screen.rigNextFrequencySend):
+			screen.rigClient.SetFrequency(screen.rigPendingFrequencyHz)
+			screen.rigNextFrequencySend = now.Add(rigFrequencyRetryInterval)
+		}
+	}
 
-	if state.FrequencyHz >= 100_000 && state.FrequencyHz <= 6_000_000_000 && state.FrequencyHz != screen.rigLastFrequencyHz {
+	// While a program-originated CAT order is awaiting confirmation, an old
+	// polled value must not immediately pull the application back to the radio.
+	if screen.rigPendingFrequencyHz == 0 && state.FrequencyHz >= 100_000 && state.FrequencyHz <= 6_000_000_000 && state.FrequencyHz != screen.rigLastFrequencyHz {
 		screen.rigLastFrequencyHz = state.FrequencyHz
 		if state.FrequencyHz != screen.frequencyHz {
 			screen.tuneFromRig(state.FrequencyHz)
@@ -83,9 +115,6 @@ func (screen *MainScreen) updateRigControl() {
 	}
 
 	if screen.rigControlMode == rigBidirectional {
-		if screen.frequencyHz != screen.rigLastProgramHz && screen.frequencyHz != state.FrequencyHz {
-			screen.rigClient.SetFrequency(screen.frequencyHz)
-		}
 		mode := screen.appModeForRig()
 		if mode != "" && mode != screen.rigLastProgramMode && mode != state.Mode {
 			screen.rigClient.SetMode(mode)
@@ -93,6 +122,23 @@ func (screen *MainScreen) updateRigControl() {
 	}
 	screen.rigLastProgramHz = screen.frequencyHz
 	screen.rigLastProgramMode = screen.appModeForRig()
+}
+
+func (screen *MainScreen) clearPendingRigFrequency() {
+	screen.rigPendingFrequencyHz = 0
+	screen.rigPendingSince = time.Time{}
+	screen.rigNextFrequencySend = time.Time{}
+}
+
+func rigFrequencyConfirmed(actual, wanted int64) bool {
+	if actual <= 0 || wanted <= 0 {
+		return false
+	}
+	difference := actual - wanted
+	if difference < 0 {
+		difference = -difference
+	}
+	return difference <= rigFrequencyConfirmationToleranceHz
 }
 
 func (screen *MainScreen) updateRigTXMute(state omnirig.State) {

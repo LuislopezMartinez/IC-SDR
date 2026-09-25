@@ -20,6 +20,7 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 		WaterfallSpeed: 25, WaterfallContrast: 130, WaterfallOffsetDB: -18,
 		WaterfallMinimum: -95, WaterfallMaximum: -15, WaterfallPalette: "VIRIDIS",
 		MemoryViewEnabled: boolSetting(false),
+		AudioNotchEnabled: boolSetting(true), AudioNotchFrequencyHz: 1250, AudioNotchWidthHz: 180, AudioNotchDepthDB: -40,
 	}
 	if err := writeAppSettings(path, want); err != nil {
 		t.Fatal(err)
@@ -53,6 +54,9 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 	}
 	if screen.waterfallSettings.Palette != "VIRIDIS" || screen.waterfallSettings.Contrast != 130 || screen.memoryViewEnabled {
 		t.Fatalf("restored visual settings are incomplete")
+	}
+	if !screen.audioNotchEnabled || screen.audioNotchFrequencyHz != 1250 || screen.audioNotchWidthHz != 180 || screen.audioNotchDepthDB != -40 {
+		t.Fatalf("restored audio notch = %v/%d/%d/%.0f", screen.audioNotchEnabled, screen.audioNotchFrequencyHz, screen.audioNotchWidthHz, screen.audioNotchDepthDB)
 	}
 }
 

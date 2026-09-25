@@ -13,6 +13,9 @@ import (
 
 const (
 	rigOnline = 4
+	pmFreq    = 2
+	pmFreqA   = 4
+	pmFreqB   = 8
 	pmCWU     = 8_388_608
 	pmCWL     = 16_777_216
 	pmSSBU    = 33_554_432
@@ -86,6 +89,7 @@ func (client *Client) run() {
 			client.finish(nil)
 			return
 		case value := <-client.commands:
+			err = nil
 			if value.selectRig == 1 || value.selectRig == 2 {
 				selected = value.selectRig
 				client.readState(rigs, selected)
@@ -95,7 +99,7 @@ func (client *Client) run() {
 				_, err = oleutil.PutProperty(app, "DialogVisible", *value.dialog)
 			}
 			if value.frequencyHz > 0 {
-				_, err = oleutil.PutProperty(rigs[selected-1], "Freq", int32(value.frequencyHz))
+				err = setRigFrequency(rigs[selected-1], value.frequencyHz)
 			}
 			if value.mode != "" {
 				if raw := modeToParam(value.mode); raw != 0 {
@@ -110,6 +114,37 @@ func (client *Client) run() {
 		case <-ticker.C:
 			client.readState(rigs, selected)
 		}
+	}
+}
+
+func setRigFrequency(rig *ole.IDispatch, frequencyHz int64) error {
+	writeable, err := oleutil.GetProperty(rig, "WriteableParams")
+	if err != nil {
+		return fmt.Errorf("no se pudieron consultar los parámetros CAT escribibles: %w", err)
+	}
+	mask := int32(writeable.Val)
+	_ = writeable.Clear()
+	property := writableFrequencyProperty(mask)
+	if property == "" {
+		return fmt.Errorf("el perfil de radio no permite escribir la frecuencia")
+	}
+	_, err = oleutil.PutProperty(rig, property, int32(frequencyHz))
+	if err != nil {
+		return fmt.Errorf("no se pudo escribir %s: %w", property, err)
+	}
+	return nil
+}
+
+func writableFrequencyProperty(mask int32) string {
+	switch {
+	case mask&pmFreq != 0:
+		return "Freq"
+	case mask&pmFreqA != 0:
+		return "FreqA"
+	case mask&pmFreqB != 0:
+		return "FreqB"
+	default:
+		return ""
 	}
 }
 

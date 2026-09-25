@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.9.2](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.9.2)**
+**Versión actual: [v0.9.3](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.9.3)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -44,6 +44,17 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.9.3
+
+- Nuevo filtro *notch* de audio ajustable, con detección automática de tonos, ancho y profundidad configurables.
+- El escáner conserva y muestra los límites de segmentos fuera de la vista FFT; permite centrar cada extremo o ajustar el FFT al segmento completo.
+- CAT OmniRig más fiable con perfiles VFO A/B, confirmación de sintonía y reintentos ante lecturas antiguas.
+- Nuevo paso de sintonía de 500 Hz y mejoras visuales en el ancho de demodulación y el panel de audio.
+- Correcciones de estabilidad y cobertura adicional de pruebas para audio, escáner y OmniRig.
+
+> [!NOTE]
+> Esta versión permite comprobar el flujo de actualización automática desde la v0.9.2.
 
 ## Novedades de v0.9.2
 
