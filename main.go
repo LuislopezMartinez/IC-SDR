@@ -1,6 +1,7 @@
 package main
 
 import (
+	"go-zero/internal/buildinfo"
 	"go-zero/internal/i18n"
 
 	"fmt"
@@ -42,6 +43,7 @@ func main() {
 		}
 	}()
 	startupStep(i18n.Source("text.1eb6e8bf9c68"), os.Getpid(), runtime.GOOS, runtime.GOARCH, runtime.Version())
+	startupStep("Versión=%s · compilación=%s · revisión=%s", buildinfo.DisplayVersion(), buildinfo.BuildDate, buildinfo.Revision)
 	executable, executableErr := os.Executable()
 	workingDirectory, workingErr := os.Getwd()
 	startupStep(i18n.Source("text.ae2092f2053f"), executable, executableErr)
@@ -93,7 +95,7 @@ func main() {
 	simpleui.SetLifecycleLogger(startupStep)
 	simpleui.SetMode(1600, 900, simpleui.Stretch)
 	simpleui.SetTextScale(1.25)
-	simpleui.SetTitle(i18n.Source("text.29b8efd09a7c"))
+	simpleui.SetTitle(buildinfo.WindowTitle())
 	simpleui.SetMinimumSize(960, 540)
 	// F1-F12 are available for user-assigned memory shortcuts. In particular,
 	// do not reserve F11 for window maximization in the main receiver window.

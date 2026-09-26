@@ -1,14 +1,57 @@
 package sdr
 
 import (
+	"go-zero/internal/i18n"
+
 	"math"
 	"testing"
+	"time"
 )
 
 func TestIQStats(t *testing.T) {
 	rms, peak, invalid := iqStats([]float32{1, 0, 0, 1, float32(math.NaN()), 0})
 	if math.Abs(rms-math.Sqrt(2.0/3.0)) > 1e-6 || peak != 1 || invalid != 1 {
 		t.Fatalf("rms=%v peak=%v invalid=%d", rms, peak, invalid)
+	}
+}
+
+func TestDigitalVoiceBypassSelectsDigitalThenReturnsToNFM(t *testing.T) {
+	receiver := NewReceiver(Config{FrequencyHz: 100_000_000, SampleRate: 2_048_000, FFTSize: 4096})
+	receiver.mu.Lock()
+	receiver.demodMode = i18n.Source("text.3ae4feb8250d")
+	receiver.digitalVoiceBypass = true
+	receiver.audio[0], receiver.audioWrite, receiver.audioCount = .25, 1, 1
+	receiver.mu.Unlock()
+
+	receiver.enqueueDigitalAudio([]float32{.75})
+	output := make([]float32, 1)
+	if count := receiver.ReadAudio(output); count != 1 || output[0] != .75 {
+		t.Fatalf("active bypass output = %v (%d samples), want digital .75", output, count)
+	}
+
+	receiver.mu.Lock()
+	receiver.digitalVoiceLastAudio = time.Now().Add(-time.Second)
+	receiver.audio[0], receiver.audioRead, receiver.audioWrite, receiver.audioCount = .25, 0, 1, 1
+	receiver.mu.Unlock()
+	if count := receiver.ReadAudio(output); count != 1 || output[0] != .25 {
+		t.Fatalf("idle bypass output = %v (%d samples), want NFM .25", output, count)
+	}
+}
+
+func TestChangingDemodulatorClearsDigitalVoiceBypassQueue(t *testing.T) {
+	receiver := NewReceiver(Config{FrequencyHz: 100_000_000, SampleRate: 2_048_000, FFTSize: 4096})
+	receiver.mu.Lock()
+	receiver.demodMode = i18n.Source("text.3ae4feb8250d")
+	receiver.digitalVoiceBypass = true
+	receiver.mu.Unlock()
+	receiver.enqueueDigitalAudio([]float32{.75})
+
+	receiver.SetDemodulator("NFM", 100_000_000, 12_500)
+	receiver.mu.RLock()
+	count := receiver.digitalAudioCount
+	receiver.mu.RUnlock()
+	if count != 0 {
+		t.Fatalf("digital bypass queue survived demodulator change: %d", count)
 	}
 }
 

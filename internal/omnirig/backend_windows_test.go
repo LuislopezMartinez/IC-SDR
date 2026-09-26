@@ -37,3 +37,25 @@ func TestWritableFrequencyPropertyUsesProfileCapabilities(t *testing.T) {
 		}
 	}
 }
+
+func TestOmniRigWindowTitles(t *testing.T) {
+	for _, title := range []string{"Omni-Rig", "Omni-Rig Settings", "OmniRig 1.20"} {
+		if !isOmniRigWindowTitle(title) {
+			t.Errorf("Omni-Rig window title %q was not recognised", title)
+		}
+	}
+	for _, title := range []string{"IC-SDR · v0.9.3", "Configuración CAT", ""} {
+		if isOmniRigWindowTitle(title) {
+			t.Errorf("unrelated window title %q was recognised as Omni-Rig", title)
+		}
+	}
+}
+
+func TestOmniRigWindowClassesDoNotConfuseApplicationWithDialog(t *testing.T) {
+	if !isOmniRigDialogClass("TMainForm") || isOmniRigDialogClass("TApplication") {
+		t.Fatal("Omni-Rig settings form is not distinguished from its hidden application window")
+	}
+	if !isOmniRigApplicationClass("TApplication") || isOmniRigApplicationClass("TMainForm") {
+		t.Fatal("Omni-Rig application window classification is incorrect")
+	}
+}

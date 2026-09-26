@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"go-zero/internal/buildinfo"
 	"go-zero/internal/i18n"
 
 	"embed"
@@ -37,6 +38,7 @@ var toolMenuItems = []toolMenuItem{
 	{id: tetrapolToolID, label: "TETRAPOL", icon: "menu-tetrapol.png", row: 1},
 	{id: i18n.Source("text.bcdc9d50f2be"), label: i18n.Source("text.3fc45e92c2be"), row: 2},
 	{id: i18n.Source("text.918191dc299c"), label: i18n.Source("text.db6a87d580b1"), row: 2},
+	{id: "ABOUT", label: "ACERCA DE", row: 2},
 	{id: i18n.Source("text.03c820ee5c6c"), label: i18n.Source("text.ace1d287d60c"), row: 2},
 	{id: "CHECK_UPDATES", label: "ACTUALIZACIONES", row: 2},
 }
@@ -55,6 +57,15 @@ func contactActionBounds(index int) rl.Rectangle {
 	return rl.Rectangle{X: box.X + 35 + float32(index)*275, Y: box.Y + 167, Width: 245, Height: 48}
 }
 
+func aboutDialogBounds() rl.Rectangle {
+	return rl.Rectangle{X: (designWidth - 720) / 2, Y: (designHeight - 430) / 2, Width: 720, Height: 430}
+}
+
+func aboutActionBounds(index int) rl.Rectangle {
+	box := aboutDialogBounds()
+	return rl.Rectangle{X: box.X + 45 + float32(index)*330, Y: box.Y + 343, Width: 300, Height: 52}
+}
+
 type ToolMenu struct {
 	simpleui.BaseElement
 	open            bool
@@ -64,6 +75,9 @@ type ToolMenu struct {
 	contactOpen     bool
 	contactPressed  int
 	contactCopied   bool
+	aboutOpen       bool
+	aboutPressed    int
+	aboutCopied     bool
 	languageOffset  int
 	languageOpen    bool
 	languagePressed bool
@@ -89,6 +103,8 @@ func (menu *ToolMenu) Close() {
 	menu.pressedBack = false
 	menu.contactOpen = false
 	menu.contactCopied = false
+	menu.aboutOpen = false
+	menu.aboutCopied = false
 }
 func (menu *ToolMenu) OverlayOpen() bool          { return menu.open }
 func (menu *ToolMenu) Update(simpleui.Input) bool { return false }
@@ -98,12 +114,16 @@ func (menu *ToolMenu) UpdateOverlay(input simpleui.Input) bool {
 	if !menu.open {
 		return false
 	}
-	if !menu.contactOpen && menu.languageInput(input) {
+	if !menu.contactOpen && !menu.aboutOpen && menu.languageInput(input) {
 		return true
 	}
 	if rl.IsKeyPressed(rl.KeyEscape) {
 		if menu.contactOpen {
 			menu.contactOpen = false
+			return true
+		}
+		if menu.aboutOpen {
+			menu.aboutOpen = false
 			return true
 		}
 		menu.Close()
@@ -117,6 +137,16 @@ func (menu *ToolMenu) UpdateOverlay(input simpleui.Input) bool {
 			}
 			if rl.CheckCollisionPointRec(input.Pointer, contactActionBounds(1)) {
 				menu.contactPressed = 2
+			}
+			return true
+		}
+		if menu.aboutOpen {
+			menu.aboutPressed = 0
+			if rl.CheckCollisionPointRec(input.Pointer, aboutActionBounds(0)) {
+				menu.aboutPressed = 1
+			}
+			if rl.CheckCollisionPointRec(input.Pointer, aboutActionBounds(1)) {
+				menu.aboutPressed = 2
 			}
 			return true
 		}
@@ -135,11 +165,28 @@ func (menu *ToolMenu) UpdateOverlay(input simpleui.Input) bool {
 			menu.contactPressed = 0
 			return true
 		}
+		if menu.aboutOpen {
+			if menu.aboutPressed == 1 && rl.CheckCollisionPointRec(input.Pointer, aboutActionBounds(0)) {
+				rl.SetClipboardText(buildinfo.Details())
+				menu.aboutCopied = rl.GetClipboardText() == buildinfo.Details()
+			}
+			if menu.aboutPressed == 2 && rl.CheckCollisionPointRec(input.Pointer, aboutActionBounds(1)) {
+				menu.aboutOpen = false
+			}
+			menu.aboutPressed = 0
+			return true
+		}
 		item := menu.itemAt(input.Pointer)
 		if menu.pressedBack && rl.CheckCollisionPointRec(input.Pointer, menu.backBounds()) {
 			simpleui.PlayActivationFeedback()
 			menu.Close()
 		} else if item >= 0 && item == menu.pressedItem {
+			if toolMenuItems[item].id == "ABOUT" {
+				menu.aboutOpen = true
+				menu.aboutCopied = false
+				menu.pressedItem = -1
+				return true
+			}
 			if toolMenuItems[item].id == i18n.Source("text.03c820ee5c6c") {
 				menu.contactOpen = true
 				menu.contactCopied = false
@@ -183,6 +230,9 @@ func (menu *ToolMenu) DrawOverlay() {
 	header := rl.Rectangle{X: modal.X + 2, Y: modal.Y + 2, Width: modal.Width - 4, Height: 55}
 	rl.DrawRectangleRec(header, colors.panelAlt)
 	drawCenteredStyled(i18n.Source("text.11364a4c8f17"), header, 27, simpleui.FontSemiBold, colors.text)
+	version := buildinfo.DisplayVersion()
+	versionWidth := simpleui.MeasureTextStyled(version, 14, simpleui.FontSemiBold).X
+	simpleui.DrawTextStyled(version, header.X+header.Width-versionWidth-22, header.Y+19, 14, simpleui.FontSemiBold, colors.cyan)
 	rl.DrawLine(int32(modal.X+20), int32(modal.Y+57), int32(modal.X+modal.Width-20), int32(modal.Y+57), rl.Color{R: 75, G: 75, B: 75, A: 255})
 
 	menu.drawCategory(0, i18n.Source("text.4230649e4327"), colors.cyan)
@@ -192,6 +242,10 @@ func (menu *ToolMenu) DrawOverlay() {
 		menu.drawItem(index)
 	}
 	menu.drawLanguages()
+	if menu.aboutOpen {
+		menu.drawAboutDialog()
+		return
+	}
 	if menu.contactOpen {
 		rl.DrawRectangle(0, 0, int32(designWidth), int32(designHeight), rl.Color{A: 170})
 		box := contactDialogBounds()
@@ -221,6 +275,41 @@ func (menu *ToolMenu) DrawOverlay() {
 	rl.DrawRectangleRounded(back, .2, 8, backColor)
 	rl.DrawRectangleRoundedLinesEx(back, .2, 8, 2, rl.Color{R: 130, G: 145, B: 160, A: 255})
 	drawCenteredStyled(i18n.Source("text.bd62e781ec4e"), back, 17, simpleui.FontSemiBold, simpleui.EnsureTextContrast(colors.text, backColor))
+}
+
+func (menu *ToolMenu) drawAboutDialog() {
+	rl.DrawRectangle(0, 0, int32(designWidth), int32(designHeight), rl.Color{A: 175})
+	box := aboutDialogBounds()
+	rl.DrawRectangleRounded(box, .035, 8, colors.panel)
+	rl.DrawRectangleRoundedLinesEx(box, .035, 8, 2, colors.cyan)
+	drawCenteredStyled("IC-SDR", rl.Rectangle{X: box.X, Y: box.Y + 27, Width: box.Width, Height: 42}, 30, simpleui.FontSemiBold, colors.cyan)
+	drawCenteredStyled(buildinfo.DisplayVersion(), rl.Rectangle{X: box.X, Y: box.Y + 72, Width: box.Width, Height: 30}, 19, simpleui.FontSemiBold, colors.text)
+
+	details := []struct {
+		label, value string
+	}{
+		{"COMPILACIÓN", buildinfo.BuildDate},
+		{"REVISIÓN GIT", buildinfo.Revision},
+		{"PLATAFORMA", buildinfo.Platform()},
+	}
+	for index, detail := range details {
+		y := box.Y + 135 + float32(index)*58
+		simpleui.DrawTextStyled(detail.label, box.X+65, y, 12, simpleui.FontSemiBold, colors.muted)
+		simpleui.DrawTextStyled(detail.value, box.X+245, y-2, 15, simpleui.FontMono, colors.text)
+	}
+	if menu.aboutCopied {
+		drawCenteredStyled("INFORMACIÓN COPIADA", rl.Rectangle{X: box.X, Y: box.Y + 304, Width: box.Width, Height: 24}, 13, simpleui.FontSemiBold, colors.green)
+	}
+	for index, label := range []string{"COPIAR INFORMACIÓN", "CERRAR"} {
+		bounds := aboutActionBounds(index)
+		fill := colors.panelAlt
+		if menu.aboutPressed == index+1 {
+			fill = mixColor(fill, colors.cyan, .18)
+		}
+		rl.DrawRectangleRounded(bounds, .15, 7, fill)
+		rl.DrawRectangleRoundedLinesEx(bounds, .15, 7, 1.5, colors.border)
+		drawCenteredStyled(label, bounds, 15, simpleui.FontSemiBold, simpleui.EnsureTextContrast(colors.text, fill))
+	}
 }
 
 func (menu *ToolMenu) drawCategory(row int, label string, accent rl.Color) {
@@ -343,6 +432,9 @@ func (menu *ToolMenu) drawCustomIcon(id string, center rl.Vector2, active bool, 
 		rl.DrawLineEx(rl.Vector2{X: center.X - 30, Y: center.Y - 17}, rl.Vector2{X: center.X, Y: center.Y + 3}, 3, accent)
 		rl.DrawLineEx(rl.Vector2{X: center.X, Y: center.Y + 3}, rl.Vector2{X: center.X + 30, Y: center.Y - 17}, 3, accent)
 		rl.DrawCircle(int32(center.X+34), int32(center.Y-23), 7, colors.green)
+	case "ABOUT":
+		rl.DrawCircleLines(int32(center.X), int32(center.Y), 32, accent)
+		drawCenteredStyled("i", rl.Rectangle{X: center.X - 25, Y: center.Y - 29, Width: 50, Height: 58}, 32, simpleui.FontSemiBold, accent)
 	default:
 		drawCentered("?", rl.Rectangle{X: center.X - 30, Y: center.Y - 25, Width: 60, Height: 50}, 24, accent)
 	}

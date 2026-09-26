@@ -119,30 +119,34 @@ type Receiver struct {
 	devices        []DeviceOption
 	selectedDevice DeviceOption
 
-	mu                                 sync.RWMutex
-	spectrum                           []float32
-	stats                              Stats
-	tune                               chan int64
-	settings                           chan HardwareSettings
-	centerHz                           atomic.Int64
-	spectrumGeneration                 atomic.Uint64
-	hardware                           HardwareSettings
-	demodMode                          string
-	tunedHz                            int64
-	demodBandwidthHz                   int
-	pbtLowHz, pbtHighHz                int
-	pbtBypassed                        bool
-	squelchEnabled                     bool
-	squelchThresholdDBm                float32
-	squelchHoldMs, squelchCloseMs      int
-	squelchLevelOpen, squelchClosing   bool
-	squelchGain, squelchCloseStartGain float32
-	squelchHoldRemaining               int
-	squelchCloseRemaining              int
-	audio                              []float32
-	audioRead, audioWrite, audioCount  int
-	recorderSink                       atomic.Pointer[receiverAudioSink]
-	iqSink                             atomic.Pointer[receiverIQSink]
+	mu                                                     sync.RWMutex
+	spectrum                                               []float32
+	stats                                                  Stats
+	tune                                                   chan int64
+	settings                                               chan HardwareSettings
+	centerHz                                               atomic.Int64
+	spectrumGeneration                                     atomic.Uint64
+	hardware                                               HardwareSettings
+	demodMode                                              string
+	tunedHz                                                int64
+	demodBandwidthHz                                       int
+	pbtLowHz, pbtHighHz                                    int
+	pbtBypassed                                            bool
+	squelchEnabled                                         bool
+	squelchThresholdDBm                                    float32
+	squelchHoldMs, squelchCloseMs                          int
+	squelchLevelOpen, squelchClosing                       bool
+	squelchGain, squelchCloseStartGain                     float32
+	squelchHoldRemaining                                   int
+	squelchCloseRemaining                                  int
+	audio                                                  []float32
+	audioRead, audioWrite, audioCount                      int
+	digitalAudio                                           []float32
+	digitalAudioRead, digitalAudioWrite, digitalAudioCount int
+	digitalVoiceBypass                                     bool
+	digitalVoiceLastAudio                                  time.Time
+	recorderSink                                           atomic.Pointer[receiverAudioSink]
+	iqSink                                                 atomic.Pointer[receiverIQSink]
 }
 
 type receiverAudioSink struct {
@@ -219,6 +223,7 @@ func NewReceiver(config Config) *Receiver {
 		squelchLevelOpen:    true,
 		squelchGain:         1,
 		audio:               make([]float32, 48_000),
+		digitalAudio:        make([]float32, 48_000),
 	}
 	receiver.centerHz.Store(config.FrequencyHz)
 	receiver.dmr = dmr.New(config.SampleRate, config.DMRExecutable, receiver.enqueueDigitalAudio)
@@ -503,6 +508,8 @@ func (receiver *Receiver) SetDemodulator(mode string, tunedHz int64, bandwidthHz
 	// newly selected analog path.
 	if previousMode != mode || (mode != "AM" && mode != i18n.Source("text.0896d612d497") && mode != i18n.Source("text.6b742bac3eb4") && mode != i18n.Source("text.61f0acff1735") && mode != i18n.Source("text.6323db4948ad")) {
 		receiver.audioRead, receiver.audioWrite, receiver.audioCount = 0, 0, 0
+		receiver.digitalAudioRead, receiver.digitalAudioWrite, receiver.digitalAudioCount = 0, 0, 0
+		receiver.digitalVoiceLastAudio = time.Time{}
 		receiver.stats.AudioBuffered = 0
 	}
 	receiver.mu.Unlock()
@@ -584,6 +591,8 @@ func (receiver *Receiver) StopAllDecoders() {
 	}
 	receiver.mu.Lock()
 	receiver.audioRead, receiver.audioWrite, receiver.audioCount = 0, 0, 0
+	receiver.digitalAudioRead, receiver.digitalAudioWrite, receiver.digitalAudioCount = 0, 0, 0
+	receiver.digitalVoiceLastAudio = time.Time{}
 	receiver.stats.AudioBuffered = 0
 	receiver.stats.SquelchOpen = false
 	receiver.squelchHoldRemaining, receiver.squelchCloseRemaining = 0, 0
@@ -733,6 +742,18 @@ func (receiver *Receiver) SetSquelch(enabled bool, thresholdDBm float32, holdMs,
 
 func (receiver *Receiver) ReadAudio(destination []float32) int {
 	receiver.mu.Lock()
+	if receiver.demodMode == i18n.Source("text.3ae4feb8250d") && receiver.digitalVoiceBypass && receiver.digitalVoiceActiveLocked() {
+		count := min(len(destination), receiver.digitalAudioCount)
+		for index := 0; index < count; index++ {
+			destination[index] = receiver.digitalAudio[receiver.digitalAudioRead]
+			receiver.digitalAudioRead = (receiver.digitalAudioRead + 1) % len(receiver.digitalAudio)
+		}
+		receiver.digitalAudioCount -= count
+		receiver.stats.AudioConsumed += uint64(count)
+		receiver.stats.AudioBuffered = uint64(receiver.digitalAudioCount)
+		receiver.mu.Unlock()
+		return count
+	}
 	count := min(len(destination), receiver.audioCount)
 	for index := 0; index < count; index++ {
 		destination[index] = receiver.audio[receiver.audioRead]
@@ -751,8 +772,28 @@ func (receiver *Receiver) ReadAudio(destination []float32) int {
 func (receiver *Receiver) AudioBufferedSamples() int {
 	receiver.mu.RLock()
 	count := receiver.audioCount
+	if receiver.demodMode == i18n.Source("text.3ae4feb8250d") && receiver.digitalVoiceBypass && receiver.digitalVoiceActiveLocked() {
+		count = receiver.digitalAudioCount
+	}
 	receiver.mu.RUnlock()
 	return count
+}
+
+// SetDigitalVoiceBypass keeps the ordinary NFM monitor audible until decoded
+// PCM arrives. The decoder continues to receive the same IQ stream in either
+// state; only the speaker source changes.
+func (receiver *Receiver) SetDigitalVoiceBypass(enabled bool) {
+	receiver.mu.Lock()
+	receiver.digitalVoiceBypass = enabled
+	receiver.audioRead, receiver.audioWrite, receiver.audioCount = 0, 0, 0
+	receiver.digitalAudioRead, receiver.digitalAudioWrite, receiver.digitalAudioCount = 0, 0, 0
+	receiver.digitalVoiceLastAudio = time.Time{}
+	receiver.stats.AudioBuffered = 0
+	receiver.mu.Unlock()
+}
+
+func (receiver *Receiver) digitalVoiceActiveLocked() bool {
+	return receiver.digitalAudioCount > 0 || (!receiver.digitalVoiceLastAudio.IsZero() && time.Since(receiver.digitalVoiceLastAudio) < 250*time.Millisecond)
 }
 
 // AudioPlaybackState lets the output stage apply the burst-oriented buffering
@@ -767,6 +808,15 @@ func (receiver *Receiver) AudioPlaybackState() (mode string, digitalSignalActive
 		status := receiver.tetra.Snapshot()
 		digitalSignalActive = !status.LastAudio.IsZero() && time.Since(status.LastAudio) < time.Second
 	} else if mode == i18n.Source("text.3ae4feb8250d") && receiver.digital != nil {
+		receiver.mu.RLock()
+		bypass, active := receiver.digitalVoiceBypass, receiver.digitalVoiceActiveLocked()
+		receiver.mu.RUnlock()
+		if bypass {
+			if active {
+				return mode, true
+			}
+			return "NFM", false
+		}
 		status := receiver.digital.Snapshot()
 		digitalSignalActive = status.VoiceActive && !status.LastVoice.IsZero() && time.Since(status.LastVoice) < time.Second
 	}
@@ -939,6 +989,7 @@ func (receiver *Receiver) processAudio(iq []float32) {
 		}
 		return
 	}
+	digitalNFMBypass := false
 	if mode == i18n.Source("text.3ae4feb8250d") {
 		if receiver.digital != nil {
 			receiver.digital.ProcessIQ(iq)
@@ -947,7 +998,14 @@ func (receiver *Receiver) processAudio(iq []float32) {
 			receiver.stats.SquelchOpen = status.VoiceActive
 			receiver.mu.Unlock()
 		}
-		return
+		receiver.mu.RLock()
+		bypass := receiver.digitalVoiceBypass
+		receiver.mu.RUnlock()
+		if !bypass {
+			return
+		}
+		digitalNFMBypass = true
+		mode = "NFM"
 	}
 	var samples []float32
 	switch mode {
@@ -974,6 +1032,10 @@ func (receiver *Receiver) processAudio(iq []float32) {
 		receiver.sstv.ProcessAudio(samples)
 	}
 	receiver.mu.Lock()
+	if digitalNFMBypass && receiver.digitalVoiceActiveLocked() {
+		receiver.mu.Unlock()
+		return
+	}
 	receiver.applySquelchLocked(samples, signalDBm)
 	receiver.stats.AudioProduced += uint64(len(samples))
 	for _, sample := range samples {
@@ -997,6 +1059,28 @@ func (receiver *Receiver) processAudio(iq []float32) {
 
 func (receiver *Receiver) enqueueDigitalAudio(samples []float32) {
 	receiver.mu.Lock()
+	if receiver.demodMode == i18n.Source("text.3ae4feb8250d") && receiver.digitalVoiceBypass {
+		receiver.digitalVoiceLastAudio = time.Now()
+		// Do not let pre-detection NFM remain queued behind the first decoded
+		// syllable. It would otherwise be heard when the call finishes.
+		receiver.audioRead, receiver.audioWrite, receiver.audioCount = 0, 0, 0
+		for _, sample := range samples {
+			if receiver.digitalAudioCount == len(receiver.digitalAudio) {
+				receiver.digitalAudioRead = (receiver.digitalAudioRead + 1) % len(receiver.digitalAudio)
+				receiver.digitalAudioCount--
+				receiver.stats.AudioOverruns++
+			}
+			receiver.digitalAudio[receiver.digitalAudioWrite] = sample
+			receiver.digitalAudioWrite = (receiver.digitalAudioWrite + 1) % len(receiver.digitalAudio)
+			receiver.digitalAudioCount++
+		}
+		receiver.stats.AudioProduced += uint64(len(samples))
+		receiver.stats.AudioBuffered = uint64(receiver.digitalAudioCount)
+		receiver.stats.SquelchOpen = len(samples) > 0
+		receiver.mu.Unlock()
+		receiver.publishRecorderAudio(samples, false, len(samples) > 0)
+		return
+	}
 	receiver.stats.AudioProduced += uint64(len(samples))
 	for _, sample := range samples {
 		if receiver.audioCount == len(receiver.audio) {

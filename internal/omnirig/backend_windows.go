@@ -88,15 +88,31 @@ func (client *Client) run() {
 		case <-client.stop:
 			client.finish(nil)
 			return
+		case visible := <-client.dialogs:
+			err = setDialogVisible(app, visible)
+			if visible {
+				// Delphi may report the dialog as visible while Windows has it
+				// minimized or behind the SDR. Restore it after COM has created it.
+				shown := false
+				for attempt := 0; attempt < 5; attempt++ {
+					if restoreOmniRigWindow() {
+						shown = true
+						break
+					}
+					requestOmniRigWindow()
+					time.Sleep(80 * time.Millisecond)
+				}
+				if err == nil && !shown {
+					err = fmt.Errorf("Omni-Rig confirmó el diálogo, pero Windows no encontró una ventana de configuración operativa")
+				}
+			}
+			client.publishCommandResult(err)
 		case value := <-client.commands:
 			err = nil
 			if value.selectRig == 1 || value.selectRig == 2 {
 				selected = value.selectRig
 				client.readState(rigs, selected)
 				continue
-			}
-			if value.dialog != nil {
-				_, err = oleutil.PutProperty(app, "DialogVisible", *value.dialog)
 			}
 			if value.frequencyHz > 0 {
 				err = setRigFrequency(rigs[selected-1], value.frequencyHz)
@@ -106,15 +122,46 @@ func (client *Client) run() {
 					_, err = oleutil.PutProperty(rigs[selected-1], "Mode", raw)
 				}
 			}
-			if err != nil {
-				state := client.State()
-				state.Error = fmt.Sprintf("orden CAT rechazada: %v", err)
-				client.publish(state)
-			}
+			client.publishCommandResult(err)
 		case <-ticker.C:
 			client.readState(rigs, selected)
 		}
 	}
+}
+
+func setDialogVisible(app *ole.IDispatch, visible bool) error {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if _, err := oleutil.PutProperty(app, "DialogVisible", visible); err != nil {
+			lastErr = err
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		value, err := oleutil.GetProperty(app, "DialogVisible")
+		if err == nil {
+			confirmed := value.Val != 0
+			_ = value.Clear()
+			if confirmed == visible {
+				return nil
+			}
+			lastErr = fmt.Errorf("Omni-Rig no confirmó el estado de su ventana")
+		} else {
+			lastErr = err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("no se pudo mostrar la configuración avanzada: %w", lastErr)
+}
+
+func (client *Client) publishCommandResult(err error) {
+	state := client.State()
+	state.DialogOpening = false
+	if err != nil {
+		state.Error = fmt.Sprintf("orden CAT rechazada: %v", err)
+	} else {
+		state.Error = ""
+	}
+	client.publish(state)
 }
 
 func setRigFrequency(rig *ole.IDispatch, frequencyHz int64) error {
@@ -149,7 +196,8 @@ func writableFrequencyProperty(mask int32) string {
 }
 
 func (client *Client) readState(rigs [2]*ole.IDispatch, selected int) {
-	state := State{Running: true, Updated: time.Now(), SelectedRig: selected}
+	previous := client.State()
+	state := State{Running: true, Updated: time.Now(), SelectedRig: selected, Error: previous.Error, DialogOpening: previous.DialogOpening}
 	state.Rig1 = readRigSummary(rigs[0])
 	state.Rig2 = readRigSummary(rigs[1])
 	selectedSummary := state.Rig1

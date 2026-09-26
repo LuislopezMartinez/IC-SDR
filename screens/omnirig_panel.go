@@ -134,6 +134,12 @@ func (panel *OmniRigPanel) DrawPanel() {
 	drawSmallText("CONTROL OMNIRIG · RIG 1", 376, toolY+14, colors.cyan)
 	drawSmallText("ESTADO", 806, toolY+112, colors.muted)
 	status := state.Status
+	if state.DialogOpening {
+		status = "ABRIENDO OMNIRIG…"
+	}
+	if state.Error != "" {
+		status = state.Error
+	}
 	if status == "" {
 		status = panel.screen.rigStatus
 	}

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"go-zero/internal/buildinfo"
 	"io"
 	"net/http"
 	"os"
@@ -20,7 +21,7 @@ import (
 
 // CurrentVersion is set by build-release.ps1. Development builds deliberately
 // do not offer installation over a checkout.
-var CurrentVersion = "dev"
+var CurrentVersion = buildinfo.Version
 
 const latestURL = "https://api.github.com/repos/LuislopezMartinez/IC-SDR/releases/latest"
 const packageName = "IC-SDR-Go-windows-x64.zip"

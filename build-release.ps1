@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.9.3'
+    [string]$Version = '0.9.4'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -162,7 +162,18 @@ if (-not $SkipTests) {
 $exePath = Join-Path $distRoot 'IC-SDR-Go.exe'
 $updaterPath = Join-Path $distRoot 'IC-SDR-Updater.exe'
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Versión no válida: $Version" }
-& go build -trimpath -ldflags "-s -w -H=windowsgui -X go-zero/internal/update.CurrentVersion=$Version" -o $exePath .
+$Revision = 'unknown'
+$gitCommand = Get-Command git -ErrorAction SilentlyContinue
+if ($null -ne $gitCommand) {
+    $detectedRevision = (& $gitCommand.Source -C $projectRoot rev-parse --short=12 HEAD 2>$null)
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($detectedRevision)) {
+        $Revision = $detectedRevision
+    }
+}
+$Revision = $Revision.Trim()
+$BuildDate = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+$applicationLdFlags = "-s -w -H=windowsgui -X go-zero/internal/buildinfo.Version=$Version -X go-zero/internal/buildinfo.Revision=$Revision -X go-zero/internal/buildinfo.BuildDate=$BuildDate"
+& go build -trimpath -ldflags $applicationLdFlags -o $exePath .
 if ($LASTEXITCODE -ne 0) { throw 'No se pudo compilar IC-SDR-Go.exe.' }
 & go build -trimpath -ldflags "-s -w -H=windowsgui" -o $updaterPath ./cmd/updater
 if ($LASTEXITCODE -ne 0) { throw 'No se pudo compilar IC-SDR-Updater.exe.' }

@@ -14,13 +14,13 @@ import (
 )
 
 type DigitalVoicePanel struct {
-	screen                    *MainScreen
-	controls                  []simpleui.Element
-	start, allModes           *simpleui.Button
-	modeButtons               map[string]*simpleui.Button
-	enabledModes              map[string]bool
-	skipEncrypted, followCall *simpleui.Switch
-	lastError                 string
+	screen                               *MainScreen
+	controls                             []simpleui.Element
+	start, allModes                      *simpleui.Button
+	modeButtons                          map[string]*simpleui.Button
+	enabledModes                         map[string]bool
+	skipEncrypted, followCall, nfmBypass *simpleui.Switch
+	lastError                            string
 }
 
 var digitalDetectionModes = []string{i18n.Source("text.ade0cbd42252"), "P25 I", i18n.Source("text.9e7aa85fb23c"), i18n.Source("text.09558c27a7a1"), i18n.Source("text.8ffa43c306ee"), i18n.Source("text.4fcb50bfd35b"), i18n.Source("text.ef1fb8875c5e"), "dPMR", i18n.Source("text.996308552c50"), "M17", i18n.Source("text.63c78e1bf13c")}
@@ -45,7 +45,14 @@ func NewDigitalVoicePanel(screen *MainScreen) *DigitalVoicePanel {
 	p.skipEncrypted.SetTrackColors(colors.panelAlt, colors.green)
 	p.followCall = simpleui.NewSwitch("digitalVoiceFollow", 1280, 535, 190, 28, i18n.Source("text.10f775fe15af"), false, 12)
 	p.followCall.SetTrackColors(colors.panelAlt, colors.blue)
-	p.controls = []simpleui.Element{p.start, p.allModes, p.skipEncrypted, p.followCall}
+	p.nfmBypass = simpleui.NewSwitch("digitalVoiceNFMBypass", 820, 535, 220, 28, "BYPASS NFM", true, 12)
+	p.nfmBypass.SetTrackColors(colors.panelAlt, colors.green)
+	p.nfmBypass.OnChange(func(enabled bool) {
+		if p.screen.receiver != nil {
+			p.screen.receiver.SetDigitalVoiceBypass(enabled)
+		}
+	})
+	p.controls = []simpleui.Element{p.start, p.allModes, p.nfmBypass, p.skipEncrypted, p.followCall}
 	x := float32(538)
 	for _, mode := range digitalDetectionModes {
 		label := strings.ReplaceAll(strings.ReplaceAll(mode, i18n.Source("text.f8f49fde8af0"), "N"), i18n.Source("text.1a2f630a99ac"), "")
@@ -160,8 +167,8 @@ func (p *DigitalVoicePanel) Enter() {
 		}
 	}
 	p.screen.savedMode = i18n.Source("text.0896d612d497")
-	p.screen.demodBandwidthHz = max(p.screen.demodBandwidthHz, 12_500)
 	if p.screen.receiver != nil {
+		p.screen.receiver.SetDigitalVoiceBypass(p.nfmBypass.Active())
 		p.screen.receiver.SetDemodulator(i18n.Source("text.3ae4feb8250d"), p.screen.frequencyHz, p.screen.demodBandwidthHz)
 	}
 }
@@ -202,6 +209,12 @@ func (p *DigitalVoicePanel) DrawPanel() {
 	}
 	x, y, w := float32(360), float32(488), float32(1232)
 	drawPanel(x, y, w, 338)
+	// Keep the three independent listening policies visually grouped. These
+	// cards are drawn before the UI elements, so their switches remain fully
+	// interactive while the labels no longer float over the main panel.
+	drawPanel(800, 521, 250, 55)
+	drawPanel(1058, 521, 220, 55)
+	drawPanel(1268, 521, 214, 55)
 	simpleui.DrawTextStyled(i18n.Source("text.0efd19a09068"), x+18, y+13, 16, simpleui.FontSemiBold, colors.cyan)
 	stateColor := colors.orange
 	if status.State == i18n.Source("text.c6d93a7e3862") {
@@ -212,8 +225,9 @@ func (p *DigitalVoicePanel) DrawPanel() {
 	rl.DrawCircle(int32(x+275), int32(y+23), 6, stateColor)
 	simpleui.DrawTextStyled(status.State, x+288, y+14, 13, simpleui.FontSemiBold, stateColor)
 	simpleui.DrawTextStyled(fmt.Sprintf(i18n.Source("text.94576db15561"), p.selectedModeCount()), x+306, y+52, 12, simpleui.FontSemiBold, colors.muted)
-
-	simpleui.DrawTextStyled(i18n.Source("text.d8f75115c06d"), x+178, y+67, 12, simpleui.FontSemiBold, colors.muted)
+	// This heading used to share the ALL button's coordinates and was partly
+	// hidden behind it. The free left side of the mode row is its natural slot.
+	simpleui.DrawTextStyled(i18n.Source("text.d8f75115c06d"), x+18, y+96, 12, simpleui.FontSemiBold, colors.muted)
 
 	call := rl.Rectangle{X: x + 18, Y: y + 124, Width: 490, Height: 112}
 	drawPanel(call.X, call.Y, call.Width, call.Height)

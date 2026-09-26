@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.9.3](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.9.3)**
+**Versión actual: [v0.9.4](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.9.4)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -44,6 +44,15 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.9.4
+
+- Nuevo modo **BYPASS NFM** en el monitor de voz digital: permite escuchar NFM mientras no hay voz decodificada y conmuta automáticamente al audio digital cuando llega.
+- OmniRig mejora la apertura de su configuración avanzada y recupera ventanas minimizadas u ocultas, con mensajes de estado más claros.
+- Nueva ventana **Acerca de** con versión, fecha de compilación, revisión Git y plataforma; los datos se pueden copiar al portapapeles para soporte técnico.
+- Las compilaciones de distribución incorporan versión, revisión y fecha de creación en la aplicación y en el registro de inicio.
+- Los procesos auxiliares de Windows, incluida la conversión MP3, ya no muestran ventanas de consola.
+- Correcciones de estabilidad en el audio digital, RTL_433, grabación y actualización automática.
 
 ## Novedades de v0.9.3
 

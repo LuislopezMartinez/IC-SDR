@@ -8,6 +8,10 @@ import (
 )
 
 func rtl433ViewerProcessAttributes() *syscall.SysProcAttr {
+	return hiddenChildProcessAttributes()
+}
+
+func hiddenChildProcessAttributes() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
 }
 

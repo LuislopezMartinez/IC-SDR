@@ -17,19 +17,20 @@ const (
 )
 
 type State struct {
-	Running      bool
-	Online       bool
-	FrequencyHz  int64
-	Mode         string
-	RigType      string
-	Status       string
-	Error        string
-	Updated      time.Time
-	SelectedRig  int
-	Rig1         RigSummary
-	Rig2         RigSummary
-	TXReadable   bool
-	Transmitting bool
+	Running       bool
+	Online        bool
+	FrequencyHz   int64
+	Mode          string
+	RigType       string
+	Status        string
+	Error         string
+	Updated       time.Time
+	SelectedRig   int
+	Rig1          RigSummary
+	Rig2          RigSummary
+	TXReadable    bool
+	Transmitting  bool
+	DialogOpening bool
 }
 
 type RigSummary struct {
@@ -43,7 +44,6 @@ type RigSummary struct {
 type command struct {
 	frequencyHz int64
 	mode        string
-	dialog      *bool
 	selectRig   int
 }
 
@@ -53,6 +53,7 @@ type Client struct {
 	mu          sync.RWMutex
 	state       State
 	commands    chan command
+	dialogs     chan bool
 	stop        chan struct{}
 	done        chan struct{}
 	executable  string
@@ -77,6 +78,7 @@ func (client *Client) Start() {
 	}
 	client.state = State{Running: true, Status: "Iniciando Omni-Rig…", SelectedRig: client.selectedRig}
 	client.commands = make(chan command, 8)
+	client.dialogs = make(chan bool, 1)
 	client.stop = make(chan struct{})
 	client.done = make(chan struct{})
 	client.mu.Unlock()
@@ -122,7 +124,34 @@ func (client *Client) SetMode(mode string) { client.enqueue(command{mode: mode})
 // keeps it hidden; the integrated tool exposes this only as an advanced escape
 // hatch for settings that Omni-Rig does not publish through COM.
 func (client *Client) ShowDialog(visible bool) {
-	client.enqueue(command{dialog: &visible})
+	if visible {
+		// This Win32 path is deliberately attempted before COM. It can restore an
+		// existing Omni-Rig form even while its automation worker is temporarily
+		// busy, and repeated clicks remain harmless.
+		requestOmniRigWindow()
+	}
+	client.mu.RLock()
+	dialogs, running := client.dialogs, client.state.Running
+	client.mu.RUnlock()
+	if !running || dialogs == nil {
+		return
+	}
+	client.mu.Lock()
+	client.state.DialogOpening = visible
+	client.state.Error = ""
+	client.mu.Unlock()
+	// Dialog requests must never compete with high-rate tuning commands. Keep
+	// the newest request in its own channel so CONFIG. AVANZADA cannot be lost
+	// when the CAT queue is busy.
+	select {
+	case dialogs <- visible:
+	default:
+		select {
+		case <-dialogs:
+		default:
+		}
+		dialogs <- visible
+	}
 }
 
 func (client *Client) SelectRig(number int) {

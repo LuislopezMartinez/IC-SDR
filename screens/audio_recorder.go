@@ -362,6 +362,9 @@ func encodeWAVToMP3(wavPath, mp3Path string) (err error) {
 	}
 	_ = os.Remove(mp3Path)
 	command := exec.Command(lamePath, "--silent", "--cbr", "-b", "160", "-q", "2", "-m", "m", "--noreplaygain", wavPath, mp3Path)
+	// LAME is a console application. On Windows it would briefly create a
+	// black terminal window when an MP3 recording is finalized.
+	command.SysProcAttr = hiddenChildProcessAttributes()
 	if output, err := command.CombinedOutput(); err != nil {
 		_ = os.Remove(mp3Path)
 		message := strings.TrimSpace(string(output))
