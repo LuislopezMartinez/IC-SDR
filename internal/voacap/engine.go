@@ -98,6 +98,15 @@ func stageRuntime(source string) (string, func(), error) {
 		_ = os.RemoveAll(destination)
 		return "", func() {}, err
 	}
+	// Empty directories are not retained by the portable release packaging.
+	// VOACAP nevertheless requires RUN as its working directory before either
+	// point-to-point or area calculations can create their input/output files.
+	for _, directory := range []string{"run", "areadata", "area_inv"} {
+		if err := os.MkdirAll(filepath.Join(destination, directory), 0o755); err != nil {
+			_ = os.RemoveAll(destination)
+			return "", func() {}, err
+		}
+	}
 	return destination, func() { _ = os.RemoveAll(destination) }, nil
 }
 

@@ -58,3 +58,24 @@ func TestPortableEngineProduces24HourRoute(t *testing.T) {
 		t.Fatalf("unexpected route geometry: %.0f km, %.0f degrees", prediction.DistanceKM, prediction.Azimuth)
 	}
 }
+
+func TestStageRuntimeRecreatesPortableWorkingDirectories(t *testing.T) {
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "bin_win"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "bin_win", "placeholder"), []byte("runtime"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	staged, cleanup, err := stageRuntime(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	for _, directory := range []string{"run", "areadata", "area_inv"} {
+		info, statErr := os.Stat(filepath.Join(staged, directory))
+		if statErr != nil || !info.IsDir() {
+			t.Fatalf("staged runtime is missing %s: %v", directory, statErr)
+		}
+	}
+}
