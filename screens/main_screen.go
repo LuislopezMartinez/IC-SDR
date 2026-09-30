@@ -29,6 +29,8 @@ const (
 	legacyToolWidth   = float32(1552)
 	toolContentX      = utilitiesRight + 10
 	toolContentRight  = float32(1592)
+	squelchMinimumDB  = float32(-140)
+	squelchMaximumDB  = float32(20)
 )
 
 const toolContentScaleX = (toolContentRight - toolContentX) / legacyToolWidth
@@ -188,6 +190,7 @@ type MainScreen struct {
 	scanPanel              *ScanPanel
 	dmrPanel               *DMRPanel
 	digitalVoicePanel      *DigitalVoicePanel
+	voacapPanel            *VOACAPPanel
 	aprsPanel              *APRSPanel
 	aprsView               string
 	rtl433Panel            *RTL433Panel
@@ -326,7 +329,7 @@ func (screen *MainScreen) CreateControls() {
 	squelch.OnChange(func(active bool) { screen.squelchEnabled = active; screen.applySquelch(); screen.markSettingsDirty() })
 	screen.squelchLabel = simpleui.NewLabel("squelchLabel", 1059, 24, 103, 22, fmt.Sprintf(i18n.Source("text.95de47dd223a"), screen.squelchThreshold), 10)
 	screen.squelchLabel.SetColor(colors.orange)
-	screen.squelchSlider = simpleui.NewSlider("squelchLevel", 1152, 27, 92, 20, screen.spectrumMinimumDB, screen.spectrumMaximumDB, float32(screen.squelchThreshold))
+	screen.squelchSlider = simpleui.NewSlider("squelchLevel", 1152, 27, 92, 20, squelchMinimumDB, squelchMaximumDB, float32(screen.squelchThreshold))
 	screen.squelchSlider.SetStep(1)
 	screen.squelchSlider.OnChange(func(value float32) {
 		screen.squelchThreshold = int(value)
@@ -354,7 +357,7 @@ func (screen *MainScreen) CreateControls() {
 		screen.applySquelch()
 		screen.markSettingsDirty()
 	})
-	screen.syncSquelchToSpectrumRange()
+	screen.syncSquelchControl()
 
 	mute := simpleui.NewSwitch("mute", 338, 111, 166, 28, i18n.Source("text.699ea8f5b381"), screen.muted, uiMinimumFontSize)
 	screen.muteSwitch = mute
@@ -467,6 +470,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.recorderPanel = NewRecorderPanel(screen, screen.recorder)
 	screen.utilitiesSidebar = NewUtilitiesSidebar(screen)
 	screen.digitalVoicePanel = NewDigitalVoicePanel(screen)
+	screen.voacapPanel = NewVOACAPPanel(screen)
 	screen.audioPlayer.SetVolume(volumePercentToGain(screen.volume))
 	screen.audioPlayer.SetMuted(screen.muted)
 
@@ -513,6 +517,9 @@ func (screen *MainScreen) CreateControls() {
 		simpleui.Add(element)
 	}
 	for _, element := range screen.digitalVoicePanel.controls {
+		simpleui.Add(element)
+	}
+	for _, element := range screen.voacapPanel.controls {
 		simpleui.Add(element)
 	}
 	for _, element := range screen.aprsPanel.controls {
@@ -672,6 +679,9 @@ func (screen *MainScreen) Draw() {
 	if screen.digitalVoicePanel != nil {
 		screen.digitalVoicePanel.Tick()
 	}
+	if screen.voacapPanel != nil {
+		screen.voacapPanel.Tick()
+	}
 	screen.updateFrequencyInteraction()
 	screen.updateSpectrumDrag()
 	screen.updateWaterfallTune()
@@ -751,6 +761,9 @@ func (screen *MainScreen) Close() {
 	if screen.digitalVoicePanel != nil {
 		screen.digitalVoicePanel.Close()
 	}
+	if screen.voacapPanel != nil {
+		screen.voacapPanel.Close()
+	}
 	if screen.satellitePanel != nil {
 		screen.satellitePanel.Close()
 	}
@@ -773,14 +786,15 @@ func (screen *MainScreen) setMemoryView(visible bool) {
 	screen.markSettingsDirty()
 }
 
-// syncSquelchToSpectrumRange keeps both the control and DSP threshold inside
-// the dB interval that is currently visible in the FFT graph.
-func (screen *MainScreen) syncSquelchToSpectrumRange() {
+// syncSquelchControl uses the receiver's physical dB range. It intentionally
+// remains independent from the visual FFT floor/ceiling so graph zoom never
+// changes the squelch threshold or its slider position.
+func (screen *MainScreen) syncSquelchControl() {
 	if screen.squelchSlider == nil {
 		return
 	}
-	screen.squelchSlider.SetRange(screen.spectrumMinimumDB, screen.spectrumMaximumDB)
-	threshold := min(max(float32(screen.squelchThreshold), screen.spectrumMinimumDB), screen.spectrumMaximumDB)
+	screen.squelchSlider.SetRange(squelchMinimumDB, squelchMaximumDB)
+	threshold := min(max(float32(screen.squelchThreshold), squelchMinimumDB), squelchMaximumDB)
 	screen.squelchThreshold = int(math.Round(float64(threshold)))
 	screen.squelchSlider.SetValue(float32(screen.squelchThreshold))
 	screen.squelchLabel.SetText(fmt.Sprintf(i18n.Source("text.95de47dd223a"), screen.squelchThreshold))
@@ -1146,23 +1160,27 @@ func (screen *MainScreen) drawTuningCursorLabel(cursorX, y, graphX, graphWidth f
 	if mode := screen.mode.SelectedText(); (mode == i18n.Source("text.61f0acff1735") || mode == i18n.Source("text.6323db4948ad")) && screen.audioPanel != nil && !screen.audioPanel.pbtBypassed {
 		bandwidth = i18n.Source("text.3f182c244942") + formatFilterBandwidth(screen.audioPanel.pbtHigh-screen.audioPanel.pbtLow)
 	}
-	frequencySize, detailSize := int32(15), int32(12)
+	frequencySize, detailSize := int32(13), int32(10)
 	freqWidth := simpleui.MeasureTextStyled(frequency, frequencySize, simpleui.FontMono).X
 	detailWidth := simpleui.MeasureTextStyled(bandwidth, detailSize, simpleui.FontSemiBold).X
-	plateWidth := max(freqWidth, detailWidth) + 22
-	plateX := min(max(cursorX-plateWidth/2, graphX+6), graphX+graphWidth-plateWidth-6)
-	plate := rl.Rectangle{X: plateX, Y: y + 25, Width: plateWidth, Height: 50}
+	plateWidth := max(freqWidth, detailWidth) + 14
+	plateX := min(max(cursorX-plateWidth/2, graphX+4), graphX+graphWidth-plateWidth-4)
+	plate := rl.Rectangle{X: plateX, Y: y + 5, Width: plateWidth, Height: 36}
 	plateBackground := colors.panel
 	plateBackground.A = 248
-	rl.DrawRectangleRounded(plate, .14, 8, plateBackground)
-	rl.DrawRectangleRoundedLinesEx(plate, .14, 8, 1.5, markerColor)
-	simpleui.DrawTextStyled(frequency, plate.X+(plate.Width-freqWidth)/2, plate.Y+6, frequencySize, simpleui.FontMono, simpleui.EnsureTextContrast(markerColor, plateBackground))
-	simpleui.DrawTextStyled(bandwidth, plate.X+(plate.Width-detailWidth)/2, plate.Y+29, detailSize, simpleui.FontSemiBold, simpleui.EnsureTextContrast(demodulatedBandwidthColor(), plateBackground))
+	rl.DrawRectangleRounded(plate, .12, 6, plateBackground)
+	rl.DrawRectangleRoundedLinesEx(plate, .12, 6, 1, markerColor)
+	simpleui.DrawTextStyled(frequency, plate.X+(plate.Width-freqWidth)/2, plate.Y+3, frequencySize, simpleui.FontMono, simpleui.EnsureTextContrast(markerColor, plateBackground))
+	simpleui.DrawTextStyled(bandwidth, plate.X+(plate.Width-detailWidth)/2, plate.Y+20, detailSize, simpleui.FontSemiBold, simpleui.EnsureTextContrast(demodulatedBandwidthColor(), plateBackground))
 }
 
 func (screen *MainScreen) drawLowerWorkspace() {
 	if screen.activeTool == i18n.Source("text.a8cbb160caa6") {
 		screen.digitalVoicePanel.DrawPanel()
+		return
+	}
+	if screen.activeTool == voacapToolID {
+		screen.voacapPanel.DrawPanel()
 		return
 	}
 	drawPanel(toolContentX, toolY, toolContentRight-toolContentX, toolH)
@@ -1450,6 +1468,12 @@ func (screen *MainScreen) selectTool(tool string) {
 			screen.digitalVoicePanel.Enter()
 		}
 	}
+	if screen.voacapPanel != nil {
+		screen.voacapPanel.SetVisible(tool == voacapToolID)
+		if tool == voacapToolID && previous != voacapToolID {
+			screen.voacapPanel.Enter()
+		}
+	}
 	if screen.rtl433Panel != nil {
 		screen.rtl433Panel.SetVisible(tool == i18n.Source("text.8be70e7cb2c4"))
 		if tool == i18n.Source("text.8be70e7cb2c4") && previous != i18n.Source("text.8be70e7cb2c4") {
@@ -1548,6 +1572,9 @@ func (screen *MainScreen) setViewMode(mode int) {
 	}
 	if screen.digitalVoicePanel != nil {
 		screen.digitalVoicePanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.a8cbb160caa6"))
+	}
+	if screen.voacapPanel != nil {
+		screen.voacapPanel.SetVisible(showTool && screen.activeTool == voacapToolID)
 	}
 	if screen.rtl433Panel != nil {
 		screen.rtl433Panel.SetVisible(showTool && screen.activeTool == i18n.Source("text.8be70e7cb2c4"))
@@ -2193,6 +2220,7 @@ func (screen *MainScreen) overlayOpen() bool {
 		(screen.stepSelector != nil && screen.stepSelector.OverlayOpen()) ||
 		(screen.filterSelector != nil && screen.filterSelector.OverlayOpen()) ||
 		(screen.memoryPanel != nil && screen.memoryPanel.OverlayOpen()) ||
+		(screen.voacapPanel != nil && screen.voacapPanel.OverlayOpen()) ||
 		(screen.updateDialog != nil && screen.updateDialog.OverlayOpen())
 }
 

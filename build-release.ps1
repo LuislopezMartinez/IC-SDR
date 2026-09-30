@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.9.4'
+    [string]$Version = '0.10.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -16,6 +16,8 @@ $tetrapolRuntime = Join-Path $projectRoot 'DATA\tools\tetrapol\runtime'
 $tetrapolManifestPath = Join-Path $tetrapolRuntime 'runtime-version.json'
 $omniRigRuntime = Join-Path $projectRoot 'DATA\runtime\windows-x64\omnirig'
 $omniRigManifestPath = Join-Path $omniRigRuntime 'runtime-version.json'
+$voacapRuntime = Join-Path $projectRoot 'DATA\tools\voacap\runtime'
+$voacapManifestPath = Join-Path $voacapRuntime 'runtime-version.json'
 
 if ($distRoot -ne $expectedDist -or -not $distRoot.StartsWith($projectRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Ruta de distribución no segura: $distRoot"
@@ -93,6 +95,27 @@ if (@(Get-ChildItem -LiteralPath $omniRigProfiles -Filter '*.ini' -File).Count -
 $omniRigExeHash = (Get-FileHash -LiteralPath $omniRigExe -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($omniRigExeHash -ne $omniRigManifest.executableSha256.ToLowerInvariant()) {
     throw "OmniRig.exe no coincide con el manifiesto: $omniRigExeHash"
+}
+
+if (-not (Test-Path -LiteralPath $voacapManifestPath)) {
+    throw "Falta el manifiesto del motor VOACAP portable: $voacapManifestPath"
+}
+$voacapManifest = Get-Content -LiteralPath $voacapManifestPath -Raw | ConvertFrom-Json
+if ($voacapManifest.version -ne '08.0121W') {
+    throw "Versión de VOACAP no admitida: $($voacapManifest.version). Se esperaba 08.0121W."
+}
+$voacapExe = Join-Path $voacapRuntime $voacapManifest.executable
+$voacapDll = Join-Path $voacapRuntime $voacapManifest.runtimeDll
+foreach ($required in @($voacapExe, $voacapDll, (Join-Path $voacapRuntime $voacapManifest.notice), (Join-Path $voacapRuntime 'coeffs'), (Join-Path $voacapRuntime 'antennas'))) {
+    if (-not (Test-Path -LiteralPath $required)) { throw "Falta un componente requerido de VOACAP: $required" }
+}
+$voacapExeHash = (Get-FileHash -LiteralPath $voacapExe -Algorithm SHA256).Hash.ToLowerInvariant()
+$voacapDllHash = (Get-FileHash -LiteralPath $voacapDll -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($voacapExeHash -ne $voacapManifest.executableSha256.ToLowerInvariant()) {
+    throw "Voacapw.exe no coincide con el manifiesto: $voacapExeHash"
+}
+if ($voacapDllHash -ne $voacapManifest.runtimeDllSha256.ToLowerInvariant()) {
+    throw "SALFLIBC.DLL de VOACAP no coincide con el manifiesto: $voacapDllHash"
 }
 
 # Windows locks the executable, runtime DLLs and startup.log while IC-SDR is
@@ -192,6 +215,7 @@ $copies = @(
     @{ Source = 'DATA\tools\sstv\runtime'; Destination = 'DATA\tools\sstv\runtime' },
     @{ Source = 'DATA\tools\tetra\runtime'; Destination = 'DATA\tools\tetra\runtime' },
     @{ Source = 'DATA\tools\tetrapol\runtime'; Destination = 'DATA\tools\tetrapol\runtime' },
+    @{ Source = 'DATA\tools\voacap\runtime'; Destination = 'DATA\tools\voacap\runtime' },
     @{ Source = 'DATA\data\ic-sdr-settings.json'; Destination = 'DATA\data\ic-sdr-settings.json' }
 )
 

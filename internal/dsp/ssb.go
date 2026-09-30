@@ -1,8 +1,19 @@
 package dsp
 
-import "go-zero/internal/i18n"
+import (
+	"math"
 
-import "math"
+	"go-zero/internal/i18n"
+)
+
+const (
+	// SSB needs considerably more gain reserve than AM or FM because weak
+	// sideband signals can remain intelligible far below their output level.
+	ssbTargetRMS      = float32(.34)
+	ssbMaximumGain    = float32(96)
+	ssbInitialGain    = float32(16)
+	ssbLimiterCeiling = float32(.94)
+)
 
 // SSBDemodulator isolates and translates either sideband into mono audio.
 type SSBDemodulator struct {
@@ -19,7 +30,7 @@ type SSBDemodulator struct {
 }
 
 func NewSSBDemodulator(inputRate, outputRate float64) *SSBDemodulator {
-	return &SSBDemodulator{inputRate: inputRate, outputRate: outputRate, rmsPower: .0001, gain: 1, limiterGain: 1}
+	return &SSBDemodulator{inputRate: inputRate, outputRate: outputRate, rmsPower: 1e-6, gain: ssbInitialGain, limiterGain: 1}
 }
 
 func (demod *SSBDemodulator) Process(iq []float32, mode string, frequencyOffsetHz float64, bandwidthHz int) []float32 {
@@ -85,7 +96,7 @@ func (demod *SSBDemodulator) ProcessPBT(iq []float32, mode string, frequencyOffs
 		demod.highpass = audio - demod.previousAudio + highpassR*demod.highpass
 		demod.previousAudio = audio
 		demod.tuneGain += tuneAttack * (1 - demod.tuneGain)
-		demod.output = append(demod.output, demod.processDynamics(demod.highpass)*demod.tuneGain)
+		demod.output = append(demod.output, demod.processDynamics(demod.highpass*demod.tuneGain))
 	}
 	return demod.output
 }
@@ -98,35 +109,34 @@ func (demod *SSBDemodulator) processDynamics(sample float32) float32 {
 	}
 	demod.rmsPower += rmsCoefficient * (power - demod.rmsPower)
 	rms := float32(math.Sqrt(float64(max(demod.rmsPower, 1e-8))))
-	desired := min(max(.22/max(rms, .008), .35), 12)
-	gainCoefficient := coefficient(.750, demod.outputRate)
+	desired := min(max(ssbTargetRMS/max(rms, .001), .5), ssbMaximumGain)
+	gainCoefficient := coefficient(.300, demod.outputRate)
 	if desired < demod.gain {
-		gainCoefficient = coefficient(.030, demod.outputRate)
+		gainCoefficient = coefficient(.020, demod.outputRate)
 	}
 	demod.gain += gainCoefficient * (desired - demod.gain)
 	value := sample * demod.gain
 	magnitude := absFloat(value)
 	if magnitude > 1e-6 {
 		inputDB := float32(20 * math.Log10(float64(magnitude)))
-		outputDB := softKnee(inputDB, -14, 3, 6)
-		value *= float32(math.Pow(10, float64(outputDB-inputDB+2)/20))
+		outputDB := softKnee(inputDB, -10, 3.5, 6)
+		value *= float32(math.Pow(10, float64(outputDB-inputDB+4)/20))
 	}
-	const ceiling = float32(.89125)
 	desiredLimiter := float32(1)
-	if absFloat(value) > ceiling {
-		desiredLimiter = ceiling / absFloat(value)
+	if absFloat(value) > ssbLimiterCeiling {
+		desiredLimiter = ssbLimiterCeiling / absFloat(value)
 	}
 	if desiredLimiter < demod.limiterGain {
 		demod.limiterGain = desiredLimiter
 	} else {
 		demod.limiterGain += coefficient(.100, demod.outputRate) * (desiredLimiter - demod.limiterGain)
 	}
-	return min(max(value*demod.limiterGain, -ceiling), ceiling)
+	return min(max(value*demod.limiterGain, -ssbLimiterCeiling), ssbLimiterCeiling)
 }
 
 func (demod *SSBDemodulator) resetSignalPath() {
 	demod.channelPhase, demod.audioPhase, demod.resamplePhase = 0, 0, 0
 	demod.iFilter, demod.qFilter = [3]float32{}, [3]float32{}
 	demod.previousAudio, demod.highpass, demod.tuneGain = 0, 0, 0
-	demod.rmsPower, demod.gain, demod.limiterGain = .0001, 1, 1
+	demod.rmsPower, demod.gain, demod.limiterGain = 1e-6, ssbInitialGain, 1
 }

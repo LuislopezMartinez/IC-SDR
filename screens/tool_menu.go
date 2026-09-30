@@ -22,7 +22,7 @@ type toolMenuItem struct {
 var toolMenuItems = []toolMenuItem{
 	{id: "DISTANCE_MAP", label: i18n.Source("text.3bd35969d3d1"), row: 2},
 	{id: omniRigToolID, label: "OMNIRIG CAT", icon: "menu-omnirig.png", row: 2},
-	{id: i18n.Source("text.e52a5d80bf71"), label: i18n.Source("text.f035065747e2"), icon: "menu-scope.png", row: 0},
+	{id: voacapToolID, label: "PROPAGACIÓN DX", icon: "menu-scope.png", row: 0},
 	{id: i18n.Source("text.9b6bb9932898"), label: i18n.Source("text.e3bbc3565223"), icon: "menu-waterfall-adjust.png", row: 0},
 	{id: i18n.Source("text.94fa3fe96dde"), label: i18n.Source("text.618262ce4370"), icon: "menu-fft-display.png", row: 0},
 	{id: i18n.Source("text.a42c60257b01"), label: i18n.Source("text.3758217ace1a"), icon: "menu-twin-pbt.png", row: 0},

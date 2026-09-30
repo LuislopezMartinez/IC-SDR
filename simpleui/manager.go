@@ -13,7 +13,8 @@ type Manager struct {
 	// pointerBlocked remains true for the complete frame in which an overlay
 	// handled input, including the click that closes it. This prevents canvas
 	// controls drawn below a popup from seeing the same physical event.
-	pointerBlocked bool
+	pointerBlocked    bool
+	blockUntilRelease bool
 }
 
 func NewManager() *Manager {
@@ -48,9 +49,18 @@ func (m *Manager) Get(id string) Element {
 }
 
 func (m *Manager) Update(input Input) {
-	m.pointerBlocked = false
+	// A dropdown selects on mouse-down, whereas canvases such as the waterfall
+	// tune on mouse-up. Keep the whole physical gesture reserved for the popup;
+	// otherwise its later release leaks through after the popup has closed.
+	m.pointerBlocked = m.blockUntilRelease
+	if m.blockUntilRelease && input.Released {
+		m.blockUntilRelease = false
+	}
 	if overlay := m.topOpenOverlay(); overlay != nil {
 		m.pointerBlocked = true
+		if input.Pressed || input.Down {
+			m.blockUntilRelease = true
+		}
 		consumed := overlay.UpdateOverlay(input)
 		m.rememberFocus(overlay.(Element))
 		if consumed || overlay.OverlayOpen() {

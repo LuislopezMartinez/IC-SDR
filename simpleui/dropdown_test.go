@@ -58,16 +58,24 @@ func TestManagerKeepsPointerBlockedWhenDropdownSelectionClosesOverlay(t *testing
 	manager.Add(dropdown)
 	dropdown.setOpen(true)
 	popup := dropdown.popupBounds()
-	manager.Update(Input{Pointer: rl.Vector2{X: popup.X + 10, Y: popup.Y + 10}, PointerInCanvas: true, Pressed: true})
+	manager.Update(Input{Pointer: rl.Vector2{X: popup.X + 10, Y: popup.Y + 10}, PointerInCanvas: true, Pressed: true, Down: true})
 	if dropdown.Open() {
 		t.Fatal("selection did not close dropdown")
 	}
 	if !manager.PointerInputBlocked() {
 		t.Fatal("popup selection click was allowed to reach controls underneath")
 	}
+	manager.Update(Input{PointerInCanvas: true, Down: true})
+	if !manager.PointerInputBlocked() {
+		t.Fatal("pointer was unblocked before the popup gesture was released")
+	}
+	manager.Update(Input{PointerInCanvas: true, Released: true})
+	if !manager.PointerInputBlocked() {
+		t.Fatal("popup release was allowed to reach controls underneath")
+	}
 	manager.Update(Input{PointerInCanvas: true})
 	if manager.PointerInputBlocked() {
-		t.Fatal("pointer remained blocked after the consumed frame")
+		t.Fatal("pointer remained blocked after the popup gesture")
 	}
 }
 

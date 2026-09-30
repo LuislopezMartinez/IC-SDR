@@ -360,7 +360,7 @@ func (screen *MainScreen) restoreBandDisplayProfile() {
 	if screen.stepSelector != nil {
 		screen.stepSelector.SetSelected(screen.tuningStepHz)
 	}
-	screen.syncSquelchToSpectrumRange()
+	screen.syncSquelchControl()
 	if screen.fftDisplay != nil {
 		screen.fftDisplay.Sync()
 	}
