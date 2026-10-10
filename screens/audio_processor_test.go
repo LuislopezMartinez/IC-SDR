@@ -112,3 +112,105 @@ func TestAudioNotchAttenuatesSelectedToneAndPreservesAdjacentAudio(t *testing.T)
 		t.Fatalf("notch removed adjacent audio: ratio %.4f", adjacentRatio)
 	}
 }
+
+func TestAudioNoiseReductionAttenuatesStationaryNoise(t *testing.T) {
+	measure := func(enabled bool) float64 {
+		processor := NewAudioProcessor()
+		processor.Configure(20, 4000, false, [5]float32{}, i18n.Source("text.db2cb3fe28e2"))
+		processor.ConfigureNoiseReduction(enabled, 70)
+		samples := make([]float32, audioSampleRate)
+		seed := uint32(1)
+		for index := range samples {
+			seed = seed*1664525 + 1013904223
+			samples[index] = (float32(seed>>8)/float32(1<<24)*2 - 1) * .18
+		}
+		processor.Process(samples)
+		var power float64
+		for _, sample := range samples[audioSampleRate/2:] {
+			power += float64(sample * sample)
+		}
+		return math.Sqrt(power / (audioSampleRate / 2))
+	}
+	ratio := measure(true) / measure(false)
+	if ratio >= .82 {
+		t.Fatalf("NR retained too much stationary noise: ratio %.3f", ratio)
+	}
+}
+
+func TestRecommendedNoiseReductionIsAudible(t *testing.T) {
+	measure := func(enabled bool) float64 {
+		processor := NewAudioProcessor()
+		processor.Configure(100, 4000, false, [5]float32{}, i18n.Source("text.db2cb3fe28e2"))
+		processor.ConfigureNoiseReduction(enabled, 50)
+		samples := make([]float32, audioSampleRate*2)
+		seed := uint32(17)
+		for index := range samples {
+			seed = seed*1664525 + 1013904223
+			white := (float32(seed>>8)/float32(1<<24)*2 - 1) * .16
+			// Add slow amplitude variation to approximate receiver hiss rather
+			// than validating only an ideal, perfectly stationary source.
+			envelope := float32(.78 + .22*math.Sin(2*math.Pi*1.7*float64(index)/audioSampleRate))
+			samples[index] = white * envelope
+		}
+		processor.Process(samples)
+		var power float64
+		for _, sample := range samples[len(samples)-audioSampleRate/2:] {
+			power += float64(sample * sample)
+		}
+		return math.Sqrt(power / (audioSampleRate / 2))
+	}
+	ratio := measure(true) / measure(false)
+	if ratio >= .82 {
+		t.Fatalf("recommended NR setting is barely audible: ratio %.3f", ratio)
+	}
+}
+
+func TestAudioNoiseReductionProducesFiniteOutput(t *testing.T) {
+	processor := NewAudioProcessor()
+	processor.ConfigureNoiseReduction(true, 100)
+	samples := make([]float32, 8192)
+	for index := range samples {
+		samples[index] = float32(.35 * math.Sin(2*math.Pi*900*float64(index)/audioSampleRate))
+	}
+	processor.Process(samples)
+	for index, sample := range samples {
+		if math.IsNaN(float64(sample)) || math.IsInf(float64(sample), 0) || sample < -.98 || sample > .98 {
+			t.Fatalf("invalid NR output sample %d: %v", index, sample)
+		}
+	}
+}
+
+func TestAudioNoiseReductionPreservesSustainedCarrier(t *testing.T) {
+	measure := func(enabled bool) float64 {
+		processor := NewAudioProcessor()
+		processor.Configure(20, 4000, false, [5]float32{}, i18n.Source("text.db2cb3fe28e2"))
+		processor.ConfigureNoiseReduction(enabled, 85)
+		samples := make([]float32, audioSampleRate*2)
+		for index := range samples {
+			samples[index] = float32(.25 * math.Sin(2*math.Pi*1000*float64(index)/audioSampleRate))
+		}
+		processor.Process(samples)
+		var power float64
+		for _, sample := range samples[len(samples)-audioSampleRate/2:] {
+			power += float64(sample * sample)
+		}
+		return math.Sqrt(power / (audioSampleRate / 2))
+	}
+	ratio := measure(true) / measure(false)
+	if ratio < .75 {
+		t.Fatalf("NR treated a sustained carrier as noise: ratio %.3f", ratio)
+	}
+}
+
+func TestNoiseReductionModePolicy(t *testing.T) {
+	for _, mode := range []string{"AM", i18n.Source("text.0896d612d497"), i18n.Source("text.61f0acff1735"), i18n.Source("text.6323db4948ad")} {
+		if !noiseReductionMode(mode) {
+			t.Fatalf("NR unexpectedly disabled for %s", mode)
+		}
+	}
+	for _, mode := range []string{"CW", i18n.Source("text.6b742bac3eb4"), i18n.Source("text.2604864ce4d3")} {
+		if noiseReductionMode(mode) {
+			t.Fatalf("NR unexpectedly enabled for %s", mode)
+		}
+	}
+}

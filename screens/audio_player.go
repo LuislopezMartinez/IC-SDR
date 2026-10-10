@@ -53,6 +53,7 @@ type AudioPlayer struct {
 	meterPeakBits  atomic.Uint32
 	digitalMode    atomic.Bool
 	wideFMMode     atomic.Bool
+	noiseMode      atomic.Bool
 	digitalActive  atomic.Bool
 	digitalStarved int
 	playbackMode   string
@@ -69,8 +70,9 @@ func (player *AudioPlayer) Pump() {
 	if player.receiver != nil {
 		mode, active := player.receiver.AudioPlaybackState()
 		player.transitionPlaybackMode(mode)
-		player.digitalMode.Store(mode == i18n.Source("text.2604864ce4d3") || mode == i18n.Source("text.f69d86a86926") || mode == i18n.Source("text.3ae4feb8250d"))
+		player.digitalMode.Store(mode == "DAB" || mode == i18n.Source("text.2604864ce4d3") || mode == i18n.Source("text.f69d86a86926") || mode == i18n.Source("text.3ae4feb8250d"))
 		player.wideFMMode.Store(mode == i18n.Source("text.6b742bac3eb4"))
+		player.noiseMode.Store(noiseReductionMode(mode))
 		player.digitalActive.Store(active)
 	}
 	if !player.ready {
@@ -113,12 +115,16 @@ func (player *AudioPlayer) transitionPlaybackMode(mode string) {
 		return
 	}
 	player.resetPlaybackState()
+	player.processor.ResetNoiseReduction()
 	player.playbackMode = mode
 }
 
 // ResetPlayback forces a fresh prebuffer even when two bands happen to use
 // the same demodulator (for example NFM -> NFM).
-func (player *AudioPlayer) ResetPlayback() { player.resetPlaybackState() }
+func (player *AudioPlayer) ResetPlayback() {
+	player.resetPlaybackState()
+	player.processor.ResetNoiseReduction()
+}
 
 func (player *AudioPlayer) resetPlaybackState() {
 	if player.ready && player.started {
@@ -196,10 +202,14 @@ func (player *AudioPlayer) fillAudio(destination []float32) {
 	} else {
 		player.digitalStarved = 0
 	}
-	if player.wideFMMode.Load() {
+	if digital {
+		player.processor.ProcessDigital(destination[:availableOutput])
+	} else if player.wideFMMode.Load() {
 		player.processor.ProcessWideFM(destination[:availableOutput])
-	} else {
+	} else if player.noiseMode.Load() {
 		player.processor.Process(destination[:availableOutput])
+	} else {
+		player.processor.ProcessAnalogBypass(destination[:availableOutput])
 	}
 	player.publishAudioPeak(destination[:availableOutput])
 	if sink := player.webAudioSink.Load(); sink != nil {
@@ -209,6 +219,10 @@ func (player *AudioPlayer) fillAudio(destination []float32) {
 			sink.publish(destination)
 		}
 	}
+}
+
+func noiseReductionMode(mode string) bool {
+	return mode == "AM" || mode == i18n.Source("text.0896d612d497") || mode == i18n.Source("text.61f0acff1735") || mode == i18n.Source("text.6323db4948ad")
 }
 
 // SetWebAudioSink publishes the post-processed, pre-local-volume audio.
@@ -285,6 +299,12 @@ func (player *AudioPlayer) ConfigureProcessing(lowCut, highCut int, enabled bool
 }
 func (player *AudioPlayer) ConfigureNotch(enabled bool, frequencyHz, widthHz int, depthDB float32) {
 	player.processor.ConfigureNotch(enabled, frequencyHz, widthHz, depthDB)
+}
+func (player *AudioPlayer) ConfigureNoiseReduction(enabled bool, strength float32) {
+	player.processor.ConfigureNoiseReduction(enabled, strength)
+}
+func (player *AudioPlayer) NoiseReductionActivity() float32 {
+	return player.processor.NoiseReductionActivity()
 }
 func (player *AudioPlayer) Spectrum(destination []float32) { player.processor.Spectrum(destination) }
 func (player *AudioPlayer) SpectrumBeforeNotch(destination []float32) {

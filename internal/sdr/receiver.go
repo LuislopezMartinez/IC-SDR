@@ -13,6 +13,7 @@ import (
 	"go-zero/internal/aircraft"
 	"go-zero/internal/ais"
 	"go-zero/internal/aprs"
+	"go-zero/internal/dab"
 	"go-zero/internal/digitalvoice"
 	"go-zero/internal/dmr"
 	"go-zero/internal/dsp"
@@ -49,6 +50,7 @@ type Config struct {
 	RTL433Executable                                 string
 	APRSExecutable, APRSConfig, APRSWorkingDirectory string
 	SSTVExecutable, SSTVOutputDirectory              string
+	DABExecutable                                    string
 	TETRACodec                                       string
 	TETRAPOLKitExecutable, TETRAPOLRPCELPExecutable  string
 	StartupLog                                       func(string, ...any)
@@ -96,6 +98,7 @@ type Receiver struct {
 	digital              *digitalvoice.Bank
 	rtl433               *rtl433.Decoder
 	aprs                 *aprs.Decoder
+	dab                  *dab.Decoder
 	sstv                 *sstv.Decoder
 	tetra                *tetra.Decoder
 	tetrapol             *tetrapol.Decoder
@@ -144,6 +147,7 @@ type Receiver struct {
 	digitalAudio                                           []float32
 	digitalAudioRead, digitalAudioWrite, digitalAudioCount int
 	digitalVoiceBypass                                     bool
+	dabPlaybackEnabled                                     bool
 	digitalVoiceLastAudio                                  time.Time
 	recorderSink                                           atomic.Pointer[receiverAudioSink]
 	iqSink                                                 atomic.Pointer[receiverIQSink]
@@ -233,6 +237,7 @@ func NewReceiver(config Config) *Receiver {
 	receiver.ais = ais.New(config.SampleRate, config.AISExecutable)
 	receiver.aircraft = aircraft.New(config.SampleRate, config.Aircraft1090Executable, config.Aircraft978Executable, config.AircraftUATTextExecutable)
 	receiver.aprs = aprs.New(config.SampleRate, config.APRSExecutable, config.APRSConfig, config.APRSWorkingDirectory)
+	receiver.dab = dab.New(config.SampleRate, config.DABExecutable, receiver.enqueueDigitalAudio)
 	receiver.sstv = sstv.New(config.SSTVExecutable, config.SSTVOutputDirectory)
 	receiver.tetra = tetra.New(config.SampleRate, config.TETRACodec, receiver.enqueueDigitalAudio)
 	receiver.tetrapol = tetrapol.New(config.SampleRate)
@@ -437,6 +442,9 @@ func (receiver *Receiver) Close() {
 		if receiver.aprs != nil {
 			receiver.aprs.Stop()
 		}
+		if receiver.dab != nil {
+			receiver.dab.Close()
+		}
 		if receiver.tetra != nil {
 			receiver.tetra.Close()
 		}
@@ -565,6 +573,9 @@ func (receiver *Receiver) StopAllDecoders() {
 	if receiver.digital != nil {
 		receiver.digital.Stop()
 	}
+	if receiver.dab != nil {
+		receiver.dab.Stop()
+	}
 	if receiver.sstv != nil {
 		receiver.sstv.Configure(false)
 	}
@@ -590,6 +601,7 @@ func (receiver *Receiver) StopAllDecoders() {
 		receiver.tetrapol.Configure(false)
 	}
 	receiver.mu.Lock()
+	receiver.dabPlaybackEnabled = false
 	receiver.audioRead, receiver.audioWrite, receiver.audioCount = 0, 0, 0
 	receiver.digitalAudioRead, receiver.digitalAudioWrite, receiver.digitalAudioCount = 0, 0, 0
 	receiver.digitalVoiceLastAudio = time.Time{}
@@ -742,7 +754,7 @@ func (receiver *Receiver) SetSquelch(enabled bool, thresholdDBm float32, holdMs,
 
 func (receiver *Receiver) ReadAudio(destination []float32) int {
 	receiver.mu.Lock()
-	if receiver.demodMode == i18n.Source("text.3ae4feb8250d") && receiver.digitalVoiceBypass && receiver.digitalVoiceActiveLocked() {
+	if receiver.dabPlaybackEnabled || (receiver.demodMode == i18n.Source("text.3ae4feb8250d") && receiver.digitalVoiceBypass && receiver.digitalVoiceActiveLocked()) {
 		count := min(len(destination), receiver.digitalAudioCount)
 		for index := 0; index < count; index++ {
 			destination[index] = receiver.digitalAudio[receiver.digitalAudioRead]
@@ -772,7 +784,7 @@ func (receiver *Receiver) ReadAudio(destination []float32) int {
 func (receiver *Receiver) AudioBufferedSamples() int {
 	receiver.mu.RLock()
 	count := receiver.audioCount
-	if receiver.demodMode == i18n.Source("text.3ae4feb8250d") && receiver.digitalVoiceBypass && receiver.digitalVoiceActiveLocked() {
+	if receiver.dabPlaybackEnabled || (receiver.demodMode == i18n.Source("text.3ae4feb8250d") && receiver.digitalVoiceBypass && receiver.digitalVoiceActiveLocked()) {
 		count = receiver.digitalAudioCount
 	}
 	receiver.mu.RUnlock()
@@ -801,7 +813,12 @@ func (receiver *Receiver) digitalVoiceActiveLocked() bool {
 func (receiver *Receiver) AudioPlaybackState() (mode string, digitalSignalActive bool) {
 	receiver.mu.RLock()
 	mode = receiver.demodMode
+	dabPlayback := receiver.dabPlaybackEnabled
 	receiver.mu.RUnlock()
+	if dabPlayback && receiver.dab != nil {
+		status := receiver.dab.Snapshot()
+		return "DAB", status.AudioActive
+	}
 	if mode == i18n.Source("text.2604864ce4d3") && receiver.dmr != nil {
 		digitalSignalActive = receiver.dmr.Snapshot().SignalActive
 	} else if mode == i18n.Source("text.f69d86a86926") && receiver.tetra != nil {
@@ -911,6 +928,9 @@ func (receiver *Receiver) run() {
 		}
 		if receiver.aircraft != nil {
 			receiver.aircraft.ProcessIQ(readBuffer[:read*2])
+		}
+		if receiver.dab != nil {
+			receiver.dab.ProcessIQ(readBuffer[:read*2])
 		}
 		if receiver.tetra != nil {
 			receiver.tetra.ProcessIQ(readBuffer[:read*2])
@@ -1032,6 +1052,10 @@ func (receiver *Receiver) processAudio(iq []float32) {
 		receiver.sstv.ProcessAudio(samples)
 	}
 	receiver.mu.Lock()
+	if receiver.dabPlaybackEnabled {
+		receiver.mu.Unlock()
+		return
+	}
 	if digitalNFMBypass && receiver.digitalVoiceActiveLocked() {
 		receiver.mu.Unlock()
 		return
@@ -1059,7 +1083,7 @@ func (receiver *Receiver) processAudio(iq []float32) {
 
 func (receiver *Receiver) enqueueDigitalAudio(samples []float32) {
 	receiver.mu.Lock()
-	if receiver.demodMode == i18n.Source("text.3ae4feb8250d") && receiver.digitalVoiceBypass {
+	if receiver.dabPlaybackEnabled || (receiver.demodMode == i18n.Source("text.3ae4feb8250d") && receiver.digitalVoiceBypass) {
 		receiver.digitalVoiceLastAudio = time.Now()
 		// Do not let pre-detection NFM remain queued behind the first decoded
 		// syllable. It would otherwise be heard when the call finishes.

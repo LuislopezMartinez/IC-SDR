@@ -503,6 +503,7 @@ func (viewer *voacapMap) drawRouteWheel(center rl.Vector2, radius float32) {
 		rl.DrawRectangleRounded(plate, .25, 4, plateColor)
 		simpleui.DrawTextStyled(band, center.X-labelSize.X/2, plate.Y, 8, simpleui.FontSemiBold, colors.text)
 	}
+	drawRouteCurrentHourMarker(center, inner, radius, time.Now().UTC().Hour())
 	now := time.Now().UTC().Hour()
 	current := 0.0
 	if values := viewer.route.Reliability[viewer.selectedBand()]; len(values) == 24 {
@@ -523,6 +524,34 @@ func (viewer *voacapMap) drawRouteWheel(center rl.Vector2, radius float32) {
 		}
 		drawCentered(i18n.Source(status), rl.Rectangle{X: center.X - radius, Y: center.Y - 12, Width: radius * 2, Height: 24}, 11, colors.orange)
 	}
+}
+
+// drawRouteCurrentHourMarker places a restrained radial marker through the
+// current UTC-hour sector. Keeping the pointer beyond the hour labels makes it
+// easy to find without hiding either the reliability cells or their values.
+func drawRouteCurrentHourMarker(center rl.Vector2, inner, radius float32, hour int) {
+	angle := (float64(hour*15-90) + 7.5) * math.Pi / 180
+	direction := rl.Vector2{X: float32(math.Cos(angle)), Y: float32(math.Sin(angle))}
+	perpendicular := rl.Vector2{X: -direction.Y, Y: direction.X}
+	pointAt := func(distance float32) rl.Vector2 {
+		return rl.Vector2{X: center.X + direction.X*distance, Y: center.Y + direction.Y*distance}
+	}
+
+	start := pointAt(inner + 2)
+	end := pointAt(radius + 21)
+	glow := colors.cyan
+	glow.A = 55
+	marker := colors.cyan
+	marker.A = 225
+	rl.DrawLineEx(start, end, 5, glow)
+	rl.DrawLineEx(start, end, 2, marker)
+
+	tip := pointAt(radius + 22)
+	base := pointAt(radius + 34)
+	halfBase := float32(6)
+	left := rl.Vector2{X: base.X + perpendicular.X*halfBase, Y: base.Y + perpendicular.Y*halfBase}
+	right := rl.Vector2{X: base.X - perpendicular.X*halfBase, Y: base.Y - perpendicular.Y*halfBase}
+	rl.DrawTriangle(tip, left, right, colors.cyan)
 }
 
 func routeWheelColor(value float64) rl.Color {

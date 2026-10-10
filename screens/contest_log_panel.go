@@ -1,0 +1,566 @@
+package screens
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+	"unicode"
+
+	"go-zero/internal/contestlog"
+	"go-zero/internal/i18n"
+	"go-zero/internal/resources"
+	"go-zero/simpleui"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
+)
+
+const contestLogToolID = "CONTEST_LOG"
+
+const contestLogPanelRows = 6
+
+type ContestLogPanel struct {
+	screen                                                                    *MainScreen
+	controls                                                                  []simpleui.Element
+	stationCall, operator, workedCall                                         *simpleui.TextField
+	rstSent, rstReceived, serialReceived                                      *simpleui.TextField
+	create, profile, editTemplates, power, save, export, openFolder           *simpleui.Button
+	viewLog, editLast, finish, history                                        *simpleui.Button
+	operatorCategory, assisted, categoryBand, transmitter                     *simpleui.Button
+	viewer                                                                    *ContestLogViewer
+	templateEditor                                                            *ContestTemplateEditor
+	session                                                                   *contestlog.Session
+	path, archiveDir, exportDir, backupDir, templateDir, status               string
+	profiles                                                                  []contestlog.Profile
+	statusColor                                                               rl.Color
+	pendingQSO                                                                string
+	profileValue                                                              string
+	operatorCategoryValue, assistedValue, categoryBandValue, transmitterValue string
+}
+
+func NewContestLogPanel(screen *MainScreen) *ContestLogPanel {
+	p := &ContestLogPanel{screen: screen, path: resources.WritablePath("logbook", "oceania-dx-ssb-2026.json"),
+		archiveDir: resources.WritablePath("logbook", "archive"), exportDir: resources.WritablePath("exports", "cabrillo"),
+		backupDir: resources.WritablePath("logbook", "backups"), templateDir: resources.WritablePath("logbook", "templates"), statusColor: colors.muted}
+	p.reloadProfiles()
+	p.stationCall = simpleui.NewTextField("contestStationCall", 382, toolY+58, 190, 40, i18n.Source("text.log0001"), 16)
+	p.operator = simpleui.NewTextField("contestOperator", 584, toolY+58, 190, 40, i18n.Source("text.log0002"), 13)
+	p.power = simpleui.NewButton("contestPower", 786, toolY+58, 140, 40, i18n.Source("text.log0003"), 11)
+	p.power.OnClick(p.cyclePower)
+	p.create = simpleui.NewButton("contestCreate", 938, toolY+58, 280, 40, i18n.Source("text.log0004"), 13)
+	p.create.SetColors(actionStartFill, colors.green, colors.text)
+	p.create.OnClick(p.createSession)
+	p.profile = simpleui.NewButton("contestProfile", 382, toolY+29, 836, 24, "", 11)
+	p.profile.OnClick(p.cycleProfile)
+	p.editTemplates = simpleui.NewButton("contestEditTemplates", 1230, toolY+29, 327, 24, i18n.Source("text.log0155"), 10)
+	p.editTemplates.OnClick(func() { p.templateEditor.Open() })
+
+	p.workedCall = simpleui.NewTextField("contestWorkedCall", 382, toolY+51, 190, 40, i18n.Source("text.log0005"), 17)
+	p.rstSent = simpleui.NewTextField("contestRSTSent", 632, toolY+51, 52, 40, "59", 15)
+	p.rstReceived = simpleui.NewTextField("contestRSTReceived", 744, toolY+51, 52, 40, "59", 15)
+	p.serialReceived = simpleui.NewTextField("contestSerialReceived", 856, toolY+51, 130, 40, "000", 15)
+	p.save = simpleui.NewButton("contestSave", 998, toolY+51, 150, 40, i18n.Source("text.log0009"), 12)
+	p.save.SetColors(actionStartFill, colors.green, colors.text)
+	p.save.OnClick(p.saveQSO)
+	p.viewLog = simpleui.NewButton("contestViewLog", 382, toolY+99, 190, 32, i18n.Source("text.log0010"), 11)
+	p.viewLog.OnClick(func() { p.viewer.Open(-1) })
+	p.editLast = simpleui.NewButton("contestEditLast", 584, toolY+99, 180, 32, i18n.Source("text.log0011"), 11)
+	p.editLast.OnClick(func() {
+		if p.session != nil && len(p.session.QSOs) > 0 {
+			p.viewer.Open(len(p.session.QSOs) - 1)
+		}
+	})
+	p.finish = simpleui.NewButton("contestFinish", 776, toolY+99, 180, 32, i18n.Source("text.log0085"), 11)
+	p.finish.SetColors(colors.panelAlt, colors.orange, colors.text)
+	p.finish.OnClick(func() { p.viewer.OpenFinish() })
+	p.history = simpleui.NewButton("contestHistory", 1377, toolY+99, 180, 32, i18n.Source("text.log0141"), 11)
+	p.history.OnClick(func() { p.viewer.OpenHistory() })
+	p.operatorCategoryValue, p.assistedValue, p.categoryBandValue, p.transmitterValue = "SINGLE-OP", "NON-ASSISTED", "ALL", "ONE"
+	p.profileValue = contestlog.OceaniaDXSSB
+	p.refreshProfileLabel()
+	p.operatorCategory = simpleui.NewButton("contestOperatorCategory", 382, toolY+108, 165, 32, "", 10)
+	p.assisted = simpleui.NewButton("contestAssisted", 557, toolY+108, 165, 32, "", 10)
+	p.categoryBand = simpleui.NewButton("contestCategoryBand", 732, toolY+108, 145, 32, "", 10)
+	p.transmitter = simpleui.NewButton("contestTransmitter", 887, toolY+108, 175, 32, "", 10)
+	p.operatorCategory.OnClick(func() {
+		p.operatorCategoryValue = cycleChoice(p.operatorCategoryValue, []string{"SINGLE-OP", "MULTI-OP"})
+		p.refreshConfigLabels()
+	})
+	p.assisted.OnClick(func() {
+		p.assistedValue = cycleChoice(p.assistedValue, []string{"NON-ASSISTED", "ASSISTED"})
+		p.refreshConfigLabels()
+	})
+	p.categoryBand.OnClick(func() {
+		choices := []string{"ALL"}
+		for _, profile := range p.profiles {
+			if profile.ID == p.profileValue {
+				choices = append(choices, profile.AllowedBands...)
+				break
+			}
+		}
+		p.categoryBandValue = cycleChoice(p.categoryBandValue, choices)
+		p.refreshConfigLabels()
+	})
+	p.transmitter.OnClick(func() {
+		p.transmitterValue = cycleChoice(p.transmitterValue, []string{"ONE", "TWO", "UNLIMITED"})
+		p.refreshConfigLabels()
+	})
+	p.refreshConfigLabels()
+	p.export = simpleui.NewButton("contestExport", 1270, toolY+51, 175, 40, i18n.Source("text.log0012"), 10)
+	p.export.SetColors(colors.blue, colors.cyan, colors.text)
+	p.export.OnClick(p.exportCabrillo)
+	p.openFolder = simpleui.NewButton("contestOpenFolder", 1457, toolY+51, 110, 40, i18n.Source("text.log0013"), 9)
+	p.openFolder.OnClick(func() { openExplorerPath(p.exportDir) })
+
+	callFilter := func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '/' }
+	digitFilter := func(r rune) bool { return unicode.IsDigit(r) }
+	for _, field := range []*simpleui.TextField{p.stationCall, p.operator, p.workedCall} {
+		field.SetFilter(callFilter)
+		field.SetMaxLength(16)
+		field.SetFont(simpleui.FontSemiBold)
+	}
+	for _, field := range []*simpleui.TextField{p.rstSent, p.rstReceived} {
+		field.SetFilter(digitFilter)
+		field.SetMaxLength(4)
+		field.SetFont(simpleui.FontSemiBold)
+	}
+	p.workedCall.OnSubmit(func(string) { p.serialReceived.SetFocused(true) })
+	p.serialReceived.OnSubmit(func(string) { p.saveQSO() })
+	p.controls = []simpleui.Element{p.stationCall, p.operator, p.power, p.create, p.profile, p.editTemplates, p.workedCall, p.rstSent,
+		p.rstReceived, p.serialReceived, p.save, p.viewLog, p.editLast, p.finish, p.history, p.operatorCategory,
+		p.assisted, p.categoryBand, p.transmitter, p.export, p.openFolder}
+	if loaded, err := contestlog.Load(p.path); err == nil {
+		p.session = loaded
+	} else if !os.IsNotExist(err) {
+		p.setStatus(fmt.Sprintf(i18n.Source("text.log0070"), err.Error()), colors.red)
+	}
+	p.rstSent.SetText("59")
+	p.rstReceived.SetText("59")
+	p.refreshExchangeField()
+	p.viewer = NewContestLogViewer(p)
+	p.templateEditor = NewContestTemplateEditor(p)
+	p.refreshVisibility(false)
+	return p
+}
+
+func (p *ContestLogPanel) cycleProfile() {
+	profiles := p.profiles
+	current := p.profileValue
+	for index, profile := range profiles {
+		if profile.ID == current {
+			p.profileValue = profiles[(index+1)%len(profiles)].ID
+			p.categoryBandValue = "ALL"
+			p.refreshProfileLabel()
+			p.refreshConfigLabels()
+			return
+		}
+	}
+	p.profileValue = contestlog.OceaniaDXSSB
+	p.refreshProfileLabel()
+}
+
+func (p *ContestLogPanel) reloadProfiles() {
+	profiles, err := contestlog.LoadProfiles(p.templateDir)
+	if err != nil || len(profiles) == 0 {
+		profiles = contestlog.Profiles()
+	}
+	p.profiles = profiles
+	found := false
+	for _, profile := range profiles {
+		found = found || profile.ID == p.profileValue
+	}
+	if !found {
+		p.profileValue = contestlog.OceaniaDXSSB
+	}
+}
+
+func (p *ContestLogPanel) refreshProfileLabel() {
+	for _, profile := range p.profiles {
+		if profile.ID == p.profileValue {
+			label := fmt.Sprintf(i18n.Source("text.log0156"), profile.Name, profile.Mode)
+			if profile.OfficialScoring {
+				label += i18n.Source("text.log0157")
+			}
+			p.profile.SetLabel(label)
+			return
+		}
+	}
+	p.profile.SetLabel(i18n.Source("text.log0154"))
+}
+
+func (p *ContestLogPanel) receivedExchangeLabel() string {
+	if p.session == nil {
+		return i18n.Source("text.log0111")
+	}
+	keys := map[string]string{"SERIAL": "text.log0111", "CQ_ZONE": "text.log0183", "ITU_ZONE": "text.log0184",
+		"SECTION": "text.log0185", "LOCATOR": "text.log0186", "NUMBER": "text.log0187", "TEXT": "text.log0188"}
+	if key := keys[p.session.ReceivedExchange]; key != "" {
+		return i18n.Source(key)
+	}
+	return i18n.Source("text.log0111")
+}
+
+func (p *ContestLogPanel) refreshExchangeField() {
+	if p.serialReceived == nil {
+		return
+	}
+	p.serialReceived.SetPlaceholder(p.receivedExchangeLabel())
+	if p.session != nil && (p.session.ContestMode == "CW" || p.session.ContestMode == "DIGI") {
+		p.rstSent.SetText("599")
+		p.rstReceived.SetText("599")
+	}
+}
+
+func (p *ContestLogPanel) cyclePower() {
+	current := strings.TrimPrefix(p.power.Label(), i18n.Source("text.log0014"))
+	next := map[string]string{"LOW": "HIGH", "HIGH": "QRP", "QRP": "LOW"}[current]
+	if next == "" {
+		next = "LOW"
+	}
+	p.power.SetLabel(i18n.Source("text.log0014") + next)
+}
+
+func cycleChoice(current string, choices []string) string {
+	for index, value := range choices {
+		if value == current {
+			return choices[(index+1)%len(choices)]
+		}
+	}
+	return choices[0]
+}
+
+func (p *ContestLogPanel) refreshConfigLabels() {
+	p.operatorCategory.SetLabel(fmt.Sprintf(i18n.Source("text.log0098"), p.operatorCategoryValue))
+	p.assisted.SetLabel(fmt.Sprintf(i18n.Source("text.log0099"), p.assistedValue))
+	p.categoryBand.SetLabel(fmt.Sprintf(i18n.Source("text.log0100"), p.categoryBandValue))
+	p.transmitter.SetLabel(fmt.Sprintf(i18n.Source("text.log0101"), p.transmitterValue))
+}
+
+func (p *ContestLogPanel) createSession() {
+	power := strings.TrimPrefix(p.power.Label(), i18n.Source("text.log0014"))
+	var selected contestlog.Profile
+	for _, profile := range p.profiles {
+		if profile.ID == p.profileValue {
+			selected = profile
+			break
+		}
+	}
+	session, err := contestlog.NewSessionFromProfile(selected, p.stationCall.Text(), p.operator.Text(), contestlog.Config{
+		Power: power, OperatorCategory: p.operatorCategoryValue, Assisted: p.assistedValue,
+		Band: p.categoryBandValue, Transmitter: p.transmitterValue}, time.Now())
+	if err != nil {
+		p.setStatus(err.Error(), colors.red)
+		return
+	}
+	if err := p.saveActive(session); err != nil {
+		p.setStatus(fmt.Sprintf(i18n.Source("text.log0015"), err.Error()), colors.red)
+		return
+	}
+	p.session = session
+	p.refreshExchangeField()
+	p.pendingQSO = ""
+	p.save.SetLabel(i18n.Source("text.log0009"))
+	p.setStatus(i18n.Source("text.log0016"), colors.green)
+	p.refreshVisibility(true)
+	p.workedCall.SetFocused(true)
+}
+
+func (p *ContestLogPanel) saveQSO() {
+	exchange := strings.TrimSpace(p.serialReceived.Text())
+	if exchange == "" {
+		p.setStatus(i18n.Source("text.log0017"), colors.orange)
+		return
+	}
+	serialNumber, _ := strconv.Atoi(exchange)
+	mode := p.screen.savedMode
+	if p.screen.mode != nil {
+		mode = p.screen.mode.SelectedText()
+	}
+	entry := contestlog.Entry{Time: time.Now(), FrequencyHz: p.screen.frequencyHz, Mode: mode,
+		WorkedCall: p.workedCall.Text(), RSTSent: p.rstSent.Text(), RSTReceived: p.rstReceived.Text(), SerialReceived: serialNumber, ExchangeReceived: exchange}
+	if contestlog.NormalizeCall(entry.WorkedCall) == "" {
+		p.setStatus(i18n.Source("text.log0077"), colors.red)
+		return
+	}
+	if contestlog.BandForFrequency(entry.FrequencyHz) == "" {
+		p.setStatus(i18n.Source("text.log0079"), colors.red)
+		return
+	}
+	signature := fmt.Sprintf("%s|%d|%s|%s|%s|%s", contestlog.NormalizeCall(entry.WorkedCall), entry.FrequencyHz, mode, entry.RSTSent, entry.RSTReceived, entry.ExchangeReceived)
+	warnings := p.session.Warnings(entry)
+	if len(warnings) > 0 && p.pendingQSO != signature {
+		labels := make([]string, 0, len(warnings))
+		for _, warning := range warnings {
+			switch warning {
+			case contestlog.WarningDuplicate:
+				labels = append(labels, i18n.Source("text.log0102"))
+			case contestlog.WarningMode:
+				labels = append(labels, i18n.Source("text.log0103"))
+			case contestlog.WarningTime:
+				labels = append(labels, i18n.Source("text.log0104"))
+			case contestlog.WarningBand:
+				labels = append(labels, i18n.Source("text.log0198"))
+			}
+		}
+		p.pendingQSO = signature
+		p.save.SetLabel(i18n.Source("text.log0105"))
+		p.setStatus(fmt.Sprintf(i18n.Source("text.log0106"), strings.Join(labels, " · ")), colors.orange)
+		return
+	}
+	qso, err := p.session.Add(entry)
+	if err != nil {
+		p.setStatus(err.Error(), colors.red)
+		return
+	}
+	if err := p.saveActive(p.session); err != nil {
+		p.session.QSOs = p.session.QSOs[:len(p.session.QSOs)-1]
+		p.session.NextSerial--
+		p.setStatus(fmt.Sprintf(i18n.Source("text.log0018"), err.Error()), colors.red)
+		return
+	}
+	message := fmt.Sprintf(i18n.Source("text.log0019"), qso.SerialSent, qso.WorkedCall, qso.Band)
+	color := colors.green
+	if qso.Duplicate {
+		message += i18n.Source("text.log0020")
+		color = colors.orange
+	}
+	p.setStatus(message, color)
+	p.workedCall.SetText("")
+	p.serialReceived.SetText("")
+	p.pendingQSO = ""
+	p.save.SetLabel(i18n.Source("text.log0009"))
+	p.workedCall.SetFocused(true)
+}
+
+func (p *ContestLogPanel) exportCabrillo() {
+	if p.session == nil {
+		return
+	}
+	if issues := p.session.ValidateSubmission(); len(issues) > 0 {
+		p.setStatus(fmt.Sprintf(i18n.Source("text.log0116"), len(issues)), colors.orange)
+		p.viewer.OpenParticipant()
+		return
+	}
+	path, err := p.exportSession(p.session)
+	if err != nil {
+		p.setStatus(fmt.Sprintf(i18n.Source("text.log0021"), err.Error()), colors.red)
+		return
+	}
+	p.setStatus(fmt.Sprintf(i18n.Source("text.log0022"), filepath.Base(path)), colors.green)
+}
+
+func (p *ContestLogPanel) exportSession(session *contestlog.Session) (string, error) {
+	if session == nil {
+		return "", fmt.Errorf("%s", i18n.Source("text.log0076"))
+	}
+	name := strings.ToLower(strings.NewReplacer("/", "-", "\\", "-").Replace(session.StationCall)) + ".log"
+	path := filepath.Join(p.exportDir, name)
+	if err := contestlog.ExportCabrillo(path, session); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func (p *ContestLogPanel) archivePaths() []string {
+	paths, _ := filepath.Glob(filepath.Join(p.archiveDir, "*.json"))
+	slices.Sort(paths)
+	slices.Reverse(paths)
+	return paths
+}
+
+func (p *ContestLogPanel) finishSession() error {
+	if p.session == nil {
+		return fmt.Errorf("%s", i18n.Source("text.log0076"))
+	}
+	if issues := p.session.ValidateSubmission(); len(issues) > 0 {
+		return fmt.Errorf(i18n.Source("text.log0117"), len(issues))
+	}
+	snapshot := *p.session
+	snapshot.QSOs = append([]contestlog.QSO(nil), p.session.QSOs...)
+	snapshot.Close(time.Now())
+	if _, err := p.exportSession(&snapshot); err != nil {
+		return err
+	}
+	stamp := snapshot.ClosedAt.UTC().Format("20060102-150405")
+	call := strings.NewReplacer("/", "-", "\\", "-").Replace(snapshot.StationCall)
+	archivePath := filepath.Join(p.archiveDir, stamp+"-"+call+".json")
+	if err := contestlog.Save(archivePath, &snapshot); err != nil {
+		return err
+	}
+	if err := os.Remove(p.path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	p.stationCall.SetText(snapshot.StationCall)
+	p.operator.SetText(snapshot.Operator)
+	p.session = nil
+	p.pendingQSO = ""
+	p.save.SetLabel(i18n.Source("text.log0009"))
+	p.refreshVisibility(true)
+	return nil
+}
+
+func (p *ContestLogPanel) reopenArchive(path string) error {
+	if p.session != nil {
+		return fmt.Errorf("%s", i18n.Source("text.log0087"))
+	}
+	session, err := contestlog.Load(path)
+	if err != nil {
+		return err
+	}
+	session.Reopen()
+	if err := p.saveActive(session); err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil {
+		_ = os.Remove(p.path)
+		return err
+	}
+	p.session = session
+	p.pendingQSO = ""
+	p.refreshExchangeField()
+	p.save.SetLabel(i18n.Source("text.log0009"))
+	p.refreshVisibility(true)
+	return nil
+}
+
+func (p *ContestLogPanel) saveActive(session *contestlog.Session) error {
+	if data, err := os.ReadFile(p.path); err == nil {
+		if err := os.MkdirAll(p.backupDir, 0o755); err == nil {
+			name := "contest-" + time.Now().UTC().Format("20060102-150405.000000000") + ".json"
+			_ = os.WriteFile(filepath.Join(p.backupDir, name), data, 0o644)
+			backups, _ := filepath.Glob(filepath.Join(p.backupDir, "contest-*.json"))
+			slices.Sort(backups)
+			for len(backups) > 20 {
+				_ = os.Remove(backups[0])
+				backups = backups[1:]
+			}
+		}
+	}
+	return contestlog.Save(p.path, session)
+}
+
+func (p *ContestLogPanel) setStatus(message string, color rl.Color) {
+	p.status, p.statusColor = message, color
+}
+func (p *ContestLogPanel) Enter() {
+	if p.session != nil {
+		p.workedCall.SetFocused(true)
+	}
+}
+func (p *ContestLogPanel) Leave() {
+	for _, f := range []*simpleui.TextField{p.stationCall, p.operator, p.workedCall, p.rstSent, p.rstReceived, p.serialReceived} {
+		f.SetFocused(false)
+	}
+}
+func (p *ContestLogPanel) Close() {
+	p.Leave()
+	if p.viewer != nil {
+		p.viewer.Close()
+	}
+	if p.templateEditor != nil {
+		p.templateEditor.Close()
+	}
+}
+func (p *ContestLogPanel) SetVisible(visible bool) { p.refreshVisibility(visible) }
+func (p *ContestLogPanel) Tick()                   {}
+
+func (p *ContestLogPanel) refreshVisibility(panelVisible bool) {
+	creating := p.session == nil
+	for _, control := range []simpleui.Element{p.stationCall, p.operator, p.power, p.create, p.profile, p.editTemplates, p.operatorCategory, p.assisted, p.categoryBand, p.transmitter} {
+		control.SetVisible(panelVisible && creating)
+	}
+	if p.history != nil {
+		p.history.SetVisible(panelVisible)
+		p.history.SetEnabled(p.session != nil || len(p.archivePaths()) > 0)
+	}
+	for _, control := range []simpleui.Element{p.workedCall, p.rstSent, p.rstReceived, p.serialReceived, p.save, p.viewLog, p.editLast, p.finish, p.export, p.openFolder} {
+		control.SetVisible(panelVisible && !creating)
+	}
+}
+
+func (p *ContestLogPanel) DrawPanel() {
+	drawPanel(toolContentX, toolY, toolContentRight-toolContentX, toolH)
+	simpleui.DrawTextStyled(i18n.Source("text.log0023"), 378, toolY+12, 16, simpleui.FontSemiBold, colors.cyan)
+	if p.session == nil {
+		simpleui.DrawText(i18n.Source("text.log0024"), 382, toolY+149, 11, colors.muted)
+		if p.status != "" {
+			simpleui.DrawText(p.status, 382, toolY+169, 11, p.statusColor)
+		}
+		return
+	}
+	band := contestlog.BandForFrequency(p.screen.frequencyHz)
+	if band == "" {
+		band = i18n.Source("text.log0025")
+	}
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.log0026"), p.session.StationCall, p.session.Contest, len(p.session.QSOs), p.session.NextSerial), 382, toolY+34, 12, colors.text)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.log0027"), float64(p.screen.frequencyHz)/1e6, band, time.Now().UTC().Format("15:04:05")), 1115, toolY+34, 11, colors.cyan)
+	serialBadge := rl.Rectangle{X: 1160, Y: toolY + 51, Width: 100, Height: 40}
+	badgeFill := blendRGBA(colors.panelAlt, colors.orange, .35)
+	rl.DrawRectangleRounded(serialBadge, .16, 8, badgeFill)
+	rl.DrawRectangleRoundedLinesEx(serialBadge, .16, 8, 1.5, colors.orange)
+	serialText := fmt.Sprintf(i18n.Source("text.log0028"), p.session.NextSerial)
+	serialSize := simpleui.MeasureTextStyled(serialText, 13, simpleui.FontSemiBold)
+	simpleui.DrawTextStyled(serialText, serialBadge.X+(serialBadge.Width-serialSize.X)/2, serialBadge.Y+(serialBadge.Height-serialSize.Y)/2, 13, simpleui.FontSemiBold, colors.orange)
+	fieldLabels := []struct {
+		text string
+		x    float32
+	}{{i18n.Source("text.log0109"), 632}, {i18n.Source("text.log0110"), 744}, {p.receivedExchangeLabel(), 856}}
+	for _, label := range fieldLabels {
+		simpleui.DrawTextStyled(label.text, label.x, toolY+64, 10, simpleui.FontSemiBold, colors.muted)
+	}
+	if p.status != "" {
+		simpleui.DrawTextStyled(p.status, 970, toolY+108, 12, simpleui.FontSemiBold, p.statusColor)
+	}
+	p.drawRows()
+}
+
+func (p *ContestLogPanel) drawRows() {
+	rows := make([]contestlog.QSO, 0, contestLogPanelRows)
+	for index := len(p.session.QSOs) - 1; index >= 0 && len(rows) < contestLogPanelRows; index-- {
+		q := p.session.QSOs[index]
+		rows = append(rows, q)
+	}
+	y := toolY + 138
+	tableTop := y - 7
+	tableBottom := toolY + toolH - 7
+	rl.DrawRectangleRounded(rl.Rectangle{X: 376, Y: tableTop, Width: 1188, Height: tableBottom - tableTop}, .025, 5, colors.background)
+	headers := []struct {
+		text string
+		x    float32
+	}{{i18n.Source("text.log0029"), 382}, {i18n.Source("text.log0030"), 443}, {i18n.Source("text.log0005"), 510}, {i18n.Source("text.log0031"), 685}, {i18n.Source("text.log0032"), 835}, {i18n.Source("text.log0033"), 1422}}
+	for _, header := range headers {
+		simpleui.DrawTextStyled(header.text, header.x, y, 11, simpleui.FontSemiBold, colors.muted)
+	}
+	score := p.session.Score()
+	simpleui.DrawTextStyled(fmt.Sprintf(i18n.Source("text.log0115"), score.Points, score.Multipliers, score.Total), 1010, y, 11, simpleui.FontSemiBold, colors.cyan)
+	for i, q := range rows {
+		rowY := y + 24 + float32(i)*25
+		if i%2 == 0 {
+			rl.DrawRectangle(376, int32(rowY-6), 1188, 23, colors.panelAlt)
+		}
+		state, stateColor := i18n.Source("text.log0034"), colors.green
+		if q.Duplicate {
+			state, stateColor = i18n.Source("text.log0035"), colors.orange
+		} else if len(q.Warnings) > 0 {
+			state, stateColor = i18n.Source("text.log0108"), colors.orange
+		}
+		values := []struct {
+			text string
+			x    float32
+		}{
+			{q.Time.UTC().Format("15:04"), 382}, {q.Band, 443}, {q.WorkedCall, 510},
+			{fmt.Sprintf("%s/%s", q.RSTSent, q.SentExchangeText()), 685},
+			{fmt.Sprintf("%s/%s", q.RSTReceived, q.ReceivedExchangeText()), 835},
+		}
+		for _, value := range values {
+			simpleui.DrawTextStyled(value.text, value.x, rowY, 12, simpleui.FontSemiBold, colors.text)
+		}
+		simpleui.DrawTextStyled(state, 1422, rowY, 11, simpleui.FontSemiBold, stateColor)
+	}
+	if len(rows) == 0 {
+		simpleui.DrawText(i18n.Source("text.log0036"), 382, y+35, 11, colors.muted)
+	}
+}

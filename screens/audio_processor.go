@@ -80,6 +80,9 @@ type AudioProcessor struct {
 	eqGains                                     [5]float32
 	eq                                          [5]audioBiquad
 	notch                                       audioNotchFilter
+	noiseReducer                                audioNoiseReducer
+	noiseReductionEnabled                       bool
+	noiseReductionStrength                      float32
 	profile                                     string
 	previousInput, highpass, lowpass1, lowpass2 float32
 	limiterGain                                 float32
@@ -90,7 +93,7 @@ type AudioProcessor struct {
 }
 
 func NewAudioProcessor() *AudioProcessor {
-	p := &AudioProcessor{lowCut: 100, highCut: 4000, eqEnabled: true, profile: i18n.Source("text.db2cb3fe28e2"), limiterGain: 1}
+	p := &AudioProcessor{lowCut: 100, highCut: 4000, eqEnabled: true, profile: i18n.Source("text.db2cb3fe28e2"), limiterGain: 1, noiseReducer: newAudioNoiseReducer(), noiseReductionStrength: 50}
 	for index := range p.spectrumWindow {
 		p.spectrumWindow[index] = .5 - .5*math.Cos(2*math.Pi*float64(index)/float64(len(p.spectrumWindow)-1))
 	}
@@ -113,6 +116,25 @@ func (p *AudioProcessor) ConfigureNotch(enabled bool, frequencyHz, widthHz int, 
 	p.mu.Unlock()
 }
 
+func (p *AudioProcessor) ConfigureNoiseReduction(enabled bool, strength float32) {
+	p.mu.Lock()
+	p.noiseReductionEnabled = enabled
+	p.noiseReductionStrength = min(max(strength, 0), 100)
+	p.mu.Unlock()
+}
+
+func (p *AudioProcessor) NoiseReductionActivity() float32 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.noiseReducer.activity
+}
+
+func (p *AudioProcessor) ResetNoiseReduction() {
+	p.mu.Lock()
+	p.noiseReducer = newAudioNoiseReducer()
+	p.mu.Unlock()
+}
+
 func (p *AudioProcessor) configureEQ() {
 	for i := range p.eq {
 		p.eq[i].configure(audioEQFrequencies[i], float64(p.eqGains[i]))
@@ -120,14 +142,22 @@ func (p *AudioProcessor) configureEQ() {
 }
 
 func (p *AudioProcessor) Process(samples []float32) {
-	p.process(samples, false)
+	p.process(samples, false, true)
 }
 
 func (p *AudioProcessor) ProcessWideFM(samples []float32) {
-	p.process(samples, true)
+	p.process(samples, true, false)
 }
 
-func (p *AudioProcessor) process(samples []float32, wideFM bool) {
+func (p *AudioProcessor) ProcessDigital(samples []float32) {
+	p.process(samples, false, false)
+}
+
+func (p *AudioProcessor) ProcessAnalogBypass(samples []float32) {
+	p.process(samples, false, false)
+}
+
+func (p *AudioProcessor) process(samples []float32, wideFM, allowNoiseReduction bool) {
 	p.mu.Lock()
 	lowCut, highCut := p.lowCut, p.highCut
 	if wideFM {
@@ -143,13 +173,19 @@ func (p *AudioProcessor) process(samples []float32, wideFM bool) {
 		p.lowpass1 += lowpassAlpha * (p.highpass - p.lowpass1)
 		p.lowpass2 += lowpassAlpha * (p.lowpass1 - p.lowpass2)
 		value := p.lowpass2
+		p.preNotchRing[p.ringWrite] = value
+		value = p.notch.process(value)
+		samples[i] = value
+	}
+	if allowNoiseReduction {
+		p.noiseReducer.process(samples, p.noiseReductionEnabled, p.noiseReductionStrength)
+	}
+	for i, value := range samples {
 		if p.eqEnabled {
 			for band := range p.eq {
 				value = p.eq[band].process(value)
 			}
 		}
-		p.preNotchRing[p.ringWrite] = value
-		value = p.notch.process(value)
 		switch p.profile {
 		case i18n.Source("text.692233b9c713"):
 			value *= .82

@@ -286,12 +286,29 @@ func (screen *MainScreen) selectModeFromRig(mode string) {
 }
 
 func (screen *MainScreen) applyModeSelection(mode string) {
+	previousMode := screen.savedMode
 	screen.savedMode = mode
 	if screen.filterSelector != nil {
-		screen.selectFilter(screen.filterSelector.Current(mode))
+		preset := screen.filterSelector.Current(mode)
+		if mode == "DAB+" {
+			if screen.dabPanel != nil && previousMode != "" && previousMode != "DAB+" {
+				screen.dabPanel.analogMode = previousMode
+				screen.dabPanel.analogBW = screen.demodBandwidthHz
+			}
+			screen.demodBandwidthHz = preset.BandwidthHz
+			if screen.filter != nil {
+				screen.filter.SetLabel(filterButtonLabel(preset))
+			}
+		} else {
+			screen.selectFilter(preset)
+		}
 	}
 	if mode == i18n.Source("text.2604864ce4d3") && screen.activeTool != i18n.Source("text.7a1580c49e45") {
 		screen.selectTool(i18n.Source("text.93239b223632"))
+	} else if mode == "DAB+" && screen.activeTool != dabToolID {
+		screen.selectTool(dabToolID)
+	} else if mode != "DAB+" && screen.activeTool == dabToolID {
+		screen.selectTool(i18n.Source("text.a42c60257b01"))
 	} else if mode != i18n.Source("text.2604864ce4d3") && screen.activeTool == i18n.Source("text.93239b223632") {
 		screen.selectTool(i18n.Source("text.a42c60257b01"))
 	}

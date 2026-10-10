@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"go-zero/simpleui"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 func TestValidTheme(t *testing.T) {
@@ -14,6 +16,46 @@ func TestValidTheme(t *testing.T) {
 	}
 	if validTheme("PURPLE") || validTheme("") {
 		t.Fatal("unexpected theme accepted")
+	}
+}
+
+func TestSemanticActionColorsFollowEveryPalette(t *testing.T) {
+	palettes := []uiPalette{darkPalette, lightPalette, bluePalette}
+	for _, palette := range palettes {
+		actions := semanticActionColors(palette)
+		for name, pair := range map[string][2]rl.Color{
+			"start":  {actions.start, palette.text},
+			"stop":   {actions.stop, palette.text},
+			"clear":  {actions.clear, palette.text},
+			"export": {actions.export, palette.text},
+		} {
+			if got := simpleui.EnsureTextContrast(pair[1], pair[0]); got.A == 0 {
+				t.Fatalf("%s action has no readable text color", name)
+			}
+		}
+		if actions.start == actions.stop || actions.stop == actions.clear {
+			t.Fatal("semantic actions must remain visually distinct")
+		}
+	}
+	lightActions := semanticActionColors(lightPalette)
+	if got := remapThemeColor(actionStartFill, lightPalette); got != lightActions.start {
+		t.Fatalf("start action was not remapped for light theme: got %#v want %#v", got, lightActions.start)
+	}
+	if got := remapThemeColor(actionClearFill, bluePalette); got != semanticActionColors(bluePalette).clear {
+		t.Fatalf("clear action was not remapped for blue theme: got %#v", got)
+	}
+}
+
+func TestTypographyScaleIsOrderedAndReadable(t *testing.T) {
+	if !(uiCaptionFontSize < uiBodyFontSize &&
+		uiBodyFontSize < uiMinimumFontSize &&
+		uiMinimumFontSize < uiControlFontSize &&
+		uiControlFontSize < uiSectionFontSize &&
+		uiSectionFontSize < uiTitleFontSize) {
+		t.Fatal("typography tokens must form a strictly increasing scale")
+	}
+	if uiCaptionFontSize < 11 {
+		t.Fatal("caption text is below the readable baseline")
 	}
 }
 

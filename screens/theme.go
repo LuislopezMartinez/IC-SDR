@@ -127,6 +127,7 @@ func simpleUITheme(p uiPalette, light bool) simpleui.Theme {
 }
 
 func remapThemeColor(color rl.Color, target uiPalette) rl.Color {
+	targetActions := semanticActionColors(target)
 	pairs := [][2]rl.Color{
 		{darkPalette.background, target.background}, {darkPalette.panel, target.panel},
 		{darkPalette.panelAlt, target.panelAlt}, {darkPalette.border, target.border},
@@ -134,6 +135,8 @@ func remapThemeColor(color rl.Color, target uiPalette) rl.Color {
 		{darkPalette.blue, target.blue}, {darkPalette.green, target.green},
 		{darkPalette.orange, target.orange}, {darkPalette.red, target.red},
 		{darkPalette.text, target.text}, {darkPalette.muted, target.muted},
+		{actionStartFill, targetActions.start}, {actionStopFill, targetActions.stop},
+		{actionClearFill, targetActions.clear}, {actionExportFill, targetActions.export},
 	}
 	for _, pair := range pairs {
 		if sameRGB(color, pair[0]) {

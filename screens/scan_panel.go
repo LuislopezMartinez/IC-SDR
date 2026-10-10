@@ -43,7 +43,7 @@ func NewScanPanel(screen *MainScreen) *ScanPanel {
 	}
 	return &ScanPanel{screen: screen, centerToMemory: screen.scanCenterToMemory, resume: screen.scanResume, policy: screen.scanPolicy, dwellMs: screen.scanDwellMs,
 		minimumHz: minimum, maximumHz: maximum,
-		activePeakHz: -1, currentMemory: -1, status: i18n.Source("text.c2e3ac47f4a3"), overlayVisible: true}
+		activePeakHz: -1, currentMemory: -1, status: i18n.Source("text.c2e3ac47f4a3"), overlayVisible: screen.scanOverlayVisible}
 }
 
 func (p *ScanPanel) Enter() {

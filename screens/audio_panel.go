@@ -35,6 +35,11 @@ type AudioPanel struct {
 	notchEnabled                         bool
 	notchFrequencyHz, notchWidthHz       int
 	notchDepthDB                         float32
+	nrSwitch                             *simpleui.Switch
+	nrSlider                             *simpleui.Slider
+	nrRecommended                        *simpleui.Button
+	nrEnabled                            bool
+	nrStrength                           float32
 	pbtDrag, audioDrag, notchDrag        int
 	dragStartX                           float32
 	dragStartLow, dragStartHigh          int
@@ -48,6 +53,7 @@ func NewAudioPanel(screen *MainScreen) *AudioPanel {
 		profile: i18n.Source("text.db2cb3fe28e2"), deemphasisUs: 50, pbtLow: 100, pbtHigh: 3250,
 		notchEnabled: screen.audioNotchEnabled, notchFrequencyHz: screen.audioNotchFrequencyHz,
 		notchWidthHz: screen.audioNotchWidthHz, notchDepthDB: screen.audioNotchDepthDB,
+		nrEnabled: screen.audioNREnabled, nrStrength: screen.audioNRStrength,
 	}
 	for i := range p.spectrum {
 		p.spectrum[i] = -80
@@ -111,17 +117,17 @@ func NewAudioPanel(screen *MainScreen) *AudioPanel {
 		}
 		p.apply()
 	})
-	reset := simpleui.NewButton("audioReset", 1480, 650, 92, 28, i18n.Source("text.7ef2fad58d1f"), 10)
+	reset := simpleui.NewButton("audioReset", 1284, 650, 78, 28, i18n.Source("text.7ef2fad58d1f"), 9)
 	reset.OnClick(func() { p.lowCut, p.highCut = 100, 4000; p.apply() })
-	p.notchSwitch = simpleui.NewSwitch("audioNotch", 960, 838, 118, 32, "NOTCH", p.notchEnabled, 11)
+	p.notchSwitch = simpleui.NewSwitch("audioNotch", 960, 838, 90, 32, "NOTCH", p.notchEnabled, 10)
 	p.notchSwitch.OnChange(func(active bool) { p.notchEnabled = active; p.applyNotch(true) })
-	p.notchAuto = simpleui.NewButton("audioNotchAuto", 1088, 838, 74, 32, "AUTO", 10)
+	p.notchAuto = simpleui.NewButton("audioNotchAuto", 1058, 838, 58, 32, "AUTO", 9)
 	p.notchAuto.OnClick(p.autoNotch)
-	p.notchWidthDown = simpleui.NewButton("audioNotchWidthDown", 1172, 838, 38, 32, "−", 15)
+	p.notchWidthDown = simpleui.NewButton("audioNotchWidthDown", 1124, 838, 36, 32, "−", 15)
 	p.notchWidthDown.OnClick(func() { p.setNotchWidth(p.notchWidthHz - 20) })
-	p.notchWidthUp = simpleui.NewButton("audioNotchWidthUp", 1218, 838, 38, 32, "+", 15)
+	p.notchWidthUp = simpleui.NewButton("audioNotchWidthUp", 1168, 838, 36, 32, "+", 15)
 	p.notchWidthUp.OnClick(func() { p.setNotchWidth(p.notchWidthHz + 20) })
-	p.notchDepth = simpleui.NewButton("audioNotchDepth", 1266, 838, 132, 32, "", 10)
+	p.notchDepth = simpleui.NewButton("audioNotchDepth", 1212, 838, 78, 32, "", 9)
 	p.notchDepth.OnClick(func() {
 		p.notchDepthDB -= 5
 		if p.notchDepthDB < -60 {
@@ -129,12 +135,30 @@ func NewAudioPanel(screen *MainScreen) *AudioPanel {
 		}
 		p.applyNotch(true)
 	})
-	p.notchReset = simpleui.NewButton("audioNotchReset", 1408, 838, 164, 32, "RESET", 10)
+	p.notchReset = simpleui.NewButton("audioNotchReset", 1298, 838, 66, 32, "RESET", 9)
 	p.notchReset.OnClick(func() {
 		p.notchFrequencyHz, p.notchWidthHz, p.notchDepthDB = 1000, 120, -35
 		p.applyNotch(true)
 	})
-	p.controls = []simpleui.Element{p.pbtLock, p.pbtClear, p.pbtBypass, p.eqSwitch, flat, p.profileButton, p.deemphasisButton, reset, p.notchSwitch, p.notchAuto, p.notchWidthDown, p.notchWidthUp, p.notchDepth, p.notchReset}
+	p.nrSwitch = simpleui.NewSwitch("audioNR", 1392, 838, 78, 32, "NR", p.nrEnabled, 11)
+	p.nrSwitch.OnChange(func(active bool) {
+		p.nrEnabled = active
+		p.applyNoiseReduction(true)
+	})
+	p.nrSlider = simpleui.NewSlider("audioNRStrength", 1394, 753, 176, 22, 0, 100, p.nrStrength)
+	p.nrSlider.SetStep(5)
+	p.nrSlider.OnChange(func(value float32) {
+		p.nrStrength = value
+		p.applyNoiseReduction(false)
+	})
+	p.nrSlider.OnRelease(func(float32) { p.screen.markSettingsDirty() })
+	p.nrRecommended = simpleui.NewButton("audioNRRecommended", 1478, 838, 94, 32, i18n.Source("text.audioNRRecommended"), 8)
+	p.nrRecommended.OnClick(func() {
+		p.nrStrength = 50
+		p.nrSlider.SetValue(50)
+		p.applyNoiseReduction(true)
+	})
+	p.controls = []simpleui.Element{p.pbtLock, p.pbtClear, p.pbtBypass, p.eqSwitch, flat, p.profileButton, p.deemphasisButton, reset, p.notchSwitch, p.notchAuto, p.notchWidthDown, p.notchWidthUp, p.notchDepth, p.notchReset, p.nrSwitch, p.nrSlider, p.nrRecommended}
 	for _, slider := range p.eqSliders {
 		p.controls = append(p.controls, slider)
 	}
@@ -142,7 +166,20 @@ func NewAudioPanel(screen *MainScreen) *AudioPanel {
 	p.apply()
 	p.applyPBT()
 	p.applyNotch(false)
+	p.applyNoiseReduction(false)
 	return p
+}
+
+func (p *AudioPanel) applyNoiseReduction(persist bool) {
+	p.nrStrength = min(max(p.nrStrength, 0), 100)
+	if p.screen.audioPlayer != nil {
+		p.screen.audioPlayer.ConfigureNoiseReduction(p.nrEnabled, p.nrStrength)
+	}
+	p.screen.audioNREnabled = p.nrEnabled
+	p.screen.audioNRStrength = p.nrStrength
+	if persist {
+		p.screen.markSettingsDirty()
+	}
 }
 
 func (p *AudioPanel) applyPBT() {
@@ -240,17 +277,23 @@ func (p *AudioPanel) cycleProfile() {
 func (p *AudioPanel) DrawPanel() {
 	mode := p.screen.mode.SelectedText()
 	ssb := mode == i18n.Source("text.61f0acff1735") || mode == i18n.Source("text.6323db4948ad")
+	nrCompatible := noiseReductionMode(mode)
 	p.pbtLock.SetEnabled(ssb && !p.pbtBypassed)
 	p.pbtClear.SetEnabled(ssb)
 	p.pbtBypass.SetEnabled(ssb)
+	p.nrSwitch.SetEnabled(nrCompatible)
+	p.nrSlider.SetEnabled(nrCompatible)
+	p.nrRecommended.SetEnabled(nrCompatible)
 	drawPanel(370, 642, 300, 238)
 	drawPanel(680, 642, 262, 238)
-	drawPanel(952, 642, 630, 238)
+	drawPanel(952, 642, 420, 238)
+	drawPanel(1382, 642, 200, 238)
 	drawSmallText(i18n.Source("text.cdc6bff8f509"), 380, 650, colors.text)
 	drawSmallText(fmt.Sprintf(i18n.Source("text.6d2a1f73e4b4"), p.pbtLow), 485, 650, colors.cyan)
 	drawSmallText(fmt.Sprintf(i18n.Source("text.08ff963b2962"), p.pbtHigh), 570, 650, colors.orange)
 	drawSmallText(i18n.Source("text.ab5f31a11801"), 840, 658, colors.text)
 	drawSmallText(i18n.Source("text.08701518bfdd"), 962, 650, colors.text)
+	drawSmallText(i18n.Source("text.audioNRTitle"), 1392, 650, colors.text)
 	p.drawPBT(ssb, mode)
 	for i, hz := range audioEQFrequencies {
 		x := float32(713 + i*45)
@@ -264,13 +307,45 @@ func (p *AudioPanel) DrawPanel() {
 	drawSmallText("+12", 686, 708, colors.muted)
 	drawSmallText("0", 690, 754, colors.muted)
 	drawSmallText("-12", 686, 801, colors.muted)
-	p.drawSpectrum(962, 684, 610, 140, 12000)
+	p.drawSpectrum(962, 684, 400, 140, 12000)
 	drawSmallText(fmt.Sprintf(i18n.Source("text.148eb8b51395"), formatAudioHz(p.lowCut)), 962, 666, colors.cyan)
 	drawSmallText(fmt.Sprintf(i18n.Source("text.d96b30c0b24d"), formatAudioHz(p.highCut)), 1090, 666, colors.orange)
-	drawSmallText(fmt.Sprintf("N %s · W %d · %.0f dB", formatAudioHz(p.notchFrequencyHz), p.notchWidthHz, p.notchDepthDB), 1225, 666, map[bool]rl.Color{true: colors.red, false: colors.muted}[p.notchEnabled])
+	p.drawNoiseReduction(nrCompatible)
 	drawSmallText(fmt.Sprintf(i18n.Source("text.68c6f1d43d10"), p.screen.stats.AudioBuffered*1000/audioSampleRate, float32(p.screen.stats.AudioBuffered)*100/48000), 962, 874, colors.muted)
-	drawSmallText(fmt.Sprintf(i18n.Source("text.0429bae138cb"), p.screen.stats.AudioOverruns), 1175, 874, colors.muted)
-	drawSmallText(fmt.Sprintf(i18n.Source("text.1197ea4c2f46"), formatAudioHz(p.highCut-p.lowCut)), 1450, 874, colors.text)
+	drawSmallText(fmt.Sprintf(i18n.Source("text.0429bae138cb"), p.screen.stats.AudioOverruns), 1125, 874, colors.muted)
+	drawSmallText(fmt.Sprintf("N %s · W %d · %.0f dB", formatAudioHz(p.notchFrequencyHz), p.notchWidthHz, p.notchDepthDB), 1210, 874, map[bool]rl.Color{true: colors.red, false: colors.muted}[p.notchEnabled])
+}
+
+func (p *AudioPanel) drawNoiseReduction(compatible bool) {
+	drawSmallText(i18n.Source("text.audioNRIntensity"), 1394, 716, colors.muted)
+	value := fmt.Sprintf("%.0f %%", p.nrStrength)
+	size := simpleui.MeasureTextStyled(value, 18, simpleui.FontSemiBold)
+	simpleui.DrawTextStyled(value, 1570-size.X, 684, 18, simpleui.FontSemiBold, colors.cyan)
+	drawSmallText(i18n.Source("text.audioNRSoft"), 1394, 780, colors.muted)
+	strong := i18n.Source("text.audioNRStrong")
+	strongSize := simpleui.MeasureTextStyled(strong, 9, simpleui.FontRegular)
+	simpleui.DrawTextStyled(strong, 1570-strongSize.X, 780, 9, simpleui.FontRegular, colors.muted)
+	activity := float32(0)
+	if p.screen.audioPlayer != nil && p.nrEnabled {
+		activity = p.screen.audioPlayer.NoiseReductionActivity()
+	}
+	for index := 0; index < 9; index++ {
+		x := float32(1394 + index*19)
+		active := float32(index+1)/9 <= max(activity*2.2, .12)
+		color := colors.grid
+		if active {
+			color = colors.cyan
+		}
+		rl.DrawRectangle(int32(x), 808, 11, int32(6+index), color)
+	}
+	status := i18n.Source("text.audioNROff")
+	statusColor := colors.muted
+	if !compatible {
+		status = i18n.Source("text.audioNRUnavailable")
+	} else if p.nrEnabled {
+		status, statusColor = i18n.Source("text.audioNRAdapting"), colors.cyan
+	}
+	drawSmallText(status, 1394, 824, statusColor)
 }
 
 func (p *AudioPanel) drawPBT(enabled bool, mode string) {
@@ -330,7 +405,7 @@ func (p *AudioPanel) handleGraphInput() {
 		p.pbtDrag, p.audioDrag, p.notchDrag = 0, 0, 0
 		return
 	}
-	mouse := simpleui.MousePosition()
+	mouse := p.screen.toolWorkspacePointer()
 	pressed := rl.IsMouseButtonPressed(rl.MouseButtonLeft)
 	down := rl.IsMouseButtonDown(rl.MouseButtonLeft)
 	released := rl.IsMouseButtonReleased(rl.MouseButtonLeft)
@@ -377,25 +452,19 @@ func (p *AudioPanel) handleGraphInput() {
 		}
 		p.applyPBT()
 	}
-	if pressed && mouse.X >= 962 && mouse.X <= 1572 && mouse.Y >= 684 && mouse.Y <= 824 {
-		lowX := 962 + 610*float32(p.lowCut)/12000
-		highX := 962 + 610*float32(p.highCut)/12000
-		notchX := 962 + 610*float32(p.notchFrequencyHz)/12000
-		notchHalf := 610 * float32(p.notchWidthHz) / 12000 / 2
+	if pressed && mouse.X >= 962 && mouse.X <= 1362 && mouse.Y >= 684 && mouse.Y <= 824 {
+		lowX := 962 + 400*float32(p.lowCut)/12000
+		highX := 962 + 400*float32(p.highCut)/12000
 		if math.Abs(float64(mouse.X-lowX)) <= 16 {
 			p.audioDrag = 1
 		} else if math.Abs(float64(mouse.X-highX)) <= 16 {
 			p.audioDrag = 2
-		} else if p.notchEnabled && math.Abs(float64(mouse.X-(notchX-notchHalf))) <= 12 {
-			p.notchDrag = 1
-		} else if p.notchEnabled && math.Abs(float64(mouse.X-(notchX+notchHalf))) <= 12 {
-			p.notchDrag = 2
-		} else if p.notchEnabled && math.Abs(float64(mouse.X-notchX)) <= max(float64(notchHalf), 14) {
-			p.notchDrag = 3
+		} else if p.notchEnabled {
+			p.notchDrag = notchInteractionZone(mouse.Y, 684, 140)
 		}
 	}
 	if p.audioDrag != 0 && down {
-		value := int(math.Round(float64((mouse.X-962)*12000/610/10))) * 10
+		value := int(math.Round(float64((mouse.X-962)*12000/400/10))) * 10
 		value = min(max(value, 20), 12000)
 		if p.audioDrag == 1 {
 			p.lowCut = min(value, p.highCut-200)
@@ -405,16 +474,16 @@ func (p *AudioPanel) handleGraphInput() {
 		p.apply()
 	}
 	if p.notchDrag != 0 && down {
-		value := int(math.Round(float64((mouse.X-962)*12000/610/10))) * 10
+		value := int(math.Round(float64((mouse.X-962)*12000/400/10))) * 10
 		value = min(max(value, 80), 12_000)
-		if p.notchDrag == 3 {
+		if p.notchDrag == 1 {
 			p.notchFrequencyHz = value
 		} else {
 			p.notchWidthHz = min(max(2*int(math.Abs(float64(value-p.notchFrequencyHz))), 20), 2_000)
 		}
 		p.applyNotch(true)
 	}
-	if mouse.X >= 962 && mouse.X <= 1572 && mouse.Y >= 684 && mouse.Y <= 824 {
+	if mouse.X >= 962 && mouse.X <= 1362 && mouse.Y >= 684 && mouse.Y <= 824 {
 		if wheel := rl.GetMouseWheelMove(); wheel != 0 && p.notchEnabled {
 			p.setNotchWidth(p.notchWidthHz + int(wheel)*20)
 		}
@@ -427,6 +496,18 @@ func (p *AudioPanel) handleGraphInput() {
 func (p *AudioPanel) drawSpectrum(x, y, w, h float32, maximumHz int) {
 	drawPanel(x, y, w, h)
 	drawGrid(x, y, w, h, 4, 4)
+	hoverZone := 0
+	mouse := p.screen.toolWorkspacePointer()
+	if p.notchEnabled && mouse.X >= x && mouse.X <= x+w && mouse.Y >= y && mouse.Y <= y+h {
+		hoverZone = notchInteractionZone(mouse.Y, y, h)
+	}
+	middleY := y + h/2
+	if hoverZone == 1 || p.notchDrag == 1 {
+		rl.DrawRectangleRec(rl.Rectangle{X: x + 1, Y: y + 1, Width: w - 2, Height: h/2 - 1}, rl.Color{R: 30, G: 190, B: 235, A: 28})
+	} else if hoverZone == 2 || p.notchDrag == 2 {
+		rl.DrawRectangleRec(rl.Rectangle{X: x + 1, Y: middleY, Width: w - 2, Height: h/2 - 1}, rl.Color{R: 245, G: 170, B: 30, A: 30})
+	}
+	rl.DrawLineEx(rl.Vector2{X: x + 1, Y: middleY}, rl.Vector2{X: x + w - 1, Y: middleY}, 1, colors.border)
 	lowX := x + w*float32(p.lowCut)/float32(maximumHz)
 	highX := x + w*float32(p.highCut)/float32(maximumHz)
 	rl.DrawRectangleRec(rl.Rectangle{X: lowX, Y: y, Width: max(highX-lowX, 0), Height: h}, rl.Color{R: 20, G: 125, B: 190, A: 48})
@@ -451,11 +532,53 @@ func (p *AudioPanel) drawSpectrum(x, y, w, h float32, maximumHz int) {
 	drawAudioDragHandle(lowX, y+8, colors.cyan)
 	drawAudioDragHandle(highX, y+8, colors.orange)
 	if p.notchEnabled {
-		rl.DrawLineEx(rl.Vector2{X: notchX, Y: y}, rl.Vector2{X: notchX, Y: y + h}, 2, colors.red)
-		drawAudioDragHandle(notchX-notchHalf, y+h-25, colors.red)
-		drawAudioDragHandle(notchX+notchHalf, y+h-25, colors.red)
-		drawAudioDragHandle(notchX, y+8, colors.red)
+		rl.DrawLineEx(rl.Vector2{X: notchX, Y: y}, rl.Vector2{X: notchX, Y: y + h}, 2, colors.cyan)
+		rl.DrawLineEx(rl.Vector2{X: notchX - notchHalf, Y: middleY}, rl.Vector2{X: notchX - notchHalf, Y: y + h}, 2, colors.orange)
+		rl.DrawLineEx(rl.Vector2{X: notchX + notchHalf, Y: middleY}, rl.Vector2{X: notchX + notchHalf, Y: y + h}, 2, colors.orange)
+		drawAudioDragHandle(notchX-notchHalf, y+h-25, colors.orange)
+		drawAudioDragHandle(notchX+notchHalf, y+h-25, colors.orange)
+		drawAudioDragHandle(notchX, y+8, colors.cyan)
+		if hoverZone == 1 || p.notchDrag == 1 {
+			drawNotchFeedbackBadge(i18n.Source("text.audioNotchTune"), rl.Rectangle{X: x + 8, Y: y + 6, Width: 170, Height: 25}, colors.cyan)
+			drawNotchFeedbackBadge(fmt.Sprintf(i18n.Source("text.audioNotchCenter"), formatAudioHz(p.notchFrequencyHz)), rl.Rectangle{X: x + w - 170, Y: y + 6, Width: 162, Height: 25}, colors.cyan)
+			drawHorizontalAdjustArrow(notchX, y+43, colors.cyan)
+		} else if hoverZone == 2 || p.notchDrag == 2 {
+			drawNotchFeedbackBadge(i18n.Source("text.audioNotchWidth"), rl.Rectangle{X: x + 8, Y: middleY + 6, Width: 170, Height: 25}, colors.orange)
+			drawNotchFeedbackBadge(fmt.Sprintf(i18n.Source("text.audioNotchWidthValue"), p.notchWidthHz), rl.Rectangle{X: x + w - 170, Y: middleY + 6, Width: 162, Height: 25}, colors.orange)
+			drawHorizontalAdjustArrow(notchX, middleY+43, colors.orange)
+		}
 	}
+}
+
+func notchInteractionZone(mouseY, graphY, graphHeight float32) int {
+	if mouseY < graphY || mouseY > graphY+graphHeight {
+		return 0
+	}
+	if mouseY < graphY+graphHeight/2 {
+		return 1
+	}
+	return 2
+}
+
+func drawHorizontalAdjustArrow(centerX, y float32, color rl.Color) {
+	left, right := centerX-27, centerX+27
+	rl.DrawLineEx(rl.Vector2{X: left, Y: y}, rl.Vector2{X: right, Y: y}, 2, color)
+	rl.DrawTriangle(rl.Vector2{X: left - 7, Y: y}, rl.Vector2{X: left + 2, Y: y - 5}, rl.Vector2{X: left + 2, Y: y + 5}, color)
+	rl.DrawTriangle(rl.Vector2{X: right + 7, Y: y}, rl.Vector2{X: right - 2, Y: y + 5}, rl.Vector2{X: right - 2, Y: y - 5}, color)
+}
+
+func drawNotchFeedbackBadge(label string, bounds rl.Rectangle, accent rl.Color) {
+	background, textColor := notchFeedbackBadgeColors()
+	rl.DrawRectangleRounded(bounds, .22, 6, background)
+	rl.DrawRectangleRoundedLinesEx(bounds, .22, 6, 1.5, accent)
+	size := simpleui.MeasureTextStyled(label, uiCaptionFontSize, simpleui.FontSemiBold)
+	simpleui.DrawTextStyled(label, bounds.X+(bounds.Width-size.X)/2, bounds.Y+(bounds.Height-size.Y)/2, uiCaptionFontSize, simpleui.FontSemiBold, textColor)
+}
+
+func notchFeedbackBadgeColors() (rl.Color, rl.Color) {
+	background := mixColor(colors.panel, colors.background, .35)
+	background.A = 248
+	return background, simpleui.EnsureTextContrast(colors.text, background)
 }
 
 func drawAudioDragHandle(x, y float32, accent rl.Color) {

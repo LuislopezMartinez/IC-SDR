@@ -13,7 +13,9 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 		SpanHz: 500_000, TuningStepHz: 6_250, CenterMode: false,
 		ScanCenterToMemory: boolSetting(true), ScanResume: "HOLD", ScanPolicy: "STRONGER",
 		ScanDwellMs: 5000, ScanMinimumHz: 433_050_000, ScanMaximumHz: 434_750_000,
-		ActiveTool: "MEMORIES", ViewMode: 2,
+		ScanOverlayVisible: boolSetting(false),
+		UtilitiesCollapsed: boolSetting(true),
+		ActiveTool:         "MEMORIES", ViewMode: 2,
 		SquelchEnabled: boolSetting(true), SquelchThreshold: -42, SquelchHoldMs: 120, SquelchCloseMs: 240,
 		SpectrumMinimumDB: -80, SpectrumMaximumDB: -10,
 		FFTAveragingMs: 150, FFTRefreshFPS: 30, FFTPeakHold: boolSetting(false), FFTPeakDecay: 6, FFTWindow: "FLAT TOP",
@@ -21,6 +23,7 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 		WaterfallMinimum: -95, WaterfallMaximum: -15, WaterfallPalette: "VIRIDIS",
 		MemoryViewEnabled: boolSetting(false),
 		AudioNotchEnabled: boolSetting(true), AudioNotchFrequencyHz: 1250, AudioNotchWidthHz: 180, AudioNotchDepthDB: -40,
+		AudioNREnabled: boolSetting(true), AudioNRStrength: float32Setting(65),
 	}
 	if err := writeAppSettings(path, want); err != nil {
 		t.Fatal(err)
@@ -43,8 +46,14 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 	if screen.activeTool != "MEMORIES" || screen.viewMode != 2 || !screen.scanCenterToMemory || screen.scanResume != "HOLD" || screen.scanPolicy != "STRONGER" || screen.scanDwellMs != 5000 {
 		t.Fatalf("restored scanner settings are incomplete")
 	}
+	if screen.scanOverlayVisible || NewScanPanel(screen).overlayVisible {
+		t.Fatal("scanner FFT visibility was not restored as disabled")
+	}
 	if screen.activeTool != want.ActiveTool || screen.viewMode != want.ViewMode {
 		t.Fatalf("restored workspace = %s/view %d", screen.activeTool, screen.viewMode)
+	}
+	if !screen.utilitiesCollapsed {
+		t.Fatal("collapsed utilities preference was not restored")
 	}
 	if !screen.squelchEnabled || screen.squelchThreshold != -42 || screen.squelchHoldMs != 120 || screen.squelchCloseMs != 240 {
 		t.Fatalf("restored squelch = %v/%d/%d/%d", screen.squelchEnabled, screen.squelchThreshold, screen.squelchHoldMs, screen.squelchCloseMs)
@@ -58,6 +67,9 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 	if !screen.audioNotchEnabled || screen.audioNotchFrequencyHz != 1250 || screen.audioNotchWidthHz != 180 || screen.audioNotchDepthDB != -40 {
 		t.Fatalf("restored audio notch = %v/%d/%d/%.0f", screen.audioNotchEnabled, screen.audioNotchFrequencyHz, screen.audioNotchWidthHz, screen.audioNotchDepthDB)
 	}
+	if !screen.audioNREnabled || screen.audioNRStrength != 65 {
+		t.Fatalf("restored audio NR = %v/%.0f", screen.audioNREnabled, screen.audioNRStrength)
+	}
 }
 
 func TestInvalidAppSettingsKeepDefaults(t *testing.T) {
@@ -70,10 +82,13 @@ func TestInvalidAppSettingsKeepDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	screen := NewMainScreen(nil)
-	beforeBand, beforeMode, beforeFrequency := screen.bandName, screen.savedMode, screen.frequencyHz
+	beforeBand, beforeMode, beforeFrequency, beforeNR := screen.bandName, screen.savedMode, screen.frequencyHz, screen.audioNRStrength
 	loadAppSettings(path, screen)
 	if screen.bandName != beforeBand || screen.savedMode != beforeMode || screen.frequencyHz != beforeFrequency {
 		t.Fatalf("invalid settings replaced defaults: %#v", screen)
+	}
+	if screen.audioNRStrength != beforeNR {
+		t.Fatalf("missing NR setting replaced default: %.0f", screen.audioNRStrength)
 	}
 }
 

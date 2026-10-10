@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.10.1](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.10.1)**
+**Versión actual: [v0.11.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.11.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -44,6 +44,14 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.11.0
+
+- Nuevo decodificador y reproductor **DAB/DAB+**, con selección de canales de banda III y servicios digitales.
+- Nuevo **Libro de concursos** con plantillas, control de duplicados, puntuación y exportación Cabrillo/ADIF.
+- Nueva reducción de ruido de audio configurable para AM, NFM, USB, LSB y CW.
+- Mejoras de temas, cabecera SDR, utilidades, control web y mapa VOACAP.
+- Correcciones de estabilidad en audio, escáner, OmniRig, filtros y menús desplegables.
 
 ## Novedades de v0.10.1
 

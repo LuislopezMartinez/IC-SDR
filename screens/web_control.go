@@ -403,6 +403,10 @@ func (screen *MainScreen) applyWebControl(command webControlCommand) {
 			}
 		case "scannerOverlay":
 			panel.overlayVisible = *command.ScannerVisible
+			screen.scanOverlayVisible = *command.ScannerVisible
+			if screen.utilitiesSidebar != nil {
+				screen.utilitiesSidebar.scanLayer.SetActive(*command.ScannerVisible)
+			}
 		case "scannerMemory":
 			panel.centerToMemory = *command.ScannerMemory
 		case "scannerResume":

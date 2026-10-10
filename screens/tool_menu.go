@@ -22,12 +22,14 @@ type toolMenuItem struct {
 var toolMenuItems = []toolMenuItem{
 	{id: "DISTANCE_MAP", label: i18n.Source("text.3bd35969d3d1"), row: 2},
 	{id: omniRigToolID, label: "OMNIRIG CAT", icon: "menu-omnirig.png", row: 2},
+	{id: contestLogToolID, label: i18n.Source("text.log0037"), row: 2},
 	{id: voacapToolID, label: "PROPAGACIÓN DX", icon: "menu-scope.png", row: 0},
 	{id: i18n.Source("text.9b6bb9932898"), label: i18n.Source("text.e3bbc3565223"), icon: "menu-waterfall-adjust.png", row: 0},
 	{id: i18n.Source("text.94fa3fe96dde"), label: i18n.Source("text.618262ce4370"), icon: "menu-fft-display.png", row: 0},
 	{id: i18n.Source("text.a42c60257b01"), label: i18n.Source("text.3758217ace1a"), icon: "menu-twin-pbt.png", row: 0},
 	{id: i18n.Source("text.93239b223632"), label: i18n.Source("text.ade0cbd42252"), icon: "menu-dmr-if.png", row: 1},
 	{id: i18n.Source("text.a8cbb160caa6"), label: i18n.Source("text.3ae4feb8250d"), icon: "menu-digital-auto.png", row: 1},
+	{id: dabToolID, label: "DAB / DAB+", row: 1},
 	{id: i18n.Source("text.820d4685bc9d"), label: i18n.Source("text.820d4685bc9d"), icon: "menu-sstv.png", row: 1},
 	{id: i18n.Source("text.4c4310fd27fd"), label: i18n.Source("text.4c4310fd27fd"), icon: "menu-aprs.png", row: 1},
 	{id: i18n.Source("text.8be70e7cb2c4"), label: i18n.Source("text.8be70e7cb2c4"), icon: "menu-rtl433.png", row: 1},
@@ -367,6 +369,10 @@ func (menu *ToolMenu) drawCustomIcon(id string, center rl.Vector2, active bool, 
 		accent = menu.rowAccent(row)
 	}
 	switch id {
+	case dabToolID:
+		rl.DrawRectangleRounded(rl.Rectangle{X: center.X - 39, Y: center.Y - 25, Width: 78, Height: 50}, .14, 6, colors.panelAlt)
+		rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: center.X - 39, Y: center.Y - 25, Width: 78, Height: 50}, .14, 6, 2, accent)
+		drawCenteredStyled("DAB+", rl.Rectangle{X: center.X - 38, Y: center.Y - 22, Width: 76, Height: 44}, 16, simpleui.FontSemiBold, accent)
 	case "DIGITAL_AUTO":
 		rl.DrawCircleLines(int32(center.X), int32(center.Y), 31, accent)
 		for ring := float32(12); ring <= 24; ring += 12 {

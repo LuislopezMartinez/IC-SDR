@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.10.1'
+    [string]$Version = '0.11.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,6 +18,7 @@ $omniRigRuntime = Join-Path $projectRoot 'DATA\runtime\windows-x64\omnirig'
 $omniRigManifestPath = Join-Path $omniRigRuntime 'runtime-version.json'
 $voacapRuntime = Join-Path $projectRoot 'DATA\tools\voacap\runtime'
 $voacapManifestPath = Join-Path $voacapRuntime 'runtime-version.json'
+$dabManifestPath = Join-Path $projectRoot 'DATA\tools\dab\runtime-version.json'
 
 if ($distRoot -ne $expectedDist -or -not $distRoot.StartsWith($projectRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Ruta de distribución no segura: $distRoot"
@@ -118,6 +119,20 @@ if ($voacapDllHash -ne $voacapManifest.runtimeDllSha256.ToLowerInvariant()) {
     throw "SALFLIBC.DLL de VOACAP no coincide con el manifiesto: $voacapDllHash"
 }
 
+if (-not (Test-Path -LiteralPath $dabManifestPath)) {
+    throw "Falta el manifiesto del runtime DAB: $dabManifestPath"
+}
+$dabManifest = Get-Content -LiteralPath $dabManifestPath -Raw | ConvertFrom-Json
+if ($dabManifest.upstreamVersion -ne '2.7' -or $dabManifest.protocolVersion -ne 1) {
+    throw "Versión del runtime DAB no admitida: welle.io $($dabManifest.upstreamVersion), protocolo $($dabManifest.protocolVersion)."
+}
+$dabExe = Join-Path (Split-Path $dabManifestPath -Parent) $dabManifest.executable
+if (-not (Test-Path -LiteralPath $dabExe)) { throw "Falta el runtime DAB: $dabExe" }
+$dabExeHash = (Get-FileHash -LiteralPath $dabExe -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($dabExeHash -ne $dabManifest.executableSha256.ToLowerInvariant()) {
+    throw "El runtime DAB no coincide con el manifiesto: $dabExeHash"
+}
+
 # Windows locks the executable, runtime DLLs and startup.log while IC-SDR is
 # running. Close only instances launched from this distribution before copying
 # user data or deleting anything so a release attempt cannot leave a
@@ -213,6 +228,8 @@ $copies = @(
     @{ Source = 'DATA\tools\aprs\runtime'; Destination = 'DATA\tools\aprs\runtime' },
     @{ Source = 'DATA\tools\aprs\config'; Destination = 'DATA\tools\aprs\config' },
     @{ Source = 'DATA\tools\sstv\runtime'; Destination = 'DATA\tools\sstv\runtime' },
+    @{ Source = 'DATA\tools\dab\runtime'; Destination = 'DATA\tools\dab\runtime' },
+    @{ Source = 'DATA\tools\dab\runtime-version.json'; Destination = 'DATA\tools\dab\runtime-version.json' },
     @{ Source = 'DATA\tools\tetra\runtime'; Destination = 'DATA\tools\tetra\runtime' },
     @{ Source = 'DATA\tools\tetrapol\runtime'; Destination = 'DATA\tools\tetrapol\runtime' },
     @{ Source = 'DATA\tools\voacap\runtime'; Destination = 'DATA\tools\voacap\runtime' },

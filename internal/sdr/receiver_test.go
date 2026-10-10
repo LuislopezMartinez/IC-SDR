@@ -55,6 +55,27 @@ func TestChangingDemodulatorClearsDigitalVoiceBypassQueue(t *testing.T) {
 	}
 }
 
+func TestDABPlaybackNeverAlternatesWithAnalogAudio(t *testing.T) {
+	receiver := NewReceiver(Config{FrequencyHz: 223_936_000, SampleRate: 2_048_000, FFTSize: 4096})
+	receiver.mu.Lock()
+	receiver.demodMode = "USB"
+	receiver.dabPlaybackEnabled = true
+	receiver.audio[0], receiver.audioWrite, receiver.audioCount = -.8, 1, 1
+	receiver.mu.Unlock()
+	receiver.enqueueDigitalAudio([]float32{.6, .4})
+
+	output := make([]float32, 2)
+	if count := receiver.ReadAudio(output); count != 2 || output[0] != .6 || output[1] != .4 {
+		t.Fatalf("DAB output = %v (%d samples), want only decoded audio", output, count)
+	}
+	receiver.mu.RLock()
+	analogCount := receiver.audioCount
+	receiver.mu.RUnlock()
+	if analogCount != 0 {
+		t.Fatalf("analog audio remained queued during DAB playback: %d", analogCount)
+	}
+}
+
 func TestRecorderSinkReceivesContinuousDemodulatorAudio(t *testing.T) {
 	receiver := &Receiver{}
 	var got []float32

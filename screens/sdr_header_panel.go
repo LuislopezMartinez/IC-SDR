@@ -138,7 +138,13 @@ func (p *SDRHeaderPanel) Tick() {
 		p.nextSync = rl.GetTime() + .25
 	}
 }
-func (p *SDRHeaderPanel) DrawBackground() { drawPanel(1264, 4, 312, 198) }
+func (p *SDRHeaderPanel) DrawBackground() {
+	bounds := rl.Rectangle{X: 1264, Y: 4, Width: 312, Height: 198}
+	// Hardware tuning stays available without competing visually with the
+	// frequency, signal and operating controls used continuously.
+	rl.DrawRectangleRounded(bounds, .025, 8, mixColor(colors.panel, colors.background, .18))
+	rl.DrawRectangleRoundedLinesEx(bounds, .025, 8, 1, colors.border)
+}
 func (p *SDRHeaderPanel) sync() {
 	if p.receiver != nil {
 		p.current = p.receiver.HardwareSettings()

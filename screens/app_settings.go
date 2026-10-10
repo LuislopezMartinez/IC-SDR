@@ -32,12 +32,14 @@ type persistedAppSettings struct {
 	RigMuteOnTX           bool                          `json:"rigMuteOnTX,omitempty"`
 	ActiveTool            string                        `json:"activeTool,omitempty"`
 	ViewMode              int                           `json:"viewMode,omitempty"`
+	UtilitiesCollapsed    *bool                         `json:"utilitiesCollapsed,omitempty"`
 	ScanCenterToMemory    *bool                         `json:"scanCenterToMemory,omitempty"`
 	ScanResume            string                        `json:"scanResumeMode,omitempty"`
 	ScanPolicy            string                        `json:"scanSignalPolicy,omitempty"`
 	ScanDwellMs           int                           `json:"scanDwellMs,omitempty"`
 	ScanMinimumHz         int64                         `json:"scanMinimumHz,omitempty"`
 	ScanMaximumHz         int64                         `json:"scanMaximumHz,omitempty"`
+	ScanOverlayVisible    *bool                         `json:"scanOverlayVisible,omitempty"`
 	SquelchEnabled        *bool                         `json:"squelchEnabled,omitempty"`
 	SquelchThreshold      int                           `json:"squelchThreshold,omitempty"`
 	SquelchHoldMs         int                           `json:"squelchHoldMs,omitempty"`
@@ -64,6 +66,8 @@ type persistedAppSettings struct {
 	AudioNotchFrequencyHz int                           `json:"audioNotchFrequencyHz,omitempty"`
 	AudioNotchWidthHz     int                           `json:"audioNotchWidthHz,omitempty"`
 	AudioNotchDepthDB     float32                       `json:"audioNotchDepthDb,omitempty"`
+	AudioNREnabled        *bool                         `json:"audioNrEnabled,omitempty"`
+	AudioNRStrength       *float32                      `json:"audioNrStrength,omitempty"`
 	DMRAutoCenter         *bool                         `json:"dmrAutoCenter,omitempty"`
 	DMRAudioSlot          string                        `json:"dmrAudioSlot,omitempty"`
 	RTL433FrequencyHz     int64                         `json:"rtl433FrequencyHz,omitempty"`
@@ -138,6 +142,9 @@ func loadAppSettings(path string, screen *MainScreen) {
 	if settings.ViewMode >= 1 && settings.ViewMode <= 2 {
 		screen.viewMode = settings.ViewMode
 	}
+	if settings.UtilitiesCollapsed != nil {
+		screen.utilitiesCollapsed = *settings.UtilitiesCollapsed
+	}
 	if settings.ScanCenterToMemory != nil {
 		screen.scanCenterToMemory = *settings.ScanCenterToMemory
 	}
@@ -152,6 +159,15 @@ func loadAppSettings(path string, screen *MainScreen) {
 	}
 	if settings.ScanMinimumHz >= 1000 && settings.ScanMaximumHz > settings.ScanMinimumHz {
 		screen.scanMinimumHz, screen.scanMaximumHz = settings.ScanMinimumHz, settings.ScanMaximumHz
+	}
+	if settings.ScanOverlayVisible != nil {
+		screen.scanOverlayVisible = *settings.ScanOverlayVisible
+		if screen.scanPanel != nil {
+			screen.scanPanel.overlayVisible = *settings.ScanOverlayVisible
+		}
+		if screen.utilitiesSidebar != nil {
+			screen.utilitiesSidebar.scanLayer.SetActive(*settings.ScanOverlayVisible)
+		}
 	}
 	if settings.SquelchEnabled != nil {
 		screen.squelchEnabled = *settings.SquelchEnabled
@@ -224,6 +240,12 @@ func loadAppSettings(path string, screen *MainScreen) {
 	}
 	if settings.AudioNotchDepthDB >= -60 && settings.AudioNotchDepthDB <= -6 {
 		screen.audioNotchDepthDB = settings.AudioNotchDepthDB
+	}
+	if settings.AudioNREnabled != nil {
+		screen.audioNREnabled = *settings.AudioNREnabled
+	}
+	if settings.AudioNRStrength != nil && *settings.AudioNRStrength >= 0 && *settings.AudioNRStrength <= 100 {
+		screen.audioNRStrength = *settings.AudioNRStrength
 	}
 	if settings.DMRAutoCenter != nil {
 		screen.dmrAutoCenter = *settings.DMRAutoCenter
@@ -389,7 +411,7 @@ func (screen *MainScreen) flushSettings(force bool) {
 		BandCategory: screen.bandCategory, BandName: screen.bandName,
 		Mode: mode, FrequencyHz: screen.frequencyHz, CenterFrequencyHz: screen.centerFrequencyHz,
 		SpanHz: screen.spanHz, TuningStepHz: screen.tuningStepHz, CenterMode: screen.centerMode, RigMuteOnTX: screen.rigMuteOnTX,
-		ActiveTool: screen.activeTool, ViewMode: screen.viewMode,
+		ActiveTool: screen.activeTool, ViewMode: screen.viewMode, UtilitiesCollapsed: boolSetting(screen.utilitiesCollapsed),
 		SquelchEnabled: boolSetting(screen.squelchEnabled), SquelchThreshold: screen.squelchThreshold,
 		SquelchHoldMs: screen.squelchHoldMs, SquelchCloseMs: screen.squelchCloseMs,
 		SpectrumMinimumDB: screen.spectrumMinimumDB, SpectrumMaximumDB: screen.spectrumMaximumDB,
@@ -404,6 +426,7 @@ func (screen *MainScreen) flushSettings(force bool) {
 		Volume:              float32Setting(screen.volume), Muted: boolSetting(screen.muted),
 		AudioNotchEnabled: boolSetting(screen.audioNotchEnabled), AudioNotchFrequencyHz: screen.audioNotchFrequencyHz,
 		AudioNotchWidthHz: screen.audioNotchWidthHz, AudioNotchDepthDB: screen.audioNotchDepthDB,
+		AudioNREnabled: boolSetting(screen.audioNREnabled), AudioNRStrength: float32Setting(screen.audioNRStrength),
 		DMRAutoCenter: boolSetting(screen.dmrAutoCenter), DMRAudioSlot: screen.dmrAudioSlot,
 		RTL433FrequencyHz:     screen.rtl433FrequencyHz,
 		RadiosondeFamily:      screen.radiosondeFamily,
@@ -427,6 +450,7 @@ func (screen *MainScreen) flushSettings(force bool) {
 		settings.ScanResume, settings.ScanPolicy = screen.scanPanel.resume, screen.scanPanel.policy
 		settings.ScanDwellMs = screen.scanPanel.dwellMs
 		settings.ScanMinimumHz, settings.ScanMaximumHz = screen.scanPanel.minimumHz, screen.scanPanel.maximumHz
+		settings.ScanOverlayVisible = boolSetting(screen.scanPanel.overlayVisible)
 	}
 	if screen.receiver != nil {
 		hardware := screen.receiver.HardwareSettings()
@@ -515,7 +539,7 @@ func validBand(category, name string) bool {
 }
 
 func validDemodMode(mode string) bool {
-	for _, candidate := range []string{"AM", i18n.Source("text.0896d612d497"), i18n.Source("text.6b742bac3eb4"), i18n.Source("text.61f0acff1735"), i18n.Source("text.6323db4948ad"), "CW", i18n.Source("text.2604864ce4d3"), i18n.Source("text.7866f9f32e66"), i18n.Source("text.72c048cb5100"), i18n.Source("text.f69d86a86926"), tetrapolToolID} {
+	for _, candidate := range []string{"AM", i18n.Source("text.0896d612d497"), i18n.Source("text.6b742bac3eb4"), i18n.Source("text.61f0acff1735"), i18n.Source("text.6323db4948ad"), "CW", i18n.Source("text.2604864ce4d3"), i18n.Source("text.7866f9f32e66"), i18n.Source("text.72c048cb5100"), i18n.Source("text.f69d86a86926"), tetrapolToolID, "DAB+"} {
 		if mode == candidate {
 			return true
 		}

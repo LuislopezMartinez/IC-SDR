@@ -1,6 +1,13 @@
 package screens
 
-import "testing"
+import (
+	"math"
+	"testing"
+
+	"go-zero/simpleui"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
+)
 
 func TestAudioPanelUsesFullNativeToolArea(t *testing.T) {
 	panel := NewAudioPanel(NewMainScreen(nil))
@@ -26,5 +33,53 @@ func TestAudioAutoNotchSelectsNarrowPeak(t *testing.T) {
 	panel.autoNotch()
 	if !panel.notchEnabled || panel.notchFrequencyHz < 1400 || panel.notchFrequencyHz > 1650 {
 		t.Fatalf("auto notch did not select peak: enabled=%v frequency=%d", panel.notchEnabled, panel.notchFrequencyHz)
+	}
+}
+
+func TestNotchInteractionUsesUpperHalfForTuningAndLowerForWidth(t *testing.T) {
+	for _, test := range []struct {
+		y    float32
+		want int
+	}{{683, 0}, {684, 1}, {753, 1}, {754, 2}, {824, 2}, {825, 0}} {
+		if got := notchInteractionZone(test.y, 684, 140); got != test.want {
+			t.Fatalf("zone at y %.0f = %d, want %d", test.y, got, test.want)
+		}
+	}
+}
+
+func TestAudioGraphPointerTracksCollapsedWorkspaceTransform(t *testing.T) {
+	for _, legacyX := range []float32{380, 520, 660, 962, 1267, 1572} {
+		visualX := collapsedToolContentX + (legacyX-toolContentX)*collapsedWorkspaceScaleX()
+		mapped := toolPointerForLayout(rl.Vector2{X: visualX, Y: 740}, true)
+		if math.Abs(float64(mapped.X-legacyX)) > .01 || mapped.Y != 740 {
+			t.Fatalf("collapsed pointer %.2f mapped to %+v, want x %.2f", visualX, mapped, legacyX)
+		}
+	}
+	plain := rl.Vector2{X: 1111, Y: 700}
+	if got := toolPointerForLayout(plain, false); got != plain {
+		t.Fatalf("expanded pointer changed: got %+v want %+v", got, plain)
+	}
+}
+
+func TestNotchFeedbackBadgeFollowsThemeContrast(t *testing.T) {
+	previous := colors
+	t.Cleanup(func() { colors = previous })
+
+	colors = lightPalette
+	lightBackground, lightText := notchFeedbackBadgeColors()
+	if want := simpleui.EnsureTextContrast(lightPalette.text, lightBackground); lightText != want {
+		t.Fatalf("light badge text = %#v, want contrast-adjusted %#v", lightText, want)
+	}
+	if lightText == lightBackground {
+		t.Fatal("light badge text and background must be distinct")
+	}
+
+	colors = darkPalette
+	darkBackground, darkText := notchFeedbackBadgeColors()
+	if lightBackground == darkBackground {
+		t.Fatal("notch badge background did not follow the active theme")
+	}
+	if want := simpleui.EnsureTextContrast(darkPalette.text, darkBackground); darkText != want {
+		t.Fatalf("dark badge text = %#v, want contrast-adjusted %#v", darkText, want)
 	}
 }

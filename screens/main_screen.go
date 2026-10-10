@@ -22,9 +22,15 @@ const (
 	waterfallH   = float32(170)
 	toolY        = float32(630)
 	toolH        = designHeight - toolY - 8
-	// New panels must not introduce text below this readable baseline.
+	// Shared typography scale. Sizes are logical pixels and are rendered with
+	// the application's 1.25 text scale. Keep operational information at body
+	// size or above; caption is reserved for secondary metadata.
+	uiCaptionFontSize = int32(11)
+	uiBodyFontSize    = int32(12)
 	uiMinimumFontSize = int32(13)
 	uiControlFontSize = int32(14)
+	uiSectionFontSize = int32(16)
+	uiTitleFontSize   = int32(20)
 	legacyToolX       = float32(24)
 	legacyToolWidth   = float32(1552)
 	toolContentX      = utilitiesRight + 10
@@ -34,6 +40,38 @@ const (
 )
 
 const toolContentScaleX = (toolContentRight - toolContentX) / legacyToolWidth
+
+const collapsedToolContentX = utilitiesCollapsedRight + 10
+
+func collapsedWorkspaceScaleX() float32 {
+	return (toolContentRight - collapsedToolContentX) / (toolContentRight - toolContentX)
+}
+
+func collapsedToolBounds(bounds rl.Rectangle) rl.Rectangle {
+	scale := collapsedWorkspaceScaleX()
+	bounds.X = collapsedToolContentX + (bounds.X-toolContentX)*scale
+	bounds.Width *= scale
+	return bounds
+}
+
+func expandedToolBounds(bounds rl.Rectangle) rl.Rectangle {
+	scale := collapsedWorkspaceScaleX()
+	bounds.X = toolContentX + (bounds.X-collapsedToolContentX)/scale
+	bounds.Width /= scale
+	return bounds
+}
+
+func toolPointerForLayout(pointer rl.Vector2, collapsed bool) rl.Vector2 {
+	if !collapsed {
+		return pointer
+	}
+	pointer.X = toolContentX + (pointer.X-collapsedToolContentX)/collapsedWorkspaceScaleX()
+	return pointer
+}
+
+func (screen *MainScreen) toolWorkspacePointer() rl.Vector2 {
+	return toolPointerForLayout(simpleui.MousePosition(), screen.utilitiesCollapsed)
+}
 
 // compactToolControls maps the controls created for the former full-width
 // workspace into the area remaining beside the fixed utilities sidebar. Only
@@ -50,14 +88,14 @@ func compactToolControls(elements []simpleui.Element) {
 	}
 }
 
-func drawCompactedTool(draw func()) {
+func drawCompactedTool(outerScale float32, draw func()) {
 	rl.PushMatrix()
 	rl.Translatef(toolContentX, 0, 0)
 	rl.Scalef(toolContentScaleX, 1, 1)
 	rl.Translatef(-legacyToolX, 0, 0)
-	simpleui.SetHorizontalDrawScale(toolContentScaleX)
+	simpleui.SetHorizontalDrawScale(toolContentScaleX * outerScale)
 	draw()
-	simpleui.SetHorizontalDrawScale(1)
+	simpleui.SetHorizontalDrawScale(outerScale)
 	rl.PopMatrix()
 }
 
@@ -186,11 +224,15 @@ type MainScreen struct {
 	audioNotchFrequencyHz  int
 	audioNotchWidthHz      int
 	audioNotchDepthDB      float32
+	audioNREnabled         bool
+	audioNRStrength        float32
 	memoryPanel            *MemoryPanel
 	scanPanel              *ScanPanel
 	dmrPanel               *DMRPanel
+	dabPanel               *DABPanel
 	digitalVoicePanel      *DigitalVoicePanel
 	voacapPanel            *VOACAPPanel
+	contestLogPanel        *ContestLogPanel
 	aprsPanel              *APRSPanel
 	aprsView               string
 	rtl433Panel            *RTL433Panel
@@ -207,6 +249,8 @@ type MainScreen struct {
 	tetrapolBand           string
 	tetrapolDirection      string
 	utilitiesSidebar       *UtilitiesSidebar
+	utilitiesCollapsed     bool
+	utilitiesLayoutCompact bool
 	sstvAutomatic          bool
 	sstvMode               string
 	sstvCandidateModes     [4]string
@@ -222,6 +266,7 @@ type MainScreen struct {
 	scanDwellMs            int
 	scanMinimumHz          int64
 	scanMaximumHz          int64
+	scanOverlayVisible     bool
 	memoryViewEnabled      bool
 	sMeter                 *SMeter
 	spectrumMinimumDB      float32
@@ -246,6 +291,7 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		audioNotchFrequencyHz:  1_000,
 		audioNotchWidthHz:      120,
 		audioNotchDepthDB:      -35,
+		audioNRStrength:        50,
 		audioMeterDB:           -60,
 		squelchThreshold:       -100,
 		squelchHoldMs:          80,
@@ -268,6 +314,7 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		scanResume:             i18n.Source("text.85135a165905"),
 		scanPolicy:             i18n.Source("text.e3cc57e193d6"),
 		scanDwellMs:            3000,
+		scanOverlayVisible:     true,
 		demodBandwidthHz:       9_000,
 		bandCategory:           i18n.Source("text.4fae663ae96a"),
 		bandName:               "20 m",
@@ -303,7 +350,7 @@ func (screen *MainScreen) CreateControls() {
 	}
 	screen.filterSelector = NewFilterSelector(screen.selectFilter)
 	screen.mode = simpleui.NewDropdown("mode", 134, 16, 110, 48, i18n.Source("text.ac6c84ed1369"),
-		[]string{"AM", i18n.Source("text.0896d612d497"), i18n.Source("text.6b742bac3eb4"), i18n.Source("text.61f0acff1735"), i18n.Source("text.6323db4948ad"), "CW", i18n.Source("text.2604864ce4d3"), i18n.Source("text.7866f9f32e66"), i18n.Source("text.72c048cb5100"), i18n.Source("text.f69d86a86926"), tetrapolToolID}, 16)
+		[]string{"AM", i18n.Source("text.0896d612d497"), i18n.Source("text.6b742bac3eb4"), i18n.Source("text.61f0acff1735"), i18n.Source("text.6323db4948ad"), "CW", i18n.Source("text.2604864ce4d3"), i18n.Source("text.7866f9f32e66"), i18n.Source("text.72c048cb5100"), i18n.Source("text.f69d86a86926"), tetrapolToolID, "DAB+"}, 16)
 	for index, item := range screen.mode.Items() {
 		if item == screen.savedMode {
 			screen.mode.SetSelected(index)
@@ -317,17 +364,17 @@ func (screen *MainScreen) CreateControls() {
 
 	initialFilter := screen.filterSelector.Current(screen.mode.SelectedText())
 	screen.demodBandwidthHz = initialFilter.BandwidthHz
-	screen.filter = simpleui.NewButton("filter", 252, 16, 108, 48, filterButtonLabel(initialFilter), 12)
+	screen.filter = simpleui.NewButton("filter", 252, 16, 108, 48, filterButtonLabel(initialFilter), uiBodyFontSize)
 	screen.filter.OnClick(func() { screen.filterSelector.Open(screen.mode.SelectedText()) })
 
-	screen.band = simpleui.NewButton("band", 368, 16, 140, 48, i18n.Source("text.eae2605aec31")+screen.bandName, 12)
+	screen.band = simpleui.NewButton("band", 368, 16, 140, 48, i18n.Source("text.eae2605aec31")+screen.bandName, uiBodyFontSize)
 	screen.bandSelector = NewBandSelector(screen.bandCategory, screen.bandName, screen.selectBand)
 	screen.band.OnClick(screen.bandSelector.Open)
 
-	squelch := simpleui.NewSwitch("squelch", 972, 24, 82, 28, i18n.Source("text.a7056a455639"), screen.squelchEnabled, 12)
+	squelch := simpleui.NewSwitch("squelch", 972, 24, 82, 28, i18n.Source("text.a7056a455639"), screen.squelchEnabled, uiBodyFontSize)
 	screen.squelchSwitch = squelch
 	squelch.OnChange(func(active bool) { screen.squelchEnabled = active; screen.applySquelch(); screen.markSettingsDirty() })
-	screen.squelchLabel = simpleui.NewLabel("squelchLabel", 1059, 24, 103, 22, fmt.Sprintf(i18n.Source("text.95de47dd223a"), screen.squelchThreshold), 10)
+	screen.squelchLabel = simpleui.NewLabel("squelchLabel", 1059, 24, 103, 22, fmt.Sprintf(i18n.Source("text.95de47dd223a"), screen.squelchThreshold), uiCaptionFontSize)
 	screen.squelchLabel.SetColor(colors.orange)
 	screen.squelchSlider = simpleui.NewSlider("squelchLevel", 1152, 27, 92, 20, squelchMinimumDB, squelchMaximumDB, float32(screen.squelchThreshold))
 	screen.squelchSlider.SetStep(1)
@@ -337,7 +384,7 @@ func (screen *MainScreen) CreateControls() {
 		screen.applySquelch()
 		screen.markSettingsDirty()
 	})
-	holdLabel := simpleui.NewLabel("holdLabel", 972, 83, 108, 20, fmt.Sprintf(i18n.Source("text.4bec5be2178a"), screen.squelchHoldMs), 10)
+	holdLabel := simpleui.NewLabel("holdLabel", 972, 83, 108, 20, fmt.Sprintf(i18n.Source("text.4bec5be2178a"), screen.squelchHoldMs), uiCaptionFontSize)
 	holdLabel.SetColor(colors.muted)
 	holdSlider := simpleui.NewSlider("hold", 1082, 85, 162, 18, 0, 300, float32(screen.squelchHoldMs))
 	holdSlider.SetStep(1)
@@ -347,7 +394,7 @@ func (screen *MainScreen) CreateControls() {
 		screen.applySquelch()
 		screen.markSettingsDirty()
 	})
-	closeLabel := simpleui.NewLabel("closeLabel", 972, 116, 108, 20, fmt.Sprintf(i18n.Source("text.19c469a67b80"), screen.squelchCloseMs), 10)
+	closeLabel := simpleui.NewLabel("closeLabel", 972, 116, 108, 20, fmt.Sprintf(i18n.Source("text.19c469a67b80"), screen.squelchCloseMs), uiCaptionFontSize)
 	closeLabel.SetColor(colors.muted)
 	closeSlider := simpleui.NewSlider("close", 1082, 118, 162, 18, 20, 500, float32(screen.squelchCloseMs))
 	closeSlider.SetStep(1)
@@ -402,14 +449,14 @@ func (screen *MainScreen) CreateControls() {
 	screen.memViewSwitch.OnChange(screen.setMemoryView)
 	spanDown := simpleui.NewButton("spanDown", frequencyPanelX+16, frequencyPanelY+36, 36, 32, "-", 16)
 	spanUp := simpleui.NewButton("spanUp", frequencyPanelX+58, frequencyPanelY+36, 36, 32, "+", 16)
-	screen.rigButton = simpleui.NewButton("omniRig", frequencyPanelX+58, frequencyPanelY+7, 36, 22, "RIG", 10)
+	screen.rigButton = simpleui.NewButton("omniRig", frequencyPanelX+58, frequencyPanelY+7, 36, 22, "RIG", uiCaptionFontSize)
 	screen.rigButton.OnClick(screen.cycleRigControl)
 	screen.updateRigButtonColor()
 	screen.menuButton = simpleui.NewButton("menu", 24, 16, 102, 48, i18n.Source("text.e10d09208b67"), 13)
 	screen.menuButton.SetColors(rl.Color{R: 13, G: 92, B: 164, A: 255}, rl.Color{R: 17, G: 185, B: 240, A: 255}, rl.White)
 	screen.menuButton.SetMenuIcon(true)
 	screen.viewButton = simpleui.NewButton("view", frequencyDialX+9, frequencyPanelY+7, 140, 24, i18n.Source("text.e94ca1cb48a2"), 12)
-	screen.step = simpleui.NewButton("step", frequencyDialX+9, frequencyPanelY+frequencyPanelH-23, 43, 19, i18n.Source("text.78e75a25d809"), 10)
+	screen.step = simpleui.NewButton("step", frequencyDialX+9, frequencyPanelY+frequencyPanelH-23, 43, 19, i18n.Source("text.78e75a25d809"), uiCaptionFontSize)
 	screen.stepDown = simpleui.NewButton("stepDown", frequencyDialX+57, frequencyPanelY+frequencyPanelH-23, 27, 19, "-", 13)
 	screen.stepUp = simpleui.NewButton("stepUp", frequencyDialX+197, frequencyPanelY+frequencyPanelH-23, 27, 19, "+", 13)
 	screen.themeButton = simpleui.NewButton("theme", frequencyDialX+155, frequencyPanelY+7, 147, 24, i18n.Source("text.193f56324ce6"), 12)
@@ -440,6 +487,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.subtonePanel = NewSubtonePanel(screen)
 	screen.scanPanel = NewScanPanel(screen)
 	screen.dmrPanel = NewDMRPanel(screen)
+	screen.dabPanel = NewDABPanel(screen)
 	screen.aprsPanel = NewAPRSPanel(screen)
 	if screen.aprsView != "" {
 		screen.aprsPanel.view = screen.aprsView
@@ -471,6 +519,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.utilitiesSidebar = NewUtilitiesSidebar(screen)
 	screen.digitalVoicePanel = NewDigitalVoicePanel(screen)
 	screen.voacapPanel = NewVOACAPPanel(screen)
+	screen.contestLogPanel = NewContestLogPanel(screen)
 	screen.audioPlayer.SetVolume(volumePercentToGain(screen.volume))
 	screen.audioPlayer.SetMuted(screen.muted)
 
@@ -488,6 +537,7 @@ func (screen *MainScreen) CreateControls() {
 	compactToolControls(screen.aircraftPanel.controls)
 	compactToolControls(screen.satellitePanel.controls)
 	compactToolControls(screen.sstvPanel.controls)
+	screen.applyUtilitiesLayout(screen.utilitiesCollapsed)
 
 	for _, element := range []simpleui.Element{
 		screen.mode, screen.filter, screen.band,
@@ -516,12 +566,20 @@ func (screen *MainScreen) CreateControls() {
 	for _, element := range screen.dmrPanel.controls {
 		simpleui.Add(element)
 	}
+	for _, element := range screen.dabPanel.controls {
+		simpleui.Add(element)
+	}
 	for _, element := range screen.digitalVoicePanel.controls {
 		simpleui.Add(element)
 	}
 	for _, element := range screen.voacapPanel.controls {
 		simpleui.Add(element)
 	}
+	for _, element := range screen.contestLogPanel.controls {
+		simpleui.Add(element)
+	}
+	simpleui.Add(screen.contestLogPanel.viewer)
+	simpleui.Add(screen.contestLogPanel.templateEditor)
 	for _, element := range screen.aprsPanel.controls {
 		simpleui.Add(element)
 	}
@@ -597,6 +655,9 @@ func (screen *MainScreen) CreateControls() {
 	}
 	if screen.activeTool == i18n.Source("text.f69d86a86926") {
 		screen.tetraPanel.Enter()
+	}
+	if screen.activeTool == dabToolID {
+		screen.dabPanel.Enter()
 	}
 	if screen.activeTool == tetrapolToolID {
 		screen.tetrapolPanel.Enter()
@@ -682,6 +743,9 @@ func (screen *MainScreen) Draw() {
 	if screen.voacapPanel != nil {
 		screen.voacapPanel.Tick()
 	}
+	if screen.contestLogPanel != nil {
+		screen.contestLogPanel.Tick()
+	}
 	screen.updateFrequencyInteraction()
 	screen.updateSpectrumDrag()
 	screen.updateWaterfallTune()
@@ -764,6 +828,9 @@ func (screen *MainScreen) Close() {
 	if screen.voacapPanel != nil {
 		screen.voacapPanel.Close()
 	}
+	if screen.contestLogPanel != nil {
+		screen.contestLogPanel.Close()
+	}
 	if screen.satellitePanel != nil {
 		screen.satellitePanel.Close()
 	}
@@ -804,16 +871,45 @@ func (screen *MainScreen) syncSquelchControl() {
 func (screen *MainScreen) drawHeader() {
 	rl.DrawRectangle(0, 0, int32(designWidth), 205, colors.panel)
 	rl.DrawLine(0, 204, int32(designWidth), 204, colors.border)
+	screen.drawQuickTuningGroup()
 	screen.drawSquelchPanel()
 	screen.sdrHeader.DrawBackground()
 	screen.subtonePanel.Draw()
 
 	screen.sMeter.Draw(24, 94, 290, 96)
-	drawPanel(326, 94, 190, 96)
-	simpleui.DrawTextStyled(fmt.Sprintf(i18n.Source("text.63fe745de86a"), screen.audioMeterDB), 338, 101, 12, simpleui.FontSemiBold, colors.cyan)
+	drawHeaderPanel(326, 94, 190, 96, false)
+	simpleui.DrawTextStyled(i18n.Source("text.859e89a729c2"), 338, 101, uiMinimumFontSize, simpleui.FontSemiBold, colors.cyan)
+	audioValue := fmt.Sprintf("%.0f dB", screen.audioMeterDB)
+	audioValueWidth := simpleui.MeasureTextStyled(audioValue, uiBodyFontSize, simpleui.FontMono).X
+	simpleui.DrawTextStyled(audioValue, 504-audioValueWidth, 102, uiBodyFontSize, simpleui.FontMono, colors.muted)
 	drawCompactAudioMeter(338, 178, 166, 7, screen.audioMeterDB)
 
 	screen.drawFrequencyDisplay()
+}
+
+func (screen *MainScreen) drawQuickTuningGroup() {
+	bounds := rl.Rectangle{X: 130, Y: 8, Width: 386, Height: 80}
+	rl.DrawRectangleRounded(bounds, .04, 8, colors.panelAlt)
+	rl.DrawRectangleRoundedLinesEx(bounds, .04, 8, 1, colors.border)
+	rl.DrawRectangleRounded(rl.Rectangle{X: bounds.X + 10, Y: bounds.Y + bounds.Height - 4, Width: 86, Height: 3}, 1, 4, colors.cyan)
+	simpleui.DrawTextStyled(i18n.Source("text.1fdfd3b541f0"), bounds.X+108, bounds.Y+bounds.Height-17, uiCaptionFontSize, simpleui.FontSemiBold, colors.muted)
+}
+
+func drawHeaderPanel(x, y, width, height float32, primary bool) {
+	bounds := rl.Rectangle{X: x, Y: y, Width: width, Height: height}
+	background := colors.panel
+	border := colors.border
+	borderWidth := float32(1)
+	if primary {
+		background = mixColor(colors.panel, colors.cyan, .035)
+		border = mixColor(colors.border, colors.cyan, .45)
+		borderWidth = 1.5
+	}
+	rl.DrawRectangleRounded(bounds, .025, 8, background)
+	rl.DrawRectangleRoundedLinesEx(bounds, .025, 8, borderWidth, border)
+	if primary {
+		rl.DrawRectangleRounded(rl.Rectangle{X: x + 12, Y: y + 3, Width: width - 24, Height: 3}, 1, 4, colors.cyan)
+	}
 }
 
 const (
@@ -828,9 +924,9 @@ const (
 )
 
 func (screen *MainScreen) drawFrequencyDisplay() {
-	drawPanel(frequencyPanelX, frequencyPanelY, frequencyPanelW, frequencyPanelH)
+	drawHeaderPanel(frequencyPanelX, frequencyPanelY, frequencyPanelW, frequencyPanelH, true)
 	rl.DrawLineEx(rl.Vector2{X: frequencyDividerX, Y: frequencyPanelY + 7}, rl.Vector2{X: frequencyDividerX, Y: frequencyPanelY + frequencyPanelH - 7}, 1, colors.border)
-	simpleui.DrawTextStyled(i18n.Source("text.07014fb273ea"), frequencyPanelX+16, frequencyPanelY+9, 11, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(i18n.Source("text.07014fb273ea"), frequencyPanelX+16, frequencyPanelY+9, uiCaptionFontSize, simpleui.FontSemiBold, colors.cyan)
 
 	formatted := formatDialFrequency(screen.frequencyHz)
 	totalWidth := simpleui.MeasureTextStyled(formatted, frequencyFontSize, simpleui.FontMono).X
@@ -861,8 +957,8 @@ func (screen *MainScreen) drawFrequencyDisplay() {
 
 	footerY := frequencyPanelY + frequencyPanelH - 18
 	spanValue := fmt.Sprintf(i18n.Source("text.a433787084ce"), float64(screen.spanHz)/1_000_000)
-	spanWidth := simpleui.MeasureTextStyled(spanValue, 11, simpleui.FontSemiBold).X
-	simpleui.DrawTextStyled(spanValue, frequencyPanelX+(108-spanWidth)*.5, footerY, 11, simpleui.FontSemiBold, colors.muted)
+	spanWidth := simpleui.MeasureTextStyled(spanValue, uiCaptionFontSize, simpleui.FontSemiBold).X
+	simpleui.DrawTextStyled(spanValue, frequencyPanelX+(108-spanWidth)*.5, footerY, uiCaptionFontSize, simpleui.FontSemiBold, colors.muted)
 	label := formatStep(screen.tuningStepHz)
 	width := simpleui.MeasureTextStyled(label, 12, simpleui.FontSemiBold).X
 	simpleui.DrawTextStyled(label, frequencyDialX+140-width*.5, footerY, 12, simpleui.FontSemiBold, colors.orange)
@@ -935,10 +1031,10 @@ func (screen *MainScreen) drawSquelchPanel() {
 	if screen.squelchEnabled {
 		rl.DrawRectangleRounded(rl.Rectangle{X: timelineX, Y: timelineY, Width: holdWidth, Height: 9}, .4, 6, colors.orange)
 	}
-	simpleui.DrawTextStyled(i18n.Source("text.aacf94b7be62"), timelineX, timelineY-17, 9, simpleui.FontSemiBold, colors.orange)
+	simpleui.DrawTextStyled(i18n.Source("text.aacf94b7be62"), timelineX, timelineY-17, uiCaptionFontSize, simpleui.FontSemiBold, colors.orange)
 	closeText := i18n.Source("text.d3f0053c6196")
 	closeWidth := simpleui.MeasureTextStyled(closeText, 9, simpleui.FontSemiBold).X
-	simpleui.DrawTextStyled(closeText, timelineX+timelineWidth-closeWidth, timelineY-17, 9, simpleui.FontSemiBold, colors.red)
+	simpleui.DrawTextStyled(closeText, timelineX+timelineWidth-closeWidth, timelineY-17, uiCaptionFontSize, simpleui.FontSemiBold, colors.red)
 
 	dock := rl.Rectangle{X: 960, Y: 156, Width: 296, Height: 34}
 	rl.DrawRectangleRounded(dock, .2, 6, colors.panel)
@@ -1175,6 +1271,23 @@ func (screen *MainScreen) drawTuningCursorLabel(cursorX, y, graphX, graphWidth f
 }
 
 func (screen *MainScreen) drawLowerWorkspace() {
+	outerScale := float32(1)
+	if screen.utilitiesCollapsed {
+		outerScale = collapsedWorkspaceScaleX()
+		rl.PushMatrix()
+		rl.Translatef(collapsedToolContentX, 0, 0)
+		rl.Scalef(outerScale, 1, 1)
+		rl.Translatef(-toolContentX, 0, 0)
+		simpleui.SetHorizontalDrawScale(outerScale)
+		defer func() {
+			simpleui.SetHorizontalDrawScale(1)
+			rl.PopMatrix()
+		}()
+	}
+	screen.drawLowerWorkspaceContent(outerScale)
+}
+
+func (screen *MainScreen) drawLowerWorkspaceContent(outerScale float32) {
 	if screen.activeTool == i18n.Source("text.a8cbb160caa6") {
 		screen.digitalVoicePanel.DrawPanel()
 		return
@@ -1183,9 +1296,17 @@ func (screen *MainScreen) drawLowerWorkspace() {
 		screen.voacapPanel.DrawPanel()
 		return
 	}
+	if screen.activeTool == contestLogToolID {
+		screen.contestLogPanel.DrawPanel()
+		return
+	}
 	drawPanel(toolContentX, toolY, toolContentRight-toolContentX, toolH)
 	if screen.activeTool == i18n.Source("text.f69d86a86926") {
 		screen.tetraPanel.DrawPanel()
+		return
+	}
+	if screen.activeTool == dabToolID {
+		screen.dabPanel.DrawPanel()
 		return
 	}
 	if screen.activeTool == tetrapolToolID {
@@ -1204,7 +1325,7 @@ func (screen *MainScreen) drawLowerWorkspace() {
 		screen.audioPanel.DrawPanel()
 		return
 	}
-	drawCompactedTool(func() {
+	drawCompactedTool(outerScale, func() {
 		if screen.waterfallVisible {
 			drawSmallText(i18n.Source("text.5a921a588ee1"), 40, toolY+12, colors.cyan)
 		} else if screen.activeTool == i18n.Source("text.94fa3fe96dde") {
@@ -1227,9 +1348,69 @@ func (screen *MainScreen) drawLowerWorkspace() {
 			screen.satellitePanel.DrawPanel()
 		} else {
 			drawSmallText(toolDisplayName(screen.activeTool), 40, toolY+14, colors.cyan)
-			simpleui.DrawText(i18n.Source("text.cfa75b09d20e"), 40, toolY+48, 10, colors.muted)
+			simpleui.DrawText(i18n.Source("text.cfa75b09d20e"), 40, toolY+48, uiCaptionFontSize, colors.muted)
 		}
 	})
+}
+
+func (screen *MainScreen) toolWorkspaceElements() []simpleui.Element {
+	var elements []simpleui.Element
+	appendControls := func(controls []simpleui.Element) { elements = append(elements, controls...) }
+	appendControls(screen.waterfallControls)
+	appendControls(screen.fftDisplay.controls)
+	appendControls(screen.recorderPanel.toolControls)
+	appendControls(screen.dmrPanel.controls)
+	appendControls(screen.dabPanel.controls)
+	appendControls(screen.digitalVoicePanel.controls)
+	appendControls(screen.voacapPanel.controls)
+	appendControls(screen.contestLogPanel.controls)
+	appendControls(screen.aprsPanel.controls)
+	appendControls(screen.rtl433Panel.controls)
+	appendControls(screen.radiosondePanel.controls)
+	appendControls(screen.aisPanel.controls)
+	appendControls(screen.aircraftPanel.controls)
+	appendControls(screen.satellitePanel.controls)
+	appendControls(screen.sstvPanel.controls)
+	appendControls(screen.tetraPanel.controls)
+	appendControls(screen.tetrapolPanel.controls)
+	appendControls(screen.omniRigPanel.controls)
+	appendControls(screen.webPanel.controls)
+	appendControls(screen.audioPanel.controls)
+	return elements
+}
+
+func (screen *MainScreen) applyUtilitiesLayout(collapsed bool) {
+	if screen.utilitiesLayoutCompact == collapsed {
+		if screen.utilitiesSidebar != nil {
+			screen.utilitiesSidebar.applyCollapsedState(collapsed)
+		}
+		return
+	}
+	for _, element := range screen.toolWorkspaceElements() {
+		if element == nil {
+			continue
+		}
+		bounds := element.Bounds()
+		if bounds.Y < toolY || bounds.Y >= designHeight || bounds.X < collapsedToolContentX {
+			continue
+		}
+		if collapsed {
+			bounds = collapsedToolBounds(bounds)
+		} else {
+			bounds = expandedToolBounds(bounds)
+		}
+		element.SetBounds(bounds)
+	}
+	screen.utilitiesLayoutCompact = collapsed
+	screen.utilitiesCollapsed = collapsed
+	if screen.utilitiesSidebar != nil {
+		screen.utilitiesSidebar.applyCollapsedState(collapsed)
+	}
+}
+
+func (screen *MainScreen) setUtilitiesCollapsed(collapsed bool) {
+	screen.applyUtilitiesLayout(collapsed)
+	screen.markSettingsDirty()
 }
 
 func (screen *MainScreen) drawWaterfall() {
@@ -1387,6 +1568,12 @@ func (screen *MainScreen) selectTool(tool string) {
 	if previous == i18n.Source("text.a8cbb160caa6") && tool != i18n.Source("text.a8cbb160caa6") && screen.digitalVoicePanel != nil {
 		screen.digitalVoicePanel.Leave()
 	}
+	if previous == dabToolID && tool != dabToolID && screen.dabPanel != nil {
+		screen.dabPanel.Leave()
+	}
+	if previous == contestLogToolID && tool != contestLogToolID && screen.contestLogPanel != nil {
+		screen.contestLogPanel.Leave()
+	}
 	if previous == omniRigToolID && tool != omniRigToolID && screen.rigControlMode == rigOff && screen.rigClient != nil {
 		// The CAT tool starts Omni-Rig for read-only discovery even while link
 		// control is off. Release that background COM session on leaving it.
@@ -1462,6 +1649,12 @@ func (screen *MainScreen) selectTool(tool string) {
 	if screen.dmrPanel != nil {
 		screen.dmrPanel.SetVisible(tool == i18n.Source("text.93239b223632"))
 	}
+	if screen.dabPanel != nil {
+		screen.dabPanel.SetVisible(tool == dabToolID)
+		if tool == dabToolID && previous != dabToolID {
+			screen.dabPanel.Enter()
+		}
+	}
 	if screen.digitalVoicePanel != nil {
 		screen.digitalVoicePanel.SetVisible(tool == i18n.Source("text.a8cbb160caa6"))
 		if tool == i18n.Source("text.a8cbb160caa6") && previous != i18n.Source("text.a8cbb160caa6") {
@@ -1472,6 +1665,12 @@ func (screen *MainScreen) selectTool(tool string) {
 		screen.voacapPanel.SetVisible(tool == voacapToolID)
 		if tool == voacapToolID && previous != voacapToolID {
 			screen.voacapPanel.Enter()
+		}
+	}
+	if screen.contestLogPanel != nil {
+		screen.contestLogPanel.SetVisible(tool == contestLogToolID)
+		if tool == contestLogToolID && previous != contestLogToolID {
+			screen.contestLogPanel.Enter()
 		}
 	}
 	if screen.rtl433Panel != nil {
@@ -1570,11 +1769,17 @@ func (screen *MainScreen) setViewMode(mode int) {
 	if screen.dmrPanel != nil {
 		screen.dmrPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.93239b223632"))
 	}
+	if screen.dabPanel != nil {
+		screen.dabPanel.SetVisible(showTool && screen.activeTool == dabToolID)
+	}
 	if screen.digitalVoicePanel != nil {
 		screen.digitalVoicePanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.a8cbb160caa6"))
 	}
 	if screen.voacapPanel != nil {
 		screen.voacapPanel.SetVisible(showTool && screen.activeTool == voacapToolID)
+	}
+	if screen.contestLogPanel != nil {
+		screen.contestLogPanel.SetVisible(showTool && screen.activeTool == contestLogToolID)
 	}
 	if screen.rtl433Panel != nil {
 		screen.rtl433Panel.SetVisible(showTool && screen.activeTool == i18n.Source("text.8be70e7cb2c4"))
@@ -1613,7 +1818,11 @@ func (screen *MainScreen) setViewMode(mode int) {
 }
 
 func (screen *MainScreen) spectrumGeometry() (x, y, width, height float32) {
-	x, y, width, height = toolContentX, 215, toolContentRight-toolContentX, 235
+	x = toolContentX
+	if screen.utilitiesCollapsed {
+		x = collapsedToolContentX
+	}
+	y, width, height = 215, toolContentRight-x, 235
 	if screen.activeTool == i18n.Source("text.a8cbb160caa6") && screen.viewMode == 1 {
 		height = 261
 	}
@@ -1624,7 +1833,11 @@ func (screen *MainScreen) spectrumGeometry() (x, y, width, height float32) {
 }
 
 func (screen *MainScreen) waterfallGeometry() (x, y, width, height float32) {
-	x, y, width, height = toolContentX, 450, toolContentRight-toolContentX, 170
+	x = toolContentX
+	if screen.utilitiesCollapsed {
+		x = collapsedToolContentX
+	}
+	y, width, height = 450, toolContentRight-x, 170
 	if screen.activeTool == i18n.Source("text.a8cbb160caa6") && screen.viewMode == 1 {
 		y, height = 365, 111
 	}
@@ -1640,6 +1853,9 @@ func (screen *MainScreen) stopAllDecodersForBandChange() {
 	}
 	if screen.digitalVoicePanel != nil {
 		screen.digitalVoicePanel.Leave()
+	}
+	if screen.dabPanel != nil {
+		screen.dabPanel.Leave()
 	}
 	if screen.rtl433Panel != nil {
 		screen.rtl433Panel.Leave()
@@ -2221,6 +2437,8 @@ func (screen *MainScreen) overlayOpen() bool {
 		(screen.filterSelector != nil && screen.filterSelector.OverlayOpen()) ||
 		(screen.memoryPanel != nil && screen.memoryPanel.OverlayOpen()) ||
 		(screen.voacapPanel != nil && screen.voacapPanel.OverlayOpen()) ||
+		(screen.contestLogPanel != nil && screen.contestLogPanel.viewer != nil && screen.contestLogPanel.viewer.OverlayOpen()) ||
+		(screen.contestLogPanel != nil && screen.contestLogPanel.templateEditor != nil && screen.contestLogPanel.templateEditor.OverlayOpen()) ||
 		(screen.updateDialog != nil && screen.updateDialog.OverlayOpen())
 }
 
@@ -2287,7 +2505,7 @@ func drawStatusDot(x, y float32, active bool, activeText, inactiveText string) {
 	}
 	rl.DrawCircle(int32(x), int32(y), 4, color)
 	size := simpleui.MeasureText(text, 8)
-	simpleui.DrawText(text, x-10-size.X, y-5, 8, color)
+	simpleui.DrawText(text, x-10-size.X, y-5, uiCaptionFontSize, color)
 }
 
 func drawActivity(x, y float32, name string, active bool, detail string) {
@@ -2296,9 +2514,9 @@ func drawActivity(x, y float32, name string, active bool, detail string) {
 		color = colors.green
 	}
 	rl.DrawCircle(int32(x), int32(y), 4, color)
-	simpleui.DrawText(name, x+14, y-6, 10, colors.text)
+	simpleui.DrawText(name, x+14, y-6, uiCaptionFontSize, colors.text)
 	width := simpleui.MeasureText(detail, 8).X
-	simpleui.DrawText(detail, 1570-width, y-5, 8, colors.muted)
+	simpleui.DrawText(detail, 1570-width, y-5, uiCaptionFontSize, colors.muted)
 }
 
 func drawLevelMeter(x, y, width, height float32) {

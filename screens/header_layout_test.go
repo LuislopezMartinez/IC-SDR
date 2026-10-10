@@ -8,6 +8,7 @@ import (
 
 func TestSquelchAndHeaderSwitchLayout(t *testing.T) {
 	screen := NewMainScreen(nil)
+	screen.utilitiesCollapsed = false
 	screen.CreateControls()
 	if got := screen.squelchSwitch.Bounds(); got.Y != 24 || got.Height < 28 {
 		t.Fatalf("squelch switch is not aligned in raised panel: %+v", got)
@@ -54,5 +55,42 @@ func TestSquelchAndHeaderSwitchLayout(t *testing.T) {
 		screen.filter.Bounds().X+screen.filter.Bounds().Width > screen.band.Bounds().X ||
 		screen.band.Bounds().X+screen.band.Bounds().Width > frequencyPanelX {
 		t.Fatal("top-row controls overlap")
+	}
+	quickLeft, quickRight := float32(130), float32(516)
+	for name, control := range map[string]simpleui.Element{
+		"mode": screen.mode, "filter": screen.filter, "band": screen.band,
+	} {
+		bounds := control.Bounds()
+		if bounds.X < quickLeft || bounds.X+bounds.Width > quickRight || bounds.Y < 8 || bounds.Y+bounds.Height > 88 {
+			t.Fatalf("%s escaped quick-tuning group: %+v", name, bounds)
+		}
+	}
+	if frequencyPanelW <= 290 {
+		t.Fatal("frequency readout must remain the most prominent header panel")
+	}
+	if screen.sdrHeader.deviceSelect.Bounds().X <= frequencyPanelX+frequencyPanelW {
+		t.Fatal("advanced hardware controls overlap the primary frequency region")
+	}
+
+	toolControl := screen.audioPanel.controls[0]
+	expandedBounds := toolControl.Bounds()
+	scannerWasRunning := screen.scanPanel.running
+	screen.setUtilitiesCollapsed(true)
+	if x, _, _, _ := screen.spectrumGeometry(); x != collapsedToolContentX {
+		t.Fatalf("spectrum did not use collapsed workspace: x=%.0f", x)
+	}
+	if !screen.utilitiesSidebar.scan.Visible() || screen.utilitiesSidebar.scanLayer.Visible() {
+		t.Fatal("compact rail did not preserve only its primary scanner action")
+	}
+	if screen.scanPanel.running != scannerWasRunning {
+		t.Fatal("collapsing utilities changed scanner operation")
+	}
+	if toolControl.Bounds().Width <= expandedBounds.Width {
+		t.Fatal("active tool did not receive the released sidebar width")
+	}
+	screen.setUtilitiesCollapsed(false)
+	restored := toolControl.Bounds()
+	if restored.X != expandedBounds.X || restored.Width != expandedBounds.Width {
+		t.Fatalf("tool bounds were not restored: got %+v want %+v", restored, expandedBounds)
 	}
 }

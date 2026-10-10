@@ -48,7 +48,7 @@ func TestBundledEnglishFormatsAndCoverage(t *testing.T) {
 	selected = "en"
 	rebuild()
 	mu.Unlock()
-	for input, want := range map[string]string{"ABRIR MAPA": "OPEN MAP", "LIMPIAR": "CLEAR", "DETALLE DE LA ESTACIÓN": "STATION DETAILS", "INDICATIVO": "CALLSIGN", "3 estaciones · arrastra para mover · rueda para zoom": "3 stations · drag to pan · mouse wheel to zoom", "Rumbo: 120": "Course: 120", "EA1ABC>APRS:hello": "EA1ABC>APRS:hello"} {
+	for input, want := range map[string]string{"ABRIR MAPA": "OPEN MAP", "LIMPIAR": "CLEAR", "DETALLE DE LA ESTACIÓN": "STATION DETAILS", "INDICATIVO": "CALLSIGN", "VER REGISTRO": "VIEW LOG", "ENVÍAS 003": "SEND 003", "3 estaciones · arrastra para mover · rueda para zoom": "3 stations · drag to pan · mouse wheel to zoom", "Rumbo: 120": "Course: 120", "EA1ABC>APRS:hello": "EA1ABC>APRS:hello"} {
 		if got := Display(input); got != want {
 			t.Fatalf("%q => %q, want %q", input, got, want)
 		}
