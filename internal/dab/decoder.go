@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,6 +24,7 @@ const OutputSampleRate = 48_000
 type Status struct {
 	Available, Running, Synced, AudioActive bool
 	State, Detail, Ensemble, Service        string
+	DynamicLabel, AudioMode                 string
 	ServiceID                               uint32
 	SNR, FrequencyErrorHz                   float32
 	InputQueued, InputCapacity              int
@@ -39,6 +41,7 @@ type Service struct {
 
 type runtimeEvent struct {
 	Type, State, Detail, Ensemble, Service string
+	Label, Mode                            string
 	ServiceID                              uint32   `json:"serviceId"`
 	Synced                                 *bool    `json:"synced"`
 	SNR                                    *float32 `json:"snr"`
@@ -160,7 +163,7 @@ func (d *Decoder) start() error {
 	d.queue, d.stop = make(chan []float32, 24), make(chan struct{})
 	d.status.Running, d.status.State, d.status.Detail = true, "starting", ""
 	d.status.Synced, d.status.AudioActive = false, false
-	d.status.Ensemble, d.status.Service, d.status.ServiceID = "", "", 0
+	d.status.Ensemble, d.status.Service, d.status.DynamicLabel, d.status.AudioMode, d.status.ServiceID = "", "", "", "", 0
 	d.status.Services = nil
 	d.mu.Unlock()
 	go d.writeLoop(generation)
@@ -400,6 +403,12 @@ func (d *Decoder) applyEvent(event runtimeEvent, generation uint64) {
 				break
 			}
 		}
+	}
+	if event.Type == "label" {
+		d.status.DynamicLabel = strings.TrimSpace(event.Label)
+	}
+	if event.Type == "audio" && event.Mode != "" {
+		d.status.AudioMode = event.Mode
 	}
 	if event.Synced != nil {
 		d.status.Synced = *event.Synced

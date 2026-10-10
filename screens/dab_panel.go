@@ -78,7 +78,7 @@ func NewDABPanel(screen *MainScreen) *DABPanel {
 	p.next = p.button("dabNext", 558, toolY+174, 42, 42, ">", colors.panelAlt, func() { p.changeChannel(1) })
 	for index := range p.services {
 		i := index
-		p.services[index] = p.button(fmt.Sprintf("dabService%d", index), 850, toolY+55+float32(index)*47, 365, 39, "—", colors.panelAlt, func() { p.selectService(i) })
+		p.services[index] = p.button(fmt.Sprintf("dabService%d", index), 850, toolY+49+float32(index)*39, 365, 34, "—", colors.panelAlt, func() { p.selectService(i) })
 	}
 	p.controls = []simpleui.Element{p.enable, p.channel, p.previous, p.tune, p.next}
 	for _, service := range p.services {
@@ -215,7 +215,7 @@ func (p *DABPanel) DrawPanel() {
 	simpleui.DrawTextStyled("DAB / DAB+", 370, toolY+8, uiSectionFontSize, simpleui.FontSemiBold, colors.cyan)
 	channel := dabBandIIIChannels[p.channelIndex]
 	simpleui.DrawTextStyled(fmt.Sprintf("%.3f MHz", float64(channel.hz)/1e6), 380, toolY+127, 22, simpleui.FontMono, colors.text)
-	rl.DrawLineEx(rl.Vector2{X: 610, Y: toolY + 15}, rl.Vector2{X: 610, Y: toolY + 230}, 1, colors.border)
+	rl.DrawLineEx(rl.Vector2{X: 610, Y: toolY + 15}, rl.Vector2{X: 610, Y: toolY + 254}, 1, colors.border)
 	simpleui.DrawTextStyled("ESTADO", 635, toolY+8, uiSectionFontSize, simpleui.FontSemiBold, colors.cyan)
 	stateColor := colors.orange
 	if status.Synced {
@@ -240,34 +240,105 @@ func (p *DABPanel) DrawPanel() {
 	if p.feedback != "" {
 		simpleui.DrawText(clipDAB(p.feedback, 28), 635, toolY+183, uiCaptionFontSize, colors.red)
 	}
-	rl.DrawLineEx(rl.Vector2{X: 825, Y: toolY + 15}, rl.Vector2{X: 825, Y: toolY + 230}, 1, colors.border)
+	rl.DrawLineEx(rl.Vector2{X: 825, Y: toolY + 15}, rl.Vector2{X: 825, Y: toolY + 164}, 1, colors.border)
 	simpleui.DrawTextStyled("SERVICIOS", 850, toolY+8, uiSectionFontSize, simpleui.FontSemiBold, colors.cyan)
-	rl.DrawLineEx(rl.Vector2{X: 1240, Y: toolY + 15}, rl.Vector2{X: 1240, Y: toolY + 230}, 1, colors.border)
+	drawDABDynamicLabel(status.DynamicLabel)
+	rl.DrawLineEx(rl.Vector2{X: 1240, Y: toolY + 15}, rl.Vector2{X: 1240, Y: toolY + 254}, 1, colors.border)
 	simpleui.DrawTextStyled("AHORA SUENA", 1265, toolY+8, uiSectionFontSize, simpleui.FontSemiBold, colors.cyan)
 	service := status.Service
 	if service == "" {
 		service = "Sin servicio seleccionado"
 	}
 	simpleui.DrawTextStyled(clipDAB(service, 24), 1265, toolY+47, 18, simpleui.FontSemiBold, colors.text)
-	simpleui.DrawText("DAB/DAB+ · audio digital", 1265, toolY+78, uiBodyFontSize, colors.muted)
-	simpleui.DrawText(fmt.Sprintf("CORRECCIÓN   %+.0f Hz", status.FrequencyErrorHz), 1265, toolY+108, uiCaptionFontSize, colors.text)
-	simpleui.DrawText(fmt.Sprintf("COLA IQ      %d / %d", status.InputQueued, status.InputCapacity), 1265, toolY+130, uiCaptionFontSize, colors.text)
+	format := "DAB/DAB+ · audio digital"
+	if status.AudioMode != "" {
+		format = "DAB+ · " + status.AudioMode
+	}
+	simpleui.DrawText(clipDAB(format, 35), 1265, toolY+75, uiBodyFontSize, colors.muted)
+	serviceID := "—"
+	if status.ServiceID != 0 {
+		serviceID = fmt.Sprintf("0x%X", status.ServiceID)
+	}
+	simpleui.DrawText("SERVICIO      "+serviceID, 1265, toolY+101, uiCaptionFontSize, colors.text)
+	simpleui.DrawText(fmt.Sprintf("CORRECCIÓN    %+.0f Hz", status.FrequencyErrorHz), 1265, toolY+123, uiCaptionFontSize, colors.text)
+	simpleui.DrawText(fmt.Sprintf("COLA IQ       %d / %d", status.InputQueued, status.InputCapacity), 1265, toolY+145, uiCaptionFontSize, colors.text)
 	dropColor := colors.muted
 	if status.Dropped > 0 {
 		dropColor = colors.orange
 	}
-	simpleui.DrawText(fmt.Sprintf("PÉRDIDAS      %d", status.Dropped), 1265, toolY+152, uiCaptionFontSize, dropColor)
+	simpleui.DrawText(fmt.Sprintf("PÉRDIDAS      %d", status.Dropped), 1265, toolY+167, uiCaptionFontSize, dropColor)
 	audioRate := "—"
 	if status.AudioSampleRate > 0 {
 		audioRate = fmt.Sprintf("%d kHz · %d ch", status.AudioSampleRate/1000, status.AudioChannels)
 	}
-	simpleui.DrawText("AUDIO         "+audioRate, 1265, toolY+174, uiCaptionFontSize, colors.text)
+	simpleui.DrawText("AUDIO         "+audioRate, 1265, toolY+189, uiCaptionFontSize, colors.text)
 	runtimeText := "DETENIDO"
 	runtimeColor := colors.muted
 	if status.Running {
 		runtimeText, runtimeColor = "ACTIVO", colors.green
 	}
-	simpleui.DrawText("RUNTIME       "+runtimeText, 1265, toolY+196, uiCaptionFontSize, runtimeColor)
+	rl.DrawLineEx(rl.Vector2{X: 1265, Y: toolY + 216}, rl.Vector2{X: 1565, Y: toolY + 216}, 1, colors.border)
+	simpleui.DrawText("RUNTIME       "+runtimeText, 1265, toolY+229, uiCaptionFontSize, runtimeColor)
+}
+
+func drawDABDynamicLabel(label string) {
+	card := rl.Rectangle{X: 625, Y: toolY + 170, Width: 590, Height: 84}
+	rl.DrawRectangleRounded(card, 0.06, 4, colors.panelAlt)
+	rl.DrawRectangleRoundedLinesEx(card, 0.06, 4, 1, colors.border)
+	simpleui.DrawTextStyled("INFORMACIÓN DINÁMICA · DLS / DL+", card.X+12, card.Y+7, uiMinimumFontSize, simpleui.FontSemiBold, colors.cyan)
+	label = strings.TrimSpace(label)
+	if label == "" {
+		simpleui.DrawText("Sin información dinámica", card.X+12, card.Y+39, uiBodyFontSize, colors.muted)
+		return
+	}
+	lines := wrapDABText(label, card.Width-24, uiBodyFontSize, 2)
+	for index, line := range lines {
+		simpleui.DrawTextStyled(line, card.X+12, card.Y+35+float32(index)*20, uiBodyFontSize, simpleui.FontSemiBold, colors.text)
+	}
+}
+
+func wrapDABText(value string, width float32, size int32, maxLines int) []string {
+	words := strings.Fields(value)
+	if len(words) == 0 || maxLines <= 0 {
+		return nil
+	}
+	lines := make([]string, 0, maxLines)
+	line := ""
+	for wordIndex, word := range words {
+		next := word
+		if line != "" {
+			next = line + " " + word
+		}
+		if line != "" && simpleui.MeasureTextStyled(next, size, simpleui.FontSemiBold).X > width {
+			lines = append(lines, line)
+			if len(lines) == maxLines-1 {
+				line = fitDABText(strings.Join(words[wordIndex:], " "), width, size)
+				break
+			}
+			line = word
+		} else {
+			line = next
+		}
+	}
+	if line != "" && len(lines) < maxLines {
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func fitDABText(value string, width float32, size int32) string {
+	if simpleui.MeasureTextStyled(value, size, simpleui.FontSemiBold).X <= width {
+		return value
+	}
+	runes := []rune(value)
+	for len(runes) > 0 {
+		candidate := strings.TrimSpace(string(runes)) + "..."
+		if simpleui.MeasureTextStyled(candidate, size, simpleui.FontSemiBold).X <= width {
+			return candidate
+		}
+		runes = runes[:len(runes)-1]
+	}
+	return "..."
 }
 func clipDAB(value string, limit int) string {
 	if len(value) <= limit {

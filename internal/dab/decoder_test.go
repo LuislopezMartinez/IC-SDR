@@ -48,6 +48,16 @@ func TestLateServiceLabelUpdatesSelectedService(t *testing.T) {
 	}
 }
 
+func TestDynamicLabelAndAudioModeAreKeptSeparateFromDiagnostics(t *testing.T) {
+	d := New(2_048_000, t.TempDir()+"/missing.exe", nil)
+	d.applyEvent(runtimeEvent{Type: "label", Label: "Boletín informativo"}, 0)
+	d.applyEvent(runtimeEvent{Type: "audio", Mode: "HE-AAC v2", SampleRate: 32_000, Channels: 2}, 0)
+	status := d.Snapshot()
+	if status.DynamicLabel != "Boletín informativo" || status.AudioMode != "HE-AAC v2" {
+		t.Fatalf("broadcast metadata = %q / %q", status.DynamicLabel, status.AudioMode)
+	}
+}
+
 func TestStreamResamplerConverts32kTo48kAcrossBlocks(t *testing.T) {
 	r := streamResampler{outputRate: 48_000}
 	var output []float32

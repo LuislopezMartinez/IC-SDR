@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.11.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.11.0)**
+**Versión actual: [v0.11.1](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.11.1)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -39,11 +39,18 @@ IC-SDR integra herramientas para recibir y visualizar:
 
 ## Capturas actuales
 
+![Decodificador DAB+ de IC-SDR con servicios y texto dinámico DLS/DL+](docs/images/ic-sdr-dab-plus.png)
+
 ![Servidor web de IC-SDR en Windows](docs/images/ic-sdr-servidor-web.png)
 
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.11.1
+
+- El decodificador DAB/DAB+ muestra información dinámica **DLS/DL+** emitida por las emisoras, como títulos, noticias y comentarios cuando estén disponibles.
+- El panel DAB+ presenta el códec de audio, el identificador del servicio y una vista mejorada de los servicios y metadatos recibidos.
 
 ## Novedades de v0.11.0
 
