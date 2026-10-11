@@ -21,6 +21,7 @@ type toolMenuItem struct {
 
 var toolMenuItems = []toolMenuItem{
 	{id: "DISTANCE_MAP", label: i18n.Source("text.3bd35969d3d1"), row: 2},
+	{id: qrzToolID, label: "QRZ CALLBOOK", row: 2},
 	{id: omniRigToolID, label: "OMNIRIG CAT", icon: "menu-omnirig.png", row: 2},
 	{id: contestLogToolID, label: i18n.Source("text.log0037"), row: 2},
 	{id: voacapToolID, label: "PROPAGACIÓN DX", icon: "menu-scope.png", row: 0},
@@ -373,6 +374,11 @@ func (menu *ToolMenu) drawCustomIcon(id string, center rl.Vector2, active bool, 
 		rl.DrawRectangleRounded(rl.Rectangle{X: center.X - 39, Y: center.Y - 25, Width: 78, Height: 50}, .14, 6, colors.panelAlt)
 		rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: center.X - 39, Y: center.Y - 25, Width: 78, Height: 50}, .14, 6, 2, accent)
 		drawCenteredStyled("DAB+", rl.Rectangle{X: center.X - 38, Y: center.Y - 22, Width: 76, Height: 44}, 16, simpleui.FontSemiBold, accent)
+	case qrzToolID:
+		rl.DrawCircleLines(int32(center.X-17), int32(center.Y), 27, accent)
+		rl.DrawEllipseLines(int32(center.X-17), int32(center.Y), 11, 27, colors.muted)
+		rl.DrawLineEx(rl.Vector2{X: center.X - 44, Y: center.Y}, rl.Vector2{X: center.X + 10, Y: center.Y}, 2, colors.muted)
+		simpleui.DrawTextStyled("QRZ", center.X+13, center.Y-12, 17, simpleui.FontSemiBold, accent)
 	case "DIGITAL_AUTO":
 		rl.DrawCircleLines(int32(center.X), int32(center.Y), 31, accent)
 		for ring := float32(12); ring <= 24; ring += 12 {

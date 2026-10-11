@@ -67,6 +67,10 @@ func main() {
 		screens.RunDistanceMap()
 		return
 	}
+	if len(os.Args) == 3 && os.Args[1] == "--qrz-distance-map" {
+		screens.RunQRZDistanceMap(os.Args[2])
+		return
+	}
 	if len(os.Args) == 3 && os.Args[1] == "--aprs-map" {
 		screens.RunAPRSMap(os.Args[2])
 		return

@@ -20,6 +20,9 @@ func TestGeographicCalculations(t *testing.T) {
 	if Distance(a, a) != 0 {
 		t.Fatal("coincident pins")
 	}
+	if math.Abs(Distance(a, b)+LongDistance(a, b)-2*math.Pi*EarthRadius) > 1e-6 {
+		t.Fatal("short and long paths must complete the circumference")
+	}
 	p := Samples(Point{0, 179}, Point{0, -179}, 81)
 	if math.Abs(math.Abs(p[40].Lon)-180) > 1e-6 || math.Abs(Distance(p[0], p[40])-Distance(p[40], p[80])) > 1 {
 		t.Fatal("dateline sampling")

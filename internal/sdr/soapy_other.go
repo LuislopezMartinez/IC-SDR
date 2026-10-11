@@ -20,6 +20,7 @@ func openSoapyExact(config Config) (*soapyDevice, error)          { return openS
 func listSoapyDevices(Config) ([]DeviceOption, error)             { return nil, nil }
 func (*soapyDevice) read([]float32) (int, int32, error)           { return 0, 0, nil }
 func (*soapyDevice) close()                                       {}
+func (*soapyDevice) interrupt()                                   {}
 func (*soapyDevice) setCenterFrequency(int64) error               { return nil }
 func (*soapyDevice) centerFrequency() int64                       { return 0 }
 func (*soapyDevice) hardwareSettings() HardwareSettings           { return HardwareSettings{} }

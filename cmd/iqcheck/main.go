@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -10,11 +11,16 @@ import (
 )
 
 func main() {
+	duration := flag.Duration("duration", 5*time.Second, "duración de la prueba")
+	retuneEvery := flag.Duration("retune-every", 0, "intervalo entre resintonizaciones; 0 las desactiva")
+	frequency := flag.Int64("frequency", 14_200_000, "frecuencia central inicial en Hz")
+	flag.Parse()
+
 	receiver := sdr.NewReceiver(sdr.Config{
 		RuntimeRoot:   resources.Path("runtime", "windows-x64"),
 		Driver:        "sdrplay",
 		Serial:        "2401019760",
-		FrequencyHz:   14_261_000,
+		FrequencyHz:   *frequency,
 		SampleRate:    2_048_000,
 		FFTSize:       4096,
 		CalibrationDB: 23,
@@ -24,23 +30,37 @@ func main() {
 		os.Exit(1)
 	}
 	defer receiver.Close()
-	receiver.SetDemodulator("NFM", 14_261_000, 12_500)
+	receiver.SetDemodulator("USB", *frequency, 2_400)
 
 	spectrum := make([]float32, 4096)
-	for second := 1; second <= 5; second++ {
+	totalSeconds := int(duration.Round(time.Second) / time.Second)
+	if totalSeconds < 1 {
+		totalSeconds = 1
+	}
+	retuneSeconds := int(retuneEvery.Round(time.Second) / time.Second)
+	currentFrequency := *frequency
+	previous := receiver.Snapshot(spectrum)
+	for second := 1; second <= totalSeconds; second++ {
 		time.Sleep(time.Second)
-		if second == 2 {
-			receiver.SetCenterFrequency(14_361_000)
-			fmt.Println("      retune +100 kHz")
-		}
-		if second == 4 {
-			receiver.SetCenterFrequency(14_261_000)
-			fmt.Println("      retune frecuencia inicial")
+		if retuneSeconds > 0 && second%retuneSeconds == 0 {
+			if currentFrequency == *frequency {
+				currentFrequency = *frequency + 100_000
+			} else {
+				currentFrequency = *frequency
+			}
+			receiver.SetCenterFrequency(currentFrequency)
+			receiver.SetDemodulator("USB", currentFrequency, 2_400)
+			fmt.Printf("      retune %.6f MHz\n", float64(currentFrequency)/1e6)
 		}
 		stats := receiver.Snapshot(spectrum)
-		fmt.Printf("[%d/5] %s · samples=%d · fft=%d · timeout=%d · bad=%d · audio=%d buffered=%d\n",
-			second, stats.String(), stats.ReceivedSamples, stats.FFTBlocks,
-			stats.Timeouts, stats.InvalidSamples, stats.AudioProduced, stats.AudioBuffered)
+		fmt.Printf("[%d/%d] samples/s=%d fft/s=%d timeout/s=%d ovf/s=%d restarts=%d · %s\n",
+			second, totalSeconds,
+			stats.ReceivedSamples-previous.ReceivedSamples,
+			stats.FFTBlocks-previous.FFTBlocks,
+			stats.Timeouts-previous.Timeouts,
+			stats.Overflows-previous.Overflows,
+			stats.CaptureRestarts, stats.String())
+		previous = stats
 	}
 
 	stats := receiver.Snapshot(spectrum)

@@ -56,18 +56,20 @@ type Decoder struct {
 	inputRate  int
 	onAudio    func([]float32)
 
-	mu         sync.RWMutex
-	status     Status
-	serviceID  uint32
-	cmd        *exec.Cmd
-	stdin      io.WriteCloser
-	queue      chan []float32
-	stop       chan struct{}
-	generation uint64
-	channels   atomic.Int32
-	sampleRate atomic.Int32
-	dropped    atomic.Uint64
-	pool       sync.Pool
+	mu             sync.RWMutex
+	status         Status
+	serviceID      uint32
+	cmd            *exec.Cmd
+	stdin          io.WriteCloser
+	queue          chan []float32
+	stop           chan struct{}
+	processDone    chan struct{}
+	releaseProcess func()
+	generation     uint64
+	channels       atomic.Int32
+	sampleRate     atomic.Int32
+	dropped        atomic.Uint64
+	pool           sync.Pool
 }
 
 func New(inputRate float64, executable string, onAudio func([]float32)) *Decoder {
@@ -157,10 +159,21 @@ func (d *Decoder) start() error {
 		d.mu.Unlock()
 		return err
 	}
+	releaseProcess, lifetimeErr := attachProcessLifetime(cmd)
+	if lifetimeErr != nil {
+		_ = stdin.Close()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		d.status.State, d.status.Detail = "error", "cannot supervise DAB runtime: "+lifetimeErr.Error()
+		d.mu.Unlock()
+		return lifetimeErr
+	}
 	d.generation++
 	generation := d.generation
 	d.cmd, d.stdin = cmd, stdin
 	d.queue, d.stop = make(chan []float32, 24), make(chan struct{})
+	d.processDone, d.releaseProcess = make(chan struct{}), releaseProcess
+	processDone := d.processDone
 	d.status.Running, d.status.State, d.status.Detail = true, "starting", ""
 	d.status.Synced, d.status.AudioActive = false, false
 	d.status.Ensemble, d.status.Service, d.status.DynamicLabel, d.status.AudioMode, d.status.ServiceID = "", "", "", "", 0
@@ -169,7 +182,7 @@ func (d *Decoder) start() error {
 	go d.writeLoop(generation)
 	go d.audioLoop(stdout, generation)
 	go d.eventLoop(stderr, generation)
-	go d.waitLoop(cmd, generation)
+	go d.waitLoop(cmd, generation, processDone, releaseProcess)
 	return nil
 }
 
@@ -221,12 +234,30 @@ func (d *Decoder) Stop() {
 	d.status.Running, d.status.Synced, d.status.AudioActive = false, false, false
 	d.status.State = "stopped"
 	stop, stdin, cmd, queue := d.stop, d.stdin, d.cmd, d.queue
-	d.stop, d.stdin, d.cmd, d.queue = nil, nil, nil, nil
+	done, releaseProcess := d.processDone, d.releaseProcess
+	d.stop, d.stdin, d.cmd, d.queue, d.processDone, d.releaseProcess = nil, nil, nil, nil, nil, nil
 	close(stop)
 	d.mu.Unlock()
 	_ = stdin.Close()
 	if cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Kill()
+	}
+	if done != nil {
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			// Closing the job is a second, kernel-enforced termination path.
+			if releaseProcess != nil {
+				releaseProcess()
+			}
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+			}
+		}
+	}
+	if releaseProcess != nil {
+		releaseProcess()
 	}
 	for {
 		select {
@@ -427,15 +458,28 @@ func (d *Decoder) applyEvent(event runtimeEvent, generation uint64) {
 	}
 }
 
-func (d *Decoder) waitLoop(cmd *exec.Cmd, generation uint64) {
+func (d *Decoder) waitLoop(cmd *exec.Cmd, generation uint64, done chan struct{}, releaseProcess func()) {
 	err := cmd.Wait()
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	if d.generation != generation {
+		d.mu.Unlock()
+		if releaseProcess != nil {
+			releaseProcess()
+		}
+		if done != nil {
+			close(done)
+		}
 		return
 	}
 	d.status.Running, d.status.Synced, d.status.AudioActive = false, false, false
 	if err != nil && d.status.State != "stopped" {
 		d.status.State, d.status.Detail = "error", err.Error()
+	}
+	d.mu.Unlock()
+	if releaseProcess != nil {
+		releaseProcess()
+	}
+	if done != nil {
+		close(done)
 	}
 }

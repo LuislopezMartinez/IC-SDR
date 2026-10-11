@@ -599,6 +599,13 @@ func (device *soapyDevice) close() {
 	device.api = nil
 }
 
+func (device *soapyDevice) interrupt() {
+	if device == nil || device.api == nil || device.device == 0 || device.stream == 0 {
+		return
+	}
+	device.api.deactivateStream(device.device, device.stream, 0, 0)
+}
+
 func (api *soapyAPI) check(code int32, operation string) error {
 	if code == 0 {
 		return nil

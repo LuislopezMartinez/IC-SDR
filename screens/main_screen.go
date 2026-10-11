@@ -202,6 +202,7 @@ type MainScreen struct {
 	audioPlayer            *AudioPlayer
 	webServer              *WebServer
 	webPanel               *WebPanel
+	qrzPanel               *QRZPanel
 	webConfig              webConfig
 	webConfigPath          string
 	uiSounds               *UISounds
@@ -502,6 +503,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.tetrapolPanel = NewTETRAPOLPanel(screen)
 	screen.omniRigPanel = NewOmniRigPanel(screen)
 	screen.webPanel = NewWebPanel(screen)
+	screen.qrzPanel = NewQRZPanel(screen)
 	if screen.rtl433FrequencyHz >= 1_000 {
 		screen.rtl433Panel.targetHz = screen.rtl433FrequencyHz
 	}
@@ -613,6 +615,10 @@ func (screen *MainScreen) CreateControls() {
 	for _, element := range screen.webPanel.controls {
 		simpleui.Add(element)
 	}
+	for _, element := range screen.qrzPanel.controls {
+		simpleui.Add(element)
+	}
+	simpleui.Add(screen.qrzPanel)
 	for _, element := range screen.utilitiesSidebar.controls {
 		simpleui.Add(element)
 	}
@@ -787,6 +793,9 @@ func (screen *MainScreen) Close() {
 	}
 	if screen.webPanel != nil {
 		screen.webPanel.Close()
+	}
+	if screen.qrzPanel != nil {
+		screen.qrzPanel.Close()
 	}
 	screen.flushSettings(true)
 	simpleui.SetActivationFeedback(nil)
@@ -1300,6 +1309,10 @@ func (screen *MainScreen) drawLowerWorkspaceContent(outerScale float32) {
 		screen.contestLogPanel.DrawPanel()
 		return
 	}
+	if screen.activeTool == qrzToolID {
+		screen.qrzPanel.DrawPanel()
+		return
+	}
 	drawPanel(toolContentX, toolY, toolContentRight-toolContentX, toolH)
 	if screen.activeTool == i18n.Source("text.f69d86a86926") {
 		screen.tetraPanel.DrawPanel()
@@ -1375,6 +1388,7 @@ func (screen *MainScreen) toolWorkspaceElements() []simpleui.Element {
 	appendControls(screen.tetrapolPanel.controls)
 	appendControls(screen.omniRigPanel.controls)
 	appendControls(screen.webPanel.controls)
+	appendControls(screen.qrzPanel.controls)
 	appendControls(screen.audioPanel.controls)
 	return elements
 }
@@ -1730,6 +1744,12 @@ func (screen *MainScreen) selectTool(tool string) {
 			screen.satellitePanel.Enter()
 		}
 	}
+	if screen.webPanel != nil {
+		screen.webPanel.SetVisible(tool == i18n.Source("text.918191dc299c"))
+	}
+	if screen.qrzPanel != nil {
+		screen.qrzPanel.SetVisible(tool == qrzToolID)
+	}
 	screen.markSettingsDirty()
 	screen.markSettingsDirty()
 }
@@ -1813,6 +1833,9 @@ func (screen *MainScreen) setViewMode(mode int) {
 	}
 	if screen.webPanel != nil {
 		screen.webPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.918191dc299c"))
+	}
+	if screen.qrzPanel != nil {
+		screen.qrzPanel.SetVisible(showTool && screen.activeTool == qrzToolID)
 	}
 	screen.markSettingsDirty()
 }

@@ -49,6 +49,13 @@ type distanceMap struct {
 	cancel                       context.CancelFunc
 	results                      chan distanceElevationResult
 	cache                        map[string][]*float64
+	locked                       bool
+	labels                       [2]string
+}
+
+type qrzDistanceRequest struct {
+	LocalName, RemoteName string
+	Local, Remote         distance.Point
 }
 
 var distanceViewer *exec.Cmd
@@ -77,6 +84,32 @@ func OpenDistanceMap() error {
 	done := make(chan struct{})
 	distanceViewerDone = done
 	go func() { _ = cmd.Wait(); close(done) }()
+	return nil
+}
+
+func OpenQRZDistanceMap(localName, remoteName string, local, remote distance.Point) error {
+	request := qrzDistanceRequest{LocalName: localName, RemoteName: remoteName, Local: local, Remote: remote}
+	data, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
+	path := resources.WritablePath("cache", "qrz-distance.json")
+	if err = os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	if err = os.WriteFile(path, data, 0600); err != nil {
+		return err
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(exe, "--qrz-distance-map", path)
+	cmd.SysProcAttr = rtl433ViewerProcessAttributes()
+	if err = cmd.Start(); err != nil {
+		return err
+	}
+	go func() { _ = cmd.Wait() }()
 	return nil
 }
 func newDistanceMap() *distanceMap {
@@ -112,6 +145,41 @@ func RunDistanceMap() {
 		}
 	}()
 	simpleui.Run(v.draw)
+}
+
+func RunQRZDistanceMap(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var request qrzDistanceRequest
+	if json.Unmarshal(data, &request) != nil {
+		return
+	}
+	simpleui.SetMode(1440, 900, simpleui.Stretch)
+	simpleui.SetMinimumSize(960, 600)
+	simpleui.SetTitle("DISTANCIA QRZ · " + request.RemoteName)
+	simpleui.SetTextScale(1.15)
+	v := newDistanceMap()
+	v.locked = true
+	v.labels = [2]string{request.LocalName, request.RemoteName}
+	v.pins = [2]distance.Point{request.Local, request.Remote}
+	v.fitPins()
+	v.changed()
+	defer func() {
+		if v.cancel != nil {
+			v.cancel()
+		}
+	}()
+	simpleui.Run(v.draw)
+}
+
+func (v *distanceMap) fitPins() {
+	a, b := v.pins[0], v.pins[1]
+	dLon := wrapLongitude(b.Lon - a.Lon)
+	v.lon = wrapLongitude(a.Lon + dLon/2)
+	v.lat = (a.Lat + b.Lat) / 2
+	v.span = math.Max(0.35, math.Max(math.Abs(dLon)*1.65, math.Abs(a.Lat-b.Lat)*2.7))
 }
 func (v *distanceMap) changed() {
 	v.generation++
@@ -233,11 +301,13 @@ func (v *distanceMap) input(b rl.Rectangle) {
 			v.drag = 3
 		} else if !over {
 			v.drag = 2
-			for i, p := range v.pins {
-				q := projectMercator(v.lat, v.lon, v.span, p.Lat, p.Lon, b)
-				if rl.Vector2Distance(m, rl.Vector2{X: q.X, Y: q.Y - 23}) < 25 {
-					v.drag = i
-					break
+			if !v.locked {
+				for i, p := range v.pins {
+					q := projectMercator(v.lat, v.lon, v.span, p.Lat, p.Lon, b)
+					if rl.Vector2Distance(m, rl.Vector2{X: q.X, Y: q.Y - 23}) < 25 {
+						v.drag = i
+						break
+					}
 				}
 			}
 		}
@@ -336,7 +406,11 @@ func (v *distanceMap) drawPanel() {
 				alt = fmt.Sprintf("%.1f m", *v.elevations[j])
 			}
 		}
-		v.line(fmt.Sprintf("%c: %.5f, %.5f · %s", 'A'+i, p.Lat, p.Lon, distance.Locator(p)), 135+float32(i)*45)
+		prefix := string(rune('A' + i))
+		if v.locked && v.labels[i] != "" {
+			prefix = sondeClip(v.labels[i], 18)
+		}
+		v.line(fmt.Sprintf("%s: %.5f, %.5f · %s", prefix, p.Lat, p.Lon, distance.Locator(p)), 135+float32(i)*45)
 		v.line(i18n.Source("text.b8aee5a60063")+alt, 156+float32(i)*45)
 	}
 	if len(v.elevations) > 0 && v.elevations[0] != nil && v.elevations[len(v.elevations)-1] != nil {
@@ -350,7 +424,12 @@ func (v *distanceMap) drawPanel() {
 		v.expanded = !v.expanded
 		v.panel.Y = min(v.panel.Y, 900-v.panelBounds().Height)
 	}
-	if distanceButton(i18n.Source("text.f2f6d7256e7e"), rl.Rectangle{X: pb.X + 154, Y: pb.Y + 261, Width: 125, Height: 42}) {
+	if v.locked {
+		locked := rl.Rectangle{X: pb.X + 154, Y: pb.Y + 261, Width: 125, Height: 42}
+		rl.DrawRectangleRounded(locked, .12, 4, colors.panelAlt)
+		rl.DrawRectangleRoundedLinesEx(locked, .12, 4, 1, colors.border)
+		drawCenteredStyled("PUNTOS FIJOS", locked, 12, simpleui.FontSemiBold, colors.muted)
+	} else if distanceButton(i18n.Source("text.f2f6d7256e7e"), rl.Rectangle{X: pb.X + 154, Y: pb.Y + 261, Width: 125, Height: 42}) {
 		v.library = !v.library
 	}
 	if distanceButton(i18n.Source("text.a9254c5f8128"), rl.Rectangle{X: pb.X + 286, Y: pb.Y + 261, Width: 130, Height: 42}) {

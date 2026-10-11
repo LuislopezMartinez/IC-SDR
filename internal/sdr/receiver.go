@@ -25,7 +25,10 @@ import (
 	"go-zero/internal/tetrapolruntime"
 )
 
-const demodulatedAudioSampleRate = 48_000
+const (
+	demodulatedAudioSampleRate = 48_000
+	captureStallThreshold      = 4 * time.Second
+)
 
 type Config struct {
 	RadiosondeDirectory       string
@@ -70,6 +73,7 @@ type Stats struct {
 	SpectrumCenterHz                              int64
 	AudioBuffered, AudioOverruns, AudioUnderflows uint64
 	AudioProduced, AudioConsumed                  uint64
+	CaptureRestarts                               uint64
 	AudioPeak, SignalDBm                          float32
 	SquelchOpen                                   bool
 }
@@ -119,6 +123,12 @@ type Receiver struct {
 	closeOnce      sync.Once
 	startMu        sync.Mutex
 	closed         atomic.Bool
+	lastSamples    atomic.Int64
+	recovering     atomic.Bool
+	monitorOnce    sync.Once
+	monitorStarted atomic.Bool
+	monitorStop    chan struct{}
+	monitorDone    chan struct{}
 	devices        []DeviceOption
 	selectedDevice DeviceOption
 
@@ -213,6 +223,7 @@ func NewReceiver(config Config) *Receiver {
 		wfm:            dsp.NewNFMDemodulator(config.SampleRate, 48_000),
 		ssb:            dsp.NewSSBDemodulator(config.SampleRate, 48_000),
 		stop:           make(chan struct{}), done: make(chan struct{}), tuneDone: make(chan struct{}),
+		monitorStop: make(chan struct{}), monitorDone: make(chan struct{}),
 		tune:                make(chan int64, 1),
 		settings:            make(chan HardwareSettings, 1),
 		spectrum:            make([]float32, config.FFTSize),
@@ -261,7 +272,14 @@ func (receiver *Receiver) Start() error {
 	if receiver.running.Load() {
 		return nil
 	}
-	return receiver.startLocked(false)
+	if err := receiver.startLocked(false); err != nil {
+		return err
+	}
+	receiver.monitorOnce.Do(func() {
+		receiver.monitorStarted.Store(true)
+		go receiver.monitorCapture()
+	})
+	return nil
 }
 
 func (receiver *Receiver) startLocked(exact bool) error {
@@ -307,6 +325,7 @@ func (receiver *Receiver) startLocked(exact bool) error {
 	receiver.devices = mergeDeviceOptions(receiver.devices, []DeviceOption{{Driver: device.driver, Serial: device.serial, Label: device.hardware}})
 	receiver.mu.Unlock()
 	receiver.running.Store(true)
+	receiver.lastSamples.Store(time.Now().UnixNano())
 	go receiver.run()
 	go receiver.runTuner()
 	receiver.trace(i18n.Source("text.a1ee52206a7d"))
@@ -390,6 +409,12 @@ func (receiver *Receiver) CachedDevices() []DeviceOption {
 func (receiver *Receiver) stopCaptureLocked() {
 	if receiver.running.Swap(false) {
 		close(receiver.stop)
+		// SoapySDR drivers are expected to honour the read timeout, but some
+		// vendor backends can remain inside readStream after a USB disturbance.
+		// Deactivating the stream releases that read before we wait for run().
+		if receiver.device != nil {
+			receiver.device.interrupt()
+		}
 		<-receiver.done
 		<-receiver.tuneDone
 		receiver.stop = make(chan struct{})
@@ -416,6 +441,17 @@ func (receiver *Receiver) trace(format string, args ...any) {
 func (receiver *Receiver) Close() {
 	receiver.closed.Store(true)
 	receiver.closeOnce.Do(func() {
+		select {
+		case <-receiver.monitorStop:
+		default:
+			close(receiver.monitorStop)
+		}
+		if receiver.monitorStarted.Load() {
+			select {
+			case <-receiver.monitorDone:
+			case <-time.After(6 * time.Second):
+			}
+		}
 		receiver.startMu.Lock()
 		defer receiver.startMu.Unlock()
 		if receiver.dmr != nil {
@@ -887,6 +923,11 @@ func (receiver *Receiver) run() {
 		}
 		read, code, err := receiver.device.read(readBuffer)
 		if err != nil {
+			select {
+			case <-receiver.stop:
+				return
+			default:
+			}
 			receiver.setError(err)
 			receiver.mu.Lock()
 			receiver.hardware.Available = false
@@ -904,6 +945,7 @@ func (receiver *Receiver) run() {
 		if read <= 0 {
 			continue
 		}
+		receiver.lastSamples.Store(time.Now().UnixNano())
 		if generation := receiver.spectrumGeneration.Load(); generation != observedSpectrumGeneration {
 			// Discard a read that may straddle the hardware retune. Reusing it (or
 			// the previous exponential average) moves old peaks to false frequencies.
@@ -1245,8 +1287,71 @@ func (receiver *Receiver) addEvent(timeout, overflow bool) {
 }
 
 func (receiver *Receiver) setError(err error) {
+	receiver.trace("SDR: runtime error: %v", err)
 	receiver.mu.Lock()
 	receiver.stats.Status = i18n.Source("text.0a13b1eba75c") + err.Error()
+	receiver.mu.Unlock()
+}
+
+func captureStalled(running bool, lastSamples int64, now time.Time) bool {
+	return running && lastSamples > 0 && now.Sub(time.Unix(0, lastSamples)) >= captureStallThreshold
+}
+
+func (receiver *Receiver) monitorCapture() {
+	defer close(receiver.monitorDone)
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-receiver.monitorStop:
+			return
+		case now := <-ticker.C:
+			if !captureStalled(receiver.running.Load(), receiver.lastSamples.Load(), now) || !receiver.recovering.CompareAndSwap(false, true) {
+				continue
+			}
+			receiver.recoverCapture()
+			receiver.recovering.Store(false)
+		}
+	}
+}
+
+func (receiver *Receiver) recoverCapture() {
+	receiver.startMu.Lock()
+	defer receiver.startMu.Unlock()
+	if receiver.closed.Load() || !captureStalled(receiver.running.Load(), receiver.lastSamples.Load(), time.Now()) {
+		return
+	}
+	receiver.trace("SDR: no samples for %s; restarting capture", captureStallThreshold)
+	receiver.mu.Lock()
+	receiver.stats.Status = "SDR: recuperando flujo de muestras"
+	receiver.stats.FFTPerSecond = 0
+	receiver.stats.FFTBlocks = 0
+	for index := range receiver.spectrum {
+		receiver.spectrum[index] = -120
+	}
+	settings := receiver.hardware
+	receiver.mu.Unlock()
+	receiver.config.FrequencyHz = receiver.centerHz.Load()
+	receiver.config.InitialHardware = &settings
+	receiver.stopCaptureLocked()
+	for attempt := 1; attempt <= 3 && !receiver.closed.Load(); attempt++ {
+		if err := receiver.startLocked(true); err == nil {
+			receiver.mu.Lock()
+			receiver.stats.CaptureRestarts++
+			receiver.mu.Unlock()
+			receiver.trace("SDR: capture recovered on attempt %d", attempt)
+			return
+		} else {
+			receiver.trace("SDR: recovery attempt %d failed: %v", attempt, err)
+		}
+		select {
+		case <-receiver.monitorStop:
+			return
+		case <-time.After(time.Duration(attempt) * time.Second):
+		}
+	}
+	receiver.mu.Lock()
+	receiver.stats.Status = "SDR: no se pudo recuperar la recepción"
 	receiver.mu.Unlock()
 }
 

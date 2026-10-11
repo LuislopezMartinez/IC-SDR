@@ -15,6 +15,19 @@ func TestIQStats(t *testing.T) {
 	}
 }
 
+func TestCaptureStallDetection(t *testing.T) {
+	now := time.Now()
+	if captureStalled(false, now.Add(-time.Minute).UnixNano(), now) {
+		t.Fatal("stopped receiver reported as stalled")
+	}
+	if captureStalled(true, now.Add(-captureStallThreshold+time.Millisecond).UnixNano(), now) {
+		t.Fatal("healthy receiver reported as stalled")
+	}
+	if !captureStalled(true, now.Add(-captureStallThreshold).UnixNano(), now) {
+		t.Fatal("stalled receiver was not detected")
+	}
+}
+
 func TestDigitalVoiceBypassSelectsDigitalThenReturnsToNFM(t *testing.T) {
 	receiver := NewReceiver(Config{FrequencyHz: 100_000_000, SampleRate: 2_048_000, FFTSize: 4096})
 	receiver.mu.Lock()

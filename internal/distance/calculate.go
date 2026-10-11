@@ -12,6 +12,13 @@ func Distance(a, b Point) float64 {
 	h := math.Pow(math.Sin(dlat/2), 2) + math.Cos(a.Lat*rad)*math.Cos(b.Lat*rad)*math.Pow(math.Sin(dlon/2), 2)
 	return 2 * EarthRadius * math.Asin(math.Sqrt(math.Min(1, math.Max(0, h))))
 }
+
+// LongDistance returns the complementary great-circle route between two
+// points. Distance returns the shorter arc; together both routes complete a
+// full circumference on the spherical model used by this package.
+func LongDistance(a, b Point) float64 {
+	return 2*math.Pi*EarthRadius - Distance(a, b)
+}
 func Bearing(a, b Point) float64 {
 	dl := (b.Lon - a.Lon) * rad
 	return math.Mod(math.Atan2(math.Sin(dl)*math.Cos(b.Lat*rad), math.Cos(a.Lat*rad)*math.Sin(b.Lat*rad)-math.Sin(a.Lat*rad)*math.Cos(b.Lat*rad)*math.Cos(dl))/rad+360, 360)
