@@ -46,6 +46,12 @@ func SetHorizontalDrawScale(scale float32) {
 	horizontalDrawScale = scale
 }
 
+// HorizontalDrawScale reports the current horizontal geometry scale. Custom
+// layouts can use it to wrap text to the same visible width as their panels.
+func HorizontalDrawScale() float32 {
+	return horizontalDrawScale
+}
+
 // SetTextScale scales every SimpleUI text measurement and drawing operation.
 // Call it before Run so control layout and rendering use the same metrics.
 func SetTextScale(scale float32) {

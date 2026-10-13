@@ -83,3 +83,14 @@ func TestNotchFeedbackBadgeFollowsThemeContrast(t *testing.T) {
 		t.Fatalf("dark badge text = %#v, want contrast-adjusted %#v", darkText, want)
 	}
 }
+
+func TestNRMeterInactiveSegmentsKeepTheirHue(t *testing.T) {
+	live := rl.Color{R: 40, G: 210, B: 120, A: 255}
+	dim := nrMeterDimColor(live, .20)
+	if dim.R == 0 || dim.G == 0 || dim.B == 0 {
+		t.Fatalf("inactive NR segment lost its hue: %#v", dim)
+	}
+	if dim.R >= live.R || dim.G >= live.G || dim.B >= live.B || dim.A != 255 {
+		t.Fatalf("inactive NR segment is not a dark opaque variant: live=%#v dim=%#v", live, dim)
+	}
+}

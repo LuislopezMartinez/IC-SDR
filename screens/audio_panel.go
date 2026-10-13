@@ -5,6 +5,7 @@ import (
 
 	"fmt"
 	"math"
+	"strings"
 
 	"go-zero/simpleui"
 
@@ -38,8 +39,10 @@ type AudioPanel struct {
 	nrSwitch                             *simpleui.Switch
 	nrSlider                             *simpleui.Slider
 	nrRecommended                        *simpleui.Button
+	nrSpeedButton                        *simpleui.Button
 	nrEnabled                            bool
 	nrStrength                           float32
+	nrSpeed                              string
 	pbtDrag, audioDrag, notchDrag        int
 	dragStartX                           float32
 	dragStartLow, dragStartHigh          int
@@ -53,7 +56,7 @@ func NewAudioPanel(screen *MainScreen) *AudioPanel {
 		profile: i18n.Source("text.db2cb3fe28e2"), deemphasisUs: 50, pbtLow: 100, pbtHigh: 3250,
 		notchEnabled: screen.audioNotchEnabled, notchFrequencyHz: screen.audioNotchFrequencyHz,
 		notchWidthHz: screen.audioNotchWidthHz, notchDepthDB: screen.audioNotchDepthDB,
-		nrEnabled: screen.audioNREnabled, nrStrength: screen.audioNRStrength,
+		nrEnabled: screen.audioNREnabled, nrStrength: screen.audioNRStrength, nrSpeed: screen.audioNRSpeed,
 	}
 	for i := range p.spectrum {
 		p.spectrum[i] = -80
@@ -158,7 +161,19 @@ func NewAudioPanel(screen *MainScreen) *AudioPanel {
 		p.nrSlider.SetValue(50)
 		p.applyNoiseReduction(true)
 	})
-	p.controls = []simpleui.Element{p.pbtLock, p.pbtClear, p.pbtBypass, p.eqSwitch, flat, p.profileButton, p.deemphasisButton, reset, p.notchSwitch, p.notchAuto, p.notchWidthDown, p.notchWidthUp, p.notchDepth, p.notchReset, p.nrSwitch, p.nrSlider, p.nrRecommended}
+	p.nrSpeedButton = simpleui.NewButton("audioNRSpeed", 1394, 684, 100, 26, "", 8)
+	p.nrSpeedButton.OnClick(func() {
+		switch p.nrSpeed {
+		case "slow":
+			p.nrSpeed = "normal"
+		case "normal":
+			p.nrSpeed = "fast"
+		default:
+			p.nrSpeed = "slow"
+		}
+		p.applyNoiseReduction(true)
+	})
+	p.controls = []simpleui.Element{p.pbtLock, p.pbtClear, p.pbtBypass, p.eqSwitch, flat, p.profileButton, p.deemphasisButton, reset, p.notchSwitch, p.notchAuto, p.notchWidthDown, p.notchWidthUp, p.notchDepth, p.notchReset, p.nrSwitch, p.nrSlider, p.nrRecommended, p.nrSpeedButton}
 	for _, slider := range p.eqSliders {
 		p.controls = append(p.controls, slider)
 	}
@@ -174,9 +189,12 @@ func (p *AudioPanel) applyNoiseReduction(persist bool) {
 	p.nrStrength = min(max(p.nrStrength, 0), 100)
 	if p.screen.audioPlayer != nil {
 		p.screen.audioPlayer.ConfigureNoiseReduction(p.nrEnabled, p.nrStrength)
+		p.screen.audioPlayer.ConfigureNoiseReductionSpeed(p.nrSpeed)
 	}
 	p.screen.audioNREnabled = p.nrEnabled
 	p.screen.audioNRStrength = p.nrStrength
+	p.screen.audioNRSpeed = p.nrSpeed
+	p.nrSpeedButton.SetLabel(i18n.Source("text.audioNRSpeed" + strings.ToUpper(p.nrSpeed[:1]) + p.nrSpeed[1:]))
 	if persist {
 		p.screen.markSettingsDirty()
 	}
@@ -284,6 +302,7 @@ func (p *AudioPanel) DrawPanel() {
 	p.nrSwitch.SetEnabled(nrCompatible)
 	p.nrSlider.SetEnabled(nrCompatible)
 	p.nrRecommended.SetEnabled(nrCompatible)
+	p.nrSpeedButton.SetEnabled(nrCompatible)
 	drawPanel(370, 642, 300, 238)
 	drawPanel(680, 642, 262, 238)
 	drawPanel(952, 642, 420, 238)
@@ -325,27 +344,48 @@ func (p *AudioPanel) drawNoiseReduction(compatible bool) {
 	strong := i18n.Source("text.audioNRStrong")
 	strongSize := simpleui.MeasureTextStyled(strong, 9, simpleui.FontRegular)
 	simpleui.DrawTextStyled(strong, 1570-strongSize.X, 780, 9, simpleui.FontRegular, colors.muted)
-	activity := float32(0)
+	statusData := noiseReductionStatus{Learning: true}
 	if p.screen.audioPlayer != nil && p.nrEnabled {
-		activity = p.screen.audioPlayer.NoiseReductionActivity()
+		statusData = p.screen.audioPlayer.NoiseReductionStatus()
 	}
-	for index := 0; index < 9; index++ {
+	segmentColors := [9]rl.Color{colors.green, colors.green, colors.green, colors.cyan, colors.cyan, colors.orange, colors.orange, colors.red, colors.red}
+	for index, liveColor := range segmentColors {
 		x := float32(1394 + index*19)
-		active := float32(index+1)/9 <= max(activity*2.2, .12)
-		color := colors.grid
+		active := float32(index+1)/9 <= max(statusData.ReductionDB/18, .12)
+		height := float32(8 + index)
+		bounds := rl.Rectangle{X: x, Y: 819 - height, Width: 12, Height: height}
+		fill := nrMeterDimColor(liveColor, .20)
+		outline := nrMeterDimColor(liveColor, .58)
 		if active {
-			color = colors.cyan
+			fill = liveColor
+			outline = nrMeterDimColor(liveColor, 1)
 		}
-		rl.DrawRectangle(int32(x), 808, 11, int32(6+index), color)
+		rl.DrawRectangleRec(bounds, fill)
+		rl.DrawRectangleLinesEx(bounds, 1, outline)
 	}
 	status := i18n.Source("text.audioNROff")
 	statusColor := colors.muted
 	if !compatible {
 		status = i18n.Source("text.audioNRUnavailable")
 	} else if p.nrEnabled {
-		status, statusColor = i18n.Source("text.audioNRAdapting"), colors.cyan
+		status, statusColor = fmt.Sprintf(i18n.Source("text.audioNRActive"), statusData.ReductionDB), colors.cyan
+		if statusData.Learning {
+			status = i18n.Source("text.audioNRAdapting")
+		} else if statusData.Signal > .08 {
+			status = fmt.Sprintf(i18n.Source("text.audioNRProtecting"), statusData.ReductionDB)
+		}
 	}
 	drawSmallText(status, 1394, 824, statusColor)
+}
+
+func nrMeterDimColor(color rl.Color, intensity float32) rl.Color {
+	intensity = min(max(intensity, 0), 1)
+	return rl.Color{
+		R: uint8(float32(color.R) * intensity),
+		G: uint8(float32(color.G) * intensity),
+		B: uint8(float32(color.B) * intensity),
+		A: 255,
+	}
 }
 
 func (p *AudioPanel) drawPBT(enabled bool, mode string) {

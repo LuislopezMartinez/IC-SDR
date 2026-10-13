@@ -19,17 +19,27 @@ type dmrEvent struct {
 }
 
 type DMRPanel struct {
+	simpleui.BaseElement
 	screen                        *MainScreen
 	controls                      []simpleui.Element
 	autoCenter                    *simpleui.Switch
 	auto, ts1, ts2, resync, clear *simpleui.Button
+	pause, history                *simpleui.Button
 	events                        []dmrEvent
 	lastState, lastTS1, lastTS2   string
+	previewPaused                 bool
+	previewEnd, previewNew        int
+	historyOpen, historyLive      bool
+	historyFilter                 int
+	historyOffset                 int
+	historySelected               int
+	historySeen                   int
+	historyPressed                int
 }
 
 func NewDMRPanel(screen *MainScreen) *DMRPanel {
-	p := &DMRPanel{screen: screen}
-	p.autoCenter = simpleui.NewSwitch("dmrAutoCenter", 1280, 655, 260, 28, i18n.Source("text.a4c290b13a9d"), screen.dmrAutoCenter, uiMinimumFontSize)
+	p := &DMRPanel{BaseElement: simpleui.NewBaseElement("dmrHistoryOverlay", 0, 0, designWidth, designHeight), screen: screen, historyLive: true, historySelected: -1}
+	p.autoCenter = simpleui.NewSwitch("dmrAutoCenter", 1280, 675, 260, 28, i18n.Source("text.a4c290b13a9d"), screen.dmrAutoCenter, uiMinimumFontSize)
 	p.autoCenter.SetTrackColors(rl.Color{R: 51, G: 61, B: 70, A: 255}, colors.green)
 	p.autoCenter.OnChange(func(value bool) {
 		screen.dmrAutoCenter = value
@@ -38,12 +48,14 @@ func NewDMRPanel(screen *MainScreen) *DMRPanel {
 		}
 		screen.markSettingsDirty()
 	})
-	p.auto = p.button("dmrAuto", 1280, 699, 82, 42, i18n.Source("text.6ea56fae9eac"), colors.blue)
-	p.ts1 = p.button("dmrTS1", 1370, 699, 80, 42, "TS1", colors.panelAlt)
-	p.ts2 = p.button("dmrTS2", 1458, 699, 80, 42, "TS2", colors.panelAlt)
-	p.resync = p.button("dmrResync", 1280, 754, 154, 48, i18n.Source("text.688ca3416da3"), colors.orange)
+	p.auto = p.button("dmrAuto", 1280, 719, 82, 42, i18n.Source("text.6ea56fae9eac"), colors.blue)
+	p.ts1 = p.button("dmrTS1", 1370, 719, 80, 42, "TS1", colors.panelAlt)
+	p.ts2 = p.button("dmrTS2", 1458, 719, 80, 42, "TS2", colors.panelAlt)
+	p.resync = p.button("dmrResync", 1280, 772, 154, 52, i18n.Source("text.688ca3416da3"), colors.orange)
 	p.resync.SetColors(colors.orange, colors.border, colors.background)
-	p.clear = p.button("dmrClear", 1442, 754, 96, 48, i18n.Source("text.2aded7edd569"), colors.panelAlt)
+	p.clear = p.button("dmrClear", 1442, 772, 96, 52, i18n.Source("text.2aded7edd569"), colors.panelAlt)
+	p.pause = p.button("dmrActivityPause", 1054, 673, 76, 28, i18n.Source("text.dmrPause"), colors.panelAlt)
+	p.history = p.button("dmrActivityHistory", 1138, 673, 108, 28, i18n.Source("text.dmrHistory"), colors.panelAlt)
 	p.clear.SetColors(actionClearFill, colors.red, colors.text)
 	p.auto.OnClick(func() { p.selectSlot(i18n.Source("text.6ea56fae9eac")) })
 	p.ts1.OnClick(func() { p.selectSlot("TS1") })
@@ -53,8 +65,10 @@ func NewDMRPanel(screen *MainScreen) *DMRPanel {
 			p.add(i18n.Source("text.d621c1a7169f"), "--", i18n.Source("text.5278aa00d5e8"))
 		}
 	})
-	p.clear.OnClick(func() { p.events = nil })
-	p.controls = []simpleui.Element{p.autoCenter, p.auto, p.ts1, p.ts2, p.resync, p.clear}
+	p.clear.OnClick(p.clearEvents)
+	p.pause.OnClick(p.togglePreviewPause)
+	p.history.OnClick(p.openHistory)
+	p.controls = []simpleui.Element{p.autoCenter, p.auto, p.ts1, p.ts2, p.resync, p.clear, p.pause, p.history}
 	p.SetVisible(false)
 	return p
 }
@@ -86,11 +100,14 @@ func (p *DMRPanel) styleSlots() {
 }
 
 func (p *DMRPanel) SetVisible(visible bool) {
+	p.BaseElement.SetVisible(visible)
 	for _, control := range p.controls {
 		control.SetVisible(visible)
 	}
 	if visible {
 		p.styleSlots()
+	} else {
+		p.historyOpen = false
 	}
 }
 
@@ -103,9 +120,37 @@ func (p *DMRPanel) add(state, slot, detail string) {
 	} else if state == i18n.Source("text.56f21695a650") {
 		color = colors.orange
 	}
-	p.events = append(p.events, dmrEvent{time.Now().Format("15:04:05"), state, slot, detail, color})
-	if len(p.events) > 80 {
-		p.events = p.events[len(p.events)-80:]
+	p.events = append(p.events, dmrEvent{time.Now().Format("15:04:05.000"), state, slot, detail, color})
+	if p.previewPaused {
+		p.previewNew++
+	}
+	if p.historyOpen && p.historyLive {
+		p.historySeen = len(p.events)
+	}
+	if len(p.events) > 500 {
+		removed := len(p.events) - 500
+		p.events = p.events[removed:]
+		p.previewEnd = max(0, p.previewEnd-removed)
+		p.historySelected -= removed
+		p.historySeen = max(0, p.historySeen-removed)
+	}
+}
+
+func (p *DMRPanel) clearEvents() {
+	p.events = nil
+	p.previewEnd, p.previewNew = 0, 0
+	p.historyOffset, p.historySelected, p.historySeen = 0, -1, 0
+}
+
+func (p *DMRPanel) togglePreviewPause() {
+	p.previewPaused = !p.previewPaused
+	if p.previewPaused {
+		p.previewEnd = len(p.events)
+		p.previewNew = 0
+		p.pause.SetLabel(i18n.Source("text.dmrResume"))
+	} else {
+		p.previewNew = 0
+		p.pause.SetLabel(i18n.Source("text.dmrPause"))
 	}
 }
 
@@ -135,7 +180,7 @@ func (p *DMRPanel) DrawPanel() {
 	}
 	p.capture(status)
 	simpleui.DrawTextStyled(i18n.Source("text.ae7216ed6f02"), 40, 642, 16, simpleui.FontSemiBold, rl.Color{R: 175, G: 145, B: 245, A: 255})
-	drawPanel(38, 665, 210, 142)
+	drawPanel(38, 665, 210, 217)
 	stateColor := colors.orange
 	if status.State == i18n.Source("text.a430e6d293d0") {
 		stateColor = colors.green
@@ -154,14 +199,17 @@ func (p *DMRPanel) DrawPanel() {
 	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.33a5b9fa7e99"), map[bool]string{true: i18n.Source("text.52fc523baf24"), false: i18n.Source("text.31313da67e97")}[status.PLLLocked]), 52, 734, 13, colors.text)
 	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.578917444543"), status.SyncQuality, status.InputLevel), 52, 757, 13, colors.text)
 	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.0f28341d32b3"), status.Queued, status.Capacity, status.Dropped, p.screen.stats.AudioUnderflows), 52, 780, 12, colors.muted)
-	p.drawSlot(262, 665, i18n.Source("text.7c7c98979e20"), status.Slot1, p.screen.dmrAudioSlot == "TS1")
-	p.drawSlot(262, 738, i18n.Source("text.ce6d4ea6916a"), status.Slot2, p.screen.dmrAudioSlot == "TS2")
-	p.drawEvents(530, 665, 730, 142)
+	p.drawSlot(262, 665, 250, 104, i18n.Source("text.7c7c98979e20"), status.Slot1, p.screen.dmrAudioSlot == "TS1")
+	p.drawSlot(262, 778, 250, 104, i18n.Source("text.ce6d4ea6916a"), status.Slot2, p.screen.dmrAudioSlot == "TS2")
+	p.drawEvents(530, 665, 730, 217)
+	drawPanel(1270, 665, 280, 217)
 	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.ca1ffacff316"), status.FrequencyErrorHz, status.AFCCorrectionHz, status.AFCState), 1280, 636, 12, colors.muted)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.dmrStoredEvents"), len(p.events)), 1280, 842, 11, colors.muted)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.dmrSelectedSlot"), p.screen.dmrAudioSlot), 1280, 863, 11, colors.muted)
 }
 
-func (p *DMRPanel) drawSlot(x, y float32, title, value string, selected bool) {
-	drawPanel(x, y, 250, 69)
+func (p *DMRPanel) drawSlot(x, y, w, h float32, title, value string, selected bool) {
+	drawPanel(x, y, w, h)
 	simpleui.DrawText(title, x+12, y+9, 13, colors.cyan)
 	if strings.TrimSpace(value) == "" {
 		value = "--"
@@ -178,8 +226,12 @@ func (p *DMRPanel) drawSlot(x, y float32, title, value string, selected bool) {
 func (p *DMRPanel) drawEvents(x, y, w, h float32) {
 	drawPanel(x, y, w, h)
 	simpleui.DrawTextStyled(i18n.Source("text.8db39183b07c"), x+12, y+8, 14, simpleui.FontSemiBold, colors.cyan)
-	start := max(0, len(p.events)-5)
-	for row, event := range p.events[start:] {
+	end := len(p.events)
+	if p.previewPaused {
+		end = min(p.previewEnd, len(p.events))
+	}
+	start := max(0, end-9)
+	for row, event := range p.events[start:end] {
 		ry := y + 35 + float32(row)*20
 		if row%2 == 0 {
 			rl.DrawRectangle(int32(x+6), int32(ry-2), int32(w-12), 19, colors.panelAlt)
@@ -192,5 +244,10 @@ func (p *DMRPanel) drawEvents(x, y, w, h float32) {
 			detail = detail[:61] + "..."
 		}
 		simpleui.DrawText(detail, x+205, ry, 12, colors.text)
+	}
+	if p.previewPaused && p.previewNew > 0 {
+		badge := rl.Rectangle{X: x + w - 222, Y: y + h - 27, Width: 204, Height: 20}
+		rl.DrawRectangleRounded(badge, .4, 8, colors.orange)
+		drawCentered(fmt.Sprintf(i18n.Source("text.dmrNewEvents"), p.previewNew), badge, 10, simpleui.EnsureTextContrast(colors.text, colors.orange))
 	}
 }

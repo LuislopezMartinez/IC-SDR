@@ -132,7 +132,7 @@ func TestAudioNoiseReductionAttenuatesStationaryNoise(t *testing.T) {
 		return math.Sqrt(power / (audioSampleRate / 2))
 	}
 	ratio := measure(true) / measure(false)
-	if ratio >= .82 {
+	if ratio >= .68 {
 		t.Fatalf("NR retained too much stationary noise: ratio %.3f", ratio)
 	}
 }
@@ -160,7 +160,7 @@ func TestRecommendedNoiseReductionIsAudible(t *testing.T) {
 		return math.Sqrt(power / (audioSampleRate / 2))
 	}
 	ratio := measure(true) / measure(false)
-	if ratio >= .82 {
+	if ratio >= .72 {
 		t.Fatalf("recommended NR setting is barely audible: ratio %.3f", ratio)
 	}
 }
@@ -199,6 +199,122 @@ func TestAudioNoiseReductionPreservesSustainedCarrier(t *testing.T) {
 	ratio := measure(true) / measure(false)
 	if ratio < .75 {
 		t.Fatalf("NR treated a sustained carrier as noise: ratio %.3f", ratio)
+	}
+}
+
+func TestAudioNoiseReductionPreservesWeakVoiceHarmonics(t *testing.T) {
+	measure := func(enabled bool) float64 {
+		processor := NewAudioProcessor()
+		processor.Configure(100, 4000, false, [5]float32{}, i18n.Source("text.db2cb3fe28e2"))
+		processor.ConfigureNoiseReduction(enabled, 70)
+		samples := make([]float32, audioSampleRate*2)
+		seed := uint32(91)
+		for index := range samples {
+			seed = seed*1664525 + 1013904223
+			noise := (float32(seed>>8)/float32(1<<24)*2 - 1) * .09
+			timeSeconds := float64(index) / audioSampleRate
+			envelope := .55 + .45*math.Sin(2*math.Pi*3.2*timeSeconds)
+			voice := envelope * (.032*math.Sin(2*math.Pi*180*timeSeconds) + .024*math.Sin(2*math.Pi*540*timeSeconds) + .017*math.Sin(2*math.Pi*1260*timeSeconds))
+			samples[index] = noise + float32(voice)
+		}
+		processor.Process(samples)
+		// Correlation with the known harmonic pattern is a compact proxy for
+		// retaining weak, voiced speech beneath receiver hiss.
+		correlation := 0.0
+		start := len(samples) - audioSampleRate/2
+		for index, sample := range samples[start:] {
+			timeSeconds := float64(start+index-noiseHopSize) / audioSampleRate
+			reference := math.Sin(2*math.Pi*180*timeSeconds) + .75*math.Sin(2*math.Pi*540*timeSeconds) + .53*math.Sin(2*math.Pi*1260*timeSeconds)
+			correlation += float64(sample) * reference
+		}
+		return math.Abs(correlation)
+	}
+	ratio := measure(true) / measure(false)
+	if ratio < .68 {
+		t.Fatalf("NR removed too much weak voice structure: ratio %.3f", ratio)
+	}
+}
+
+func TestAudioNoiseReductionSwitchesWithoutDiscontinuity(t *testing.T) {
+	processor := NewAudioProcessor()
+	processor.Configure(100, 4000, false, [5]float32{}, i18n.Source("text.db2cb3fe28e2"))
+	processor.ConfigureNoiseReduction(false, 70)
+	phase := 0
+	previous := float32(0)
+	for block := 0; block < 80; block++ {
+		if block == 20 {
+			processor.ConfigureNoiseReduction(true, 70)
+		}
+		if block == 55 {
+			processor.ConfigureNoiseReduction(false, 70)
+		}
+		samples := make([]float32, 256)
+		for index := range samples {
+			samples[index] = float32(.25 * math.Sin(2*math.Pi*900*float64(phase)/audioSampleRate))
+			phase++
+		}
+		processor.Process(samples)
+		for _, sample := range samples {
+			if jump := absFloat32(sample - previous); jump > .14 {
+				t.Fatalf("NR transition produced a discontinuity of %.3f", jump)
+			}
+			previous = sample
+		}
+	}
+}
+
+func TestAudioNoiseReductionClosesAfterVoiceEnds(t *testing.T) {
+	measureTail := func(enabled bool) float64 {
+		processor := NewAudioProcessor()
+		processor.Configure(100, 4000, false, [5]float32{}, i18n.Source("text.db2cb3fe28e2"))
+		processor.ConfigureNoiseReduction(enabled, 70)
+		samples := make([]float32, audioSampleRate*2)
+		seed := uint32(211)
+		for index := range samples {
+			seed = seed*1664525 + 1013904223
+			noise := (float32(seed>>8)/float32(1<<24)*2 - 1) * .12
+			samples[index] = noise
+			if index < audioSampleRate {
+				timeSeconds := float64(index) / audioSampleRate
+				samples[index] += float32(.12*math.Sin(2*math.Pi*220*timeSeconds) + .07*math.Sin(2*math.Pi*660*timeSeconds))
+			}
+		}
+		processor.Process(samples)
+		power := 0.0
+		start := len(samples) - audioSampleRate/4
+		for _, sample := range samples[start:] {
+			power += float64(sample * sample)
+		}
+		return math.Sqrt(power / float64(len(samples)-start))
+	}
+	ratio := measureTail(true) / measureTail(false)
+	if ratio >= .68 {
+		t.Fatalf("NR stayed open after voice ended: residual noise ratio %.3f", ratio)
+	}
+}
+
+func TestNoiseReductionFastIntegrationClosesEarlier(t *testing.T) {
+	measure := func(speed string) float32 {
+		processor := NewAudioProcessor()
+		processor.Configure(100, 4000, false, [5]float32{}, i18n.Source("text.db2cb3fe28e2"))
+		processor.ConfigureNoiseReduction(true, 70)
+		processor.ConfigureNoiseReductionSpeed(speed)
+		samples := make([]float32, audioSampleRate+audioSampleRate/8)
+		seed := uint32(313)
+		for index := range samples {
+			seed = seed*1664525 + 1013904223
+			samples[index] = (float32(seed>>8)/float32(1<<24)*2 - 1) * .10
+			if index < audioSampleRate {
+				timeSeconds := float64(index) / audioSampleRate
+				samples[index] += float32(.16*math.Sin(2*math.Pi*240*timeSeconds) + .09*math.Sin(2*math.Pi*720*timeSeconds))
+			}
+		}
+		processor.Process(samples)
+		return processor.NoiseReductionStatus().ReductionDB
+	}
+	slow, fast := measure("slow"), measure("fast")
+	if fast <= slow+.5 {
+		t.Fatalf("fast NR integration did not close earlier: slow %.2f dB fast %.2f dB", slow, fast)
 	}
 }
 

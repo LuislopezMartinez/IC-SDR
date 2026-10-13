@@ -335,7 +335,9 @@ func (p *QRZPanel) Draw() {}
 func (p *QRZPanel) OverlayOpen() bool { return p.photoViewerOpen }
 
 func (p *QRZPanel) photoBounds() rl.Rectangle {
-	return rl.Rectangle{X: 1420, Y: toolY + 37, Width: 145, Height: 205}
+	// Fill the remaining right-hand column while preserving a small gap from
+	// the route controls and the panel edge.
+	return rl.Rectangle{X: 1413, Y: toolY + 34, Width: toolContentRight - 1421, Height: 216}
 }
 
 func (p *QRZPanel) photoViewerCloseBounds() rl.Rectangle {
@@ -428,8 +430,11 @@ func (p *QRZPanel) DrawPanel() {
 		}
 		countryX := float32(820)
 		if rl.IsTextureValid(p.flag) {
-			rl.DrawTexturePro(p.flag, rl.Rectangle{Width: float32(p.flag.Width), Height: float32(p.flag.Height)}, rl.Rectangle{X: countryX, Y: toolY + 48, Width: 28, Height: 18}, rl.Vector2{}, 0, rl.White)
-			countryX += 36
+			const flagHeight = float32(30)
+			flagWidth := flagHeight * float32(p.flag.Width) / float32(p.flag.Height)
+			flagWidth = min(flagWidth, 48)
+			rl.DrawTexturePro(p.flag, rl.Rectangle{Width: float32(p.flag.Width), Height: float32(p.flag.Height)}, rl.Rectangle{X: countryX, Y: toolY + 43, Width: flagWidth, Height: flagHeight}, rl.Vector2{}, 0, rl.White)
+			countryX += flagWidth + 10
 		}
 		countryLabel := country
 		if p.result.Continent != "" {
@@ -469,7 +474,7 @@ func (p *QRZPanel) DrawPanel() {
 	simpleui.DrawTextStyled(clipDAB(remote, 11), 1328, toolY+78, uiBodyFontSize, simpleui.FontSemiBold, colors.text)
 	coordinateColor, coordinateText := colors.muted, "Sin coordenadas"
 	if p.result.Coordinates {
-		coordinateColor, coordinateText = colors.green, "Coordenadas disponibles"
+		coordinateColor, coordinateText = colors.green, "Coordenadas OK"
 	}
 	rl.DrawCircle(1281, int32(toolY+119), 5, coordinateColor)
 	simpleui.DrawText(coordinateText, 1294, toolY+109, uiBodyFontSize, coordinateColor)

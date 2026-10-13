@@ -303,8 +303,14 @@ func (player *AudioPlayer) ConfigureNotch(enabled bool, frequencyHz, widthHz int
 func (player *AudioPlayer) ConfigureNoiseReduction(enabled bool, strength float32) {
 	player.processor.ConfigureNoiseReduction(enabled, strength)
 }
+func (player *AudioPlayer) ConfigureNoiseReductionSpeed(speed string) {
+	player.processor.ConfigureNoiseReductionSpeed(speed)
+}
 func (player *AudioPlayer) NoiseReductionActivity() float32 {
 	return player.processor.NoiseReductionActivity()
+}
+func (player *AudioPlayer) NoiseReductionStatus() noiseReductionStatus {
+	return player.processor.NoiseReductionStatus()
 }
 func (player *AudioPlayer) Spectrum(destination []float32) { player.processor.Spectrum(destination) }
 func (player *AudioPlayer) SpectrumBeforeNotch(destination []float32) {

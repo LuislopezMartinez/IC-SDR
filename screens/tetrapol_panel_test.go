@@ -1,6 +1,17 @@
 package screens
 
-import "testing"
+import (
+	"testing"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
+)
+
+func assertRectangle(t *testing.T, got, want rl.Rectangle) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("bounds = %+v, want %+v", got, want)
+	}
+}
 
 func TestTETRAPOLPanelUsesNarrowbandChannelStep(t *testing.T) {
 	screen := NewMainScreen(nil)
@@ -65,4 +76,19 @@ func TestTETRAPOLBandPresetTunesChannelRaster(t *testing.T) {
 	if screen.spanHz != 250_000 || screen.tuningStepHz != 12_500 {
 		t.Fatalf("preset raster = span %d step %d", screen.spanHz, screen.tuningStepHz)
 	}
+}
+
+func TestTETRAPOLPresetRefreshKeepsCollapsedWorkspaceLayout(t *testing.T) {
+	screen := NewMainScreen(nil)
+	panel := NewTETRAPOLPanel(screen)
+	panel.SetVisible(true)
+	screen.utilitiesCollapsed = true
+
+	panel.setBand("UHF")
+	assertRectangle(t, panel.presets[0].Bounds(), collapsedToolBounds(rl.Rectangle{X: 704, Y: toolY + 50, Width: 116, Height: 34}))
+	assertRectangle(t, panel.presets[2].Bounds(), collapsedToolBounds(rl.Rectangle{X: 952, Y: toolY + 50, Width: 116, Height: 34}))
+
+	panel.setBand("VHF")
+	assertRectangle(t, panel.presets[0].Bounds(), collapsedToolBounds(rl.Rectangle{X: 704, Y: toolY + 50, Width: 178, Height: 34}))
+	assertRectangle(t, panel.presets[1].Bounds(), collapsedToolBounds(rl.Rectangle{X: 890, Y: toolY + 50, Width: 178, Height: 34}))
 }

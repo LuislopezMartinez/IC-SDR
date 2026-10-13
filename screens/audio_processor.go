@@ -83,6 +83,7 @@ type AudioProcessor struct {
 	noiseReducer                                audioNoiseReducer
 	noiseReductionEnabled                       bool
 	noiseReductionStrength                      float32
+	noiseReductionSpeed                         string
 	profile                                     string
 	previousInput, highpass, lowpass1, lowpass2 float32
 	limiterGain                                 float32
@@ -92,8 +93,14 @@ type AudioProcessor struct {
 	ringWrite, ringCount                        int
 }
 
+type noiseReductionStatus struct {
+	ReductionDB float32
+	Signal      float32
+	Learning    bool
+}
+
 func NewAudioProcessor() *AudioProcessor {
-	p := &AudioProcessor{lowCut: 100, highCut: 4000, eqEnabled: true, profile: i18n.Source("text.db2cb3fe28e2"), limiterGain: 1, noiseReducer: newAudioNoiseReducer(), noiseReductionStrength: 50}
+	p := &AudioProcessor{lowCut: 100, highCut: 4000, eqEnabled: true, profile: i18n.Source("text.db2cb3fe28e2"), limiterGain: 1, noiseReducer: newAudioNoiseReducer(), noiseReductionStrength: 50, noiseReductionSpeed: "normal"}
 	for index := range p.spectrumWindow {
 		p.spectrumWindow[index] = .5 - .5*math.Cos(2*math.Pi*float64(index)/float64(len(p.spectrumWindow)-1))
 	}
@@ -123,10 +130,29 @@ func (p *AudioProcessor) ConfigureNoiseReduction(enabled bool, strength float32)
 	p.mu.Unlock()
 }
 
+func (p *AudioProcessor) ConfigureNoiseReductionSpeed(speed string) {
+	if speed != "slow" && speed != "fast" {
+		speed = "normal"
+	}
+	p.mu.Lock()
+	p.noiseReductionSpeed = speed
+	p.mu.Unlock()
+}
+
 func (p *AudioProcessor) NoiseReductionActivity() float32 {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.noiseReducer.activity
+}
+
+func (p *AudioProcessor) NoiseReductionStatus() noiseReductionStatus {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return noiseReductionStatus{
+		ReductionDB: p.noiseReducer.reductionDB,
+		Signal:      p.noiseReducer.signal,
+		Learning:    p.noiseReducer.frames < 94,
+	}
 }
 
 func (p *AudioProcessor) ResetNoiseReduction() {
@@ -178,7 +204,7 @@ func (p *AudioProcessor) process(samples []float32, wideFM, allowNoiseReduction 
 		samples[i] = value
 	}
 	if allowNoiseReduction {
-		p.noiseReducer.process(samples, p.noiseReductionEnabled, p.noiseReductionStrength)
+		p.noiseReducer.process(samples, p.noiseReductionEnabled, p.noiseReductionStrength, p.noiseReductionSpeed)
 	}
 	for i, value := range samples {
 		if p.eqEnabled {

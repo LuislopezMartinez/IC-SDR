@@ -68,6 +68,7 @@ type persistedAppSettings struct {
 	AudioNotchDepthDB     float32                       `json:"audioNotchDepthDb,omitempty"`
 	AudioNREnabled        *bool                         `json:"audioNrEnabled,omitempty"`
 	AudioNRStrength       *float32                      `json:"audioNrStrength,omitempty"`
+	AudioNRSpeed          string                        `json:"audioNrSpeed,omitempty"`
 	DMRAutoCenter         *bool                         `json:"dmrAutoCenter,omitempty"`
 	DMRAudioSlot          string                        `json:"dmrAudioSlot,omitempty"`
 	RTL433FrequencyHz     int64                         `json:"rtl433FrequencyHz,omitempty"`
@@ -246,6 +247,9 @@ func loadAppSettings(path string, screen *MainScreen) {
 	}
 	if settings.AudioNRStrength != nil && *settings.AudioNRStrength >= 0 && *settings.AudioNRStrength <= 100 {
 		screen.audioNRStrength = *settings.AudioNRStrength
+	}
+	if settings.AudioNRSpeed == "slow" || settings.AudioNRSpeed == "normal" || settings.AudioNRSpeed == "fast" {
+		screen.audioNRSpeed = settings.AudioNRSpeed
 	}
 	if settings.DMRAutoCenter != nil {
 		screen.dmrAutoCenter = *settings.DMRAutoCenter
@@ -426,7 +430,7 @@ func (screen *MainScreen) flushSettings(force bool) {
 		Volume:              float32Setting(screen.volume), Muted: boolSetting(screen.muted),
 		AudioNotchEnabled: boolSetting(screen.audioNotchEnabled), AudioNotchFrequencyHz: screen.audioNotchFrequencyHz,
 		AudioNotchWidthHz: screen.audioNotchWidthHz, AudioNotchDepthDB: screen.audioNotchDepthDB,
-		AudioNREnabled: boolSetting(screen.audioNREnabled), AudioNRStrength: float32Setting(screen.audioNRStrength),
+		AudioNREnabled: boolSetting(screen.audioNREnabled), AudioNRStrength: float32Setting(screen.audioNRStrength), AudioNRSpeed: screen.audioNRSpeed,
 		DMRAutoCenter: boolSetting(screen.dmrAutoCenter), DMRAudioSlot: screen.dmrAudioSlot,
 		RTL433FrequencyHz:     screen.rtl433FrequencyHz,
 		RadiosondeFamily:      screen.radiosondeFamily,

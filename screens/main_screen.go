@@ -227,6 +227,7 @@ type MainScreen struct {
 	audioNotchDepthDB      float32
 	audioNREnabled         bool
 	audioNRStrength        float32
+	audioNRSpeed           string
 	memoryPanel            *MemoryPanel
 	scanPanel              *ScanPanel
 	dmrPanel               *DMRPanel
@@ -293,6 +294,7 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		audioNotchWidthHz:      120,
 		audioNotchDepthDB:      -35,
 		audioNRStrength:        50,
+		audioNRSpeed:           "normal",
 		audioMeterDB:           -60,
 		squelchThreshold:       -100,
 		squelchHoldMs:          80,
@@ -568,6 +570,7 @@ func (screen *MainScreen) CreateControls() {
 	for _, element := range screen.dmrPanel.controls {
 		simpleui.Add(element)
 	}
+	simpleui.Add(screen.dmrPanel)
 	for _, element := range screen.dabPanel.controls {
 		simpleui.Add(element)
 	}
@@ -1340,7 +1343,7 @@ func (screen *MainScreen) drawLowerWorkspaceContent(outerScale float32) {
 	}
 	drawCompactedTool(outerScale, func() {
 		if screen.waterfallVisible {
-			drawSmallText(i18n.Source("text.5a921a588ee1"), 40, toolY+12, colors.cyan)
+			screen.drawWaterfallAdjustPanel()
 		} else if screen.activeTool == i18n.Source("text.94fa3fe96dde") {
 			screen.fftDisplay.DrawPanel()
 		} else if screen.activeTool == i18n.Source("text.93239b223632") {
@@ -1434,31 +1437,34 @@ func (screen *MainScreen) drawWaterfall() {
 }
 
 func (screen *MainScreen) createWaterfallControls() {
-	screen.wfOffsetLabel = simpleui.NewLabel("wfOffsetLabel", 40, 650, 175, 18, i18n.Source("text.05e2f3d86df6"), 12)
+	screen.wfOffsetLabel = simpleui.NewLabel("wfOffsetLabel", 60, 730, 310, 18, i18n.Source("text.05e2f3d86df6"), 12)
 	screen.wfOffsetLabel.SetAlignment(simpleui.AlignCenter)
-	screen.wfOffsetSlider = simpleui.NewSlider("wfOffset", 48, 684, 167, 20, -80, 40, float32(screen.waterfallSettings.ColorOffsetDB))
+	screen.wfOffsetSlider = simpleui.NewSlider("wfOffset", 70, 765, 290, 22, -80, 40, float32(screen.waterfallSettings.ColorOffsetDB))
 	screen.wfOffsetSlider.SetStep(1)
 
-	screen.wfContrastLabel = simpleui.NewLabel("wfContrastLabel", 230, 650, 180, 18, i18n.Source("text.ef785025081a"), 12)
+	screen.wfContrastLabel = simpleui.NewLabel("wfContrastLabel", 425, 730, 310, 18, i18n.Source("text.ef785025081a"), 12)
 	screen.wfContrastLabel.SetAlignment(simpleui.AlignCenter)
-	screen.wfContrastSlider = simpleui.NewSlider("wfContrast", 238, 684, 170, 20, 25, 200, float32(screen.waterfallSettings.Contrast))
+	screen.wfContrastSlider = simpleui.NewSlider("wfContrast", 435, 765, 290, 22, 25, 200, float32(screen.waterfallSettings.Contrast))
 	screen.wfContrastSlider.SetStep(1)
 
-	screen.wfRangeLabel = simpleui.NewLabel("wfRangeLabel", 430, 650, 210, 18, i18n.Source("text.4258625aea4f"), 12)
+	screen.wfRangeLabel = simpleui.NewLabel("wfRangeLabel", 790, 730, 350, 18, i18n.Source("text.4258625aea4f"), 12)
 	screen.wfRangeLabel.SetAlignment(simpleui.AlignCenter)
-	screen.wfRangeSlider = simpleui.NewRangeSlider("wfRange", 438, 684, 194, 20, -140, 20, screen.waterfallSettings.MinimumDBm, screen.waterfallSettings.MaximumDBm)
+	screen.wfRangeSlider = simpleui.NewRangeSlider("wfRange", 805, 765, 320, 22, -140, 20, screen.waterfallSettings.MinimumDBm, screen.waterfallSettings.MaximumDBm)
 	screen.wfRangeSlider.SetStep(1)
 	screen.wfRangeSlider.SetMinimumGap(10)
 	screen.wfRangeSlider.SetRangeDragging(false)
 
-	screen.wfSpeedLabel = simpleui.NewLabel("wfSpeedLabel", 655, 650, 175, 18, i18n.Source("text.c4d670fd6a8b"), 12)
+	screen.wfSpeedLabel = simpleui.NewLabel("wfSpeedLabel", 1205, 722, 320, 18, i18n.Source("text.c4d670fd6a8b"), 12)
 	screen.wfSpeedLabel.SetAlignment(simpleui.AlignCenter)
-	screen.wfSpeedSlider = simpleui.NewSlider("wfSpeed", 660, 684, 170, 20, 5, 60, float32(screen.waterfallSettings.LinesPerSecond))
+	screen.wfSpeedSlider = simpleui.NewSlider("wfSpeed", 1215, 755, 300, 22, 5, 60, float32(screen.waterfallSettings.LinesPerSecond))
 	screen.wfSpeedSlider.SetStep(1)
 
-	screen.wfPaletteButton = simpleui.NewButton("wfPalette", 850, 657, 150, 48, i18n.Source("text.18652a0d4bd5"), 12)
-	reset := simpleui.NewButton("wfReset", 1015, 657, 90, 48, i18n.Source("text.7ef2fad58d1f"), 12)
-	closeButton := simpleui.NewButton("wfClose", 1120, 657, 110, 48, i18n.Source("text.f13a1ed0cf3c"), 12)
+	screen.wfPaletteButton = simpleui.NewButton("wfPalette", 1205, 812, 150, 42, i18n.Source("text.18652a0d4bd5"), 11)
+	reset := simpleui.NewButton("wfReset", 1365, 812, 75, 42, i18n.Source("text.7ef2fad58d1f"), 10)
+	closeButton := simpleui.NewButton("wfClose", 1450, 812, 75, 42, i18n.Source("text.f13a1ed0cf3c"), 10)
+	screen.wfPaletteButton.SetColors(mixColor(colors.panelAlt, colors.blue, .18), colors.blue, colors.text)
+	reset.SetColors(mixColor(colors.panelAlt, colors.orange, .15), colors.orange, colors.text)
+	closeButton.SetColors(mixColor(colors.panelAlt, colors.cyan, .14), colors.cyan, colors.text)
 
 	screen.wfOffsetSlider.OnChange(func(value float32) {
 		screen.waterfallSettings.ColorOffsetDB = int(value)
@@ -2459,6 +2465,7 @@ func (screen *MainScreen) overlayOpen() bool {
 		(screen.stepSelector != nil && screen.stepSelector.OverlayOpen()) ||
 		(screen.filterSelector != nil && screen.filterSelector.OverlayOpen()) ||
 		(screen.memoryPanel != nil && screen.memoryPanel.OverlayOpen()) ||
+		(screen.dmrPanel != nil && screen.dmrPanel.OverlayOpen()) ||
 		(screen.voacapPanel != nil && screen.voacapPanel.OverlayOpen()) ||
 		(screen.contestLogPanel != nil && screen.contestLogPanel.viewer != nil && screen.contestLogPanel.viewer.OverlayOpen()) ||
 		(screen.contestLogPanel != nil && screen.contestLogPanel.templateEditor != nil && screen.contestLogPanel.templateEditor.OverlayOpen()) ||

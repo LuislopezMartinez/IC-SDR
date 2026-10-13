@@ -23,7 +23,7 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 		WaterfallMinimum: -95, WaterfallMaximum: -15, WaterfallPalette: "VIRIDIS",
 		MemoryViewEnabled: boolSetting(false),
 		AudioNotchEnabled: boolSetting(true), AudioNotchFrequencyHz: 1250, AudioNotchWidthHz: 180, AudioNotchDepthDB: -40,
-		AudioNREnabled: boolSetting(true), AudioNRStrength: float32Setting(65),
+		AudioNREnabled: boolSetting(true), AudioNRStrength: float32Setting(65), AudioNRSpeed: "fast",
 	}
 	if err := writeAppSettings(path, want); err != nil {
 		t.Fatal(err)
@@ -67,8 +67,8 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 	if !screen.audioNotchEnabled || screen.audioNotchFrequencyHz != 1250 || screen.audioNotchWidthHz != 180 || screen.audioNotchDepthDB != -40 {
 		t.Fatalf("restored audio notch = %v/%d/%d/%.0f", screen.audioNotchEnabled, screen.audioNotchFrequencyHz, screen.audioNotchWidthHz, screen.audioNotchDepthDB)
 	}
-	if !screen.audioNREnabled || screen.audioNRStrength != 65 {
-		t.Fatalf("restored audio NR = %v/%.0f", screen.audioNREnabled, screen.audioNRStrength)
+	if !screen.audioNREnabled || screen.audioNRStrength != 65 || screen.audioNRSpeed != "fast" {
+		t.Fatalf("restored audio NR = %v/%.0f/%s", screen.audioNREnabled, screen.audioNRStrength, screen.audioNRSpeed)
 	}
 }
 

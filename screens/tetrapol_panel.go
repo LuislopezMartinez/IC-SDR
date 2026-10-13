@@ -153,7 +153,15 @@ func (panel *TETRAPOLPanel) refreshPresetControls() {
 		button.SetVisible(shown)
 		if index < len(presets) {
 			button.SetLabel(presets[index].label)
-			button.SetBounds(rl.Rectangle{X: 704 + float32(index)*(width+8), Y: toolY + 50, Width: width, Height: 34})
+			bounds := rl.Rectangle{X: 704 + float32(index)*(width+8), Y: toolY + 50, Width: width, Height: 34}
+			// Presets change width when the VHF/UHF profile changes. Rebuilding
+			// their bounds in design coordinates used to undo the horizontal
+			// remapping applied while the utilities rail is collapsed, leaving
+			// these buttons shifted into the status card.
+			if panel.screen.utilitiesCollapsed {
+				bounds = collapsedToolBounds(bounds)
+			}
+			button.SetBounds(bounds)
 		}
 	}
 }
