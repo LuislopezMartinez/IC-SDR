@@ -75,6 +75,27 @@ func TestTelemetryTracksChannelFollowingActions(t *testing.T) {
 	}
 }
 
+func TestTelemetryBuildsCCHChannelAndGroupDatabase(t *testing.T) {
+	var tracker telemetryTracker
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	tracker.update([]byte(`{"event":"tsdu","tsdu":{"frame_no":8,"log_ch":"CCH","codop":85,"addr":{"z":1,"y":2,"x":3},"cipher":{"state":"clear"},"channel_action":{"action":"follow","kind":"group","channel_id":2882,"group_id":42,"coverage_id":7}}}`), now)
+	got := tracker.snapshot(now)
+	if got.TSDUCount != 1 || !got.CODOPKnown || got.LastCODOP != 85 {
+		t.Fatalf("TSDU summary = count %d CODOP %v/%d", got.TSDUCount, got.CODOPKnown, got.LastCODOP)
+	}
+	if len(got.Channels) != 1 || got.Channels[0].ChannelID != 2882 || !got.Channels[0].Active || got.Channels[0].GroupID != 42 || got.Channels[0].CoverageID != 7 {
+		t.Fatalf("channels = %+v", got.Channels)
+	}
+	if len(got.Groups) != 1 || got.Groups[0].GroupID != 42 || got.Groups[0].ChannelID != 2882 || got.Groups[0].CipherState != "clear" {
+		t.Fatalf("groups = %+v", got.Groups)
+	}
+	tracker.update([]byte(`{"event":"tsdu","tsdu":{"channel_action":{"action":"return","channel_id":2882}}}`), now.Add(time.Second))
+	got = tracker.snapshot(now.Add(time.Second))
+	if len(got.Channels) != 1 || got.Channels[0].Active {
+		t.Fatalf("returned channel remained active: %+v", got.Channels[0])
+	}
+}
+
 func TestTelemetrySyncAndVoiceExpire(t *testing.T) {
 	var tracker telemetryTracker
 	now := time.Unix(100, 0)
@@ -96,5 +117,20 @@ func TestTelemetryUsesExplicitSyncEvents(t *testing.T) {
 	got := tracker.snapshot(now.Add(4 * time.Second))
 	if got.Synchronized || got.RXOffset != 456 {
 		t.Fatalf("explicit loss not applied: %+v", got)
+	}
+}
+
+func TestTelemetryRetainsBoundedEventHistoryForNetworkViewer(t *testing.T) {
+	var tracker telemetryTracker
+	now := time.Unix(100, 0)
+	for index := 0; index < 520; index++ {
+		tracker.update([]byte(`{"event":"frame","frame":{"state":"ok","type":"DATA"}}`), now.Add(time.Duration(index)*time.Millisecond))
+	}
+	got := tracker.snapshot(now.Add(time.Second))
+	if len(got.RecentEvents) != 500 {
+		t.Fatalf("event history length = %d, want 500", len(got.RecentEvents))
+	}
+	if got.RecentEvents[0].Time != now.Add(20*time.Millisecond) {
+		t.Fatalf("oldest retained event = %v", got.RecentEvents[0].Time)
 	}
 }

@@ -1,12 +1,14 @@
 package screens
 
 import (
+	"go-zero/internal/ft8"
 	"go-zero/internal/i18n"
 	"go-zero/internal/omnirig"
 	"go-zero/internal/resources"
 
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"go-zero/internal/sdr"
@@ -79,7 +81,8 @@ func (screen *MainScreen) toolWorkspacePointer() rl.Vector2 {
 func compactToolControls(elements []simpleui.Element) {
 	for _, element := range elements {
 		bounds := element.Bounds()
-		if bounds.Y < toolY || bounds.Y >= toolY+toolH {
+		isExpandedSSTVControl := strings.HasPrefix(element.ID(), "sstvCandidate") && bounds.Y >= 458
+		if (!isExpandedSSTVControl && bounds.Y < toolY) || bounds.Y >= toolY+toolH {
 			continue
 		}
 		bounds.X = toolContentX + (bounds.X-legacyToolX)*toolContentScaleX
@@ -245,10 +248,13 @@ type MainScreen struct {
 	radiosondeFamily       string
 	radiosondeFrequencyHz  int64
 	sstvPanel              *SSTVPanel
+	ft8Panel               *FT8Panel
+	ft8Depth               string
 	tetraPanel             *TETRAPanel
 	tetrapolPanel          *TETRAPOLPanel
 	omniRigPanel           *OmniRigPanel
 	tetrapolBand           string
+	tetrapolPlan           string
 	tetrapolDirection      string
 	utilitiesSidebar       *UtilitiesSidebar
 	utilitiesCollapsed     bool
@@ -330,9 +336,11 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		rtl433BandwidthHz:      500_000,
 		sstvAutomatic:          true,
 		sstvMode:               "R36",
+		ft8Depth:               ft8.DepthBalanced,
 		sstvCandidateModes:     [4]string{"R36", "R72", "M1", "S1"},
 		subtoneMode:            i18n.Source("text.6ea56fae9eac"),
 		tetrapolBand:           "UHF",
+		tetrapolPlan:           tetrapolPlanUHF125,
 		tetrapolDirection:      "DOWN",
 		settingsPath:           defaultAppSettingsPath(),
 		sMeter:                 &SMeter{},
@@ -501,6 +509,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.aircraftPanel = NewAircraftPanel(screen)
 	screen.satellitePanel = NewSatellitePanel(screen)
 	screen.sstvPanel = NewSSTVPanel(screen)
+	screen.ft8Panel = NewFT8Panel(screen)
 	screen.tetraPanel = NewTETRAPanel(screen)
 	screen.tetrapolPanel = NewTETRAPOLPanel(screen)
 	screen.omniRigPanel = NewOmniRigPanel(screen)
@@ -606,12 +615,17 @@ func (screen *MainScreen) CreateControls() {
 	for _, element := range screen.sstvPanel.controls {
 		simpleui.Add(element)
 	}
+	for _, element := range screen.ft8Panel.controls {
+		simpleui.Add(element)
+	}
+	simpleui.Add(screen.ft8Panel)
 	for _, element := range screen.tetraPanel.controls {
 		simpleui.Add(element)
 	}
 	for _, element := range screen.tetrapolPanel.controls {
 		simpleui.Add(element)
 	}
+	simpleui.Add(screen.tetrapolPanel)
 	for _, element := range screen.omniRigPanel.controls {
 		simpleui.Add(element)
 	}
@@ -661,6 +675,9 @@ func (screen *MainScreen) CreateControls() {
 	}
 	if screen.activeTool == i18n.Source("text.820d4685bc9d") {
 		screen.sstvPanel.Enter()
+	}
+	if screen.activeTool == ft8ToolID {
+		screen.ft8Panel.Enter()
 	}
 	if screen.activeTool == i18n.Source("text.f69d86a86926") {
 		screen.tetraPanel.Enter()
@@ -740,6 +757,9 @@ func (screen *MainScreen) Draw() {
 	if screen.sstvPanel != nil {
 		screen.sstvPanel.Tick()
 	}
+	if screen.ft8Panel != nil {
+		screen.ft8Panel.Tick()
+	}
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.Tick()
 	}
@@ -775,7 +795,7 @@ func (screen *MainScreen) Draw() {
 	rl.DrawRectangle(0, 0, int32(designWidth), int32(designHeight), colors.background)
 	screen.drawHeader()
 	screen.drawSpectrum()
-	if screen.activeTool != i18n.Source("text.a8cbb160caa6") {
+	if screen.shouldDrawWaterfall() {
 		if screen.receiver != nil {
 			screen.waterfall.Update(screen.receiver, screen.stats.SampleRate, screen.spanHz)
 		}
@@ -785,6 +805,10 @@ func (screen *MainScreen) Draw() {
 		screen.drawLowerWorkspace()
 	}
 	screen.utilitiesSidebar.Draw()
+}
+
+func (screen *MainScreen) shouldDrawWaterfall() bool {
+	return screen.activeTool != i18n.Source("text.a8cbb160caa6") && screen.activeTool != i18n.Source("text.820d4685bc9d")
 }
 
 func (screen *MainScreen) Close() {
@@ -827,6 +851,9 @@ func (screen *MainScreen) Close() {
 	if screen.sstvPanel != nil {
 		screen.sstvPanel.Leave()
 		screen.sstvPanel.Close()
+	}
+	if screen.ft8Panel != nil {
+		screen.ft8Panel.Close()
 	}
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.Close()
@@ -1316,6 +1343,15 @@ func (screen *MainScreen) drawLowerWorkspaceContent(outerScale float32) {
 		screen.qrzPanel.DrawPanel()
 		return
 	}
+	if screen.activeTool == i18n.Source("text.820d4685bc9d") {
+		drawPanel(toolContentX, 458, toolContentRight-toolContentX, designHeight-466)
+		drawCompactedTool(outerScale, func() { screen.sstvPanel.DrawPanel() })
+		return
+	}
+	if screen.activeTool == ft8ToolID {
+		screen.ft8Panel.DrawPanel()
+		return
+	}
 	drawPanel(toolContentX, toolY, toolContentRight-toolContentX, toolH)
 	if screen.activeTool == i18n.Source("text.f69d86a86926") {
 		screen.tetraPanel.DrawPanel()
@@ -1358,8 +1394,6 @@ func (screen *MainScreen) drawLowerWorkspaceContent(outerScale float32) {
 			screen.aircraftPanel.DrawPanel()
 		} else if screen.activeTool == i18n.Source("text.4c4310fd27fd") {
 			screen.aprsPanel.DrawPanel()
-		} else if screen.activeTool == i18n.Source("text.820d4685bc9d") {
-			screen.sstvPanel.DrawPanel()
 		} else if screen.activeTool == i18n.Source("text.bcdc9d50f2be") {
 			screen.satellitePanel.DrawPanel()
 		} else {
@@ -1387,6 +1421,7 @@ func (screen *MainScreen) toolWorkspaceElements() []simpleui.Element {
 	appendControls(screen.aircraftPanel.controls)
 	appendControls(screen.satellitePanel.controls)
 	appendControls(screen.sstvPanel.controls)
+	appendControls(screen.ft8Panel.controls)
 	appendControls(screen.tetraPanel.controls)
 	appendControls(screen.tetrapolPanel.controls)
 	appendControls(screen.omniRigPanel.controls)
@@ -1408,7 +1443,8 @@ func (screen *MainScreen) applyUtilitiesLayout(collapsed bool) {
 			continue
 		}
 		bounds := element.Bounds()
-		if bounds.Y < toolY || bounds.Y >= designHeight || bounds.X < collapsedToolContentX {
+		isExpandedSSTVControl := strings.HasPrefix(element.ID(), "sstvCandidate") && bounds.Y >= 458
+		if (!isExpandedSSTVControl && bounds.Y < toolY) || bounds.Y >= designHeight || bounds.X < collapsedToolContentX {
 			continue
 		}
 		if collapsed {
@@ -1576,6 +1612,9 @@ func (screen *MainScreen) selectTool(tool string) {
 	if previous == i18n.Source("text.820d4685bc9d") && tool != i18n.Source("text.820d4685bc9d") && screen.sstvPanel != nil {
 		screen.sstvPanel.Leave()
 	}
+	if previous == ft8ToolID && tool != ft8ToolID && screen.ft8Panel != nil {
+		screen.ft8Panel.Leave()
+	}
 	if previous == i18n.Source("text.f69d86a86926") && tool != i18n.Source("text.f69d86a86926") && screen.tetraPanel != nil {
 		screen.tetraPanel.Leave()
 	}
@@ -1631,6 +1670,9 @@ func (screen *MainScreen) selectTool(tool string) {
 			screen.savedMode = i18n.Source("text.61f0acff1735")
 			screen.selectFilter(screen.filterSelector.Current(i18n.Source("text.61f0acff1735")))
 		}
+	}
+	if tool == ft8ToolID && screen.ft8Panel != nil && previous != ft8ToolID {
+		screen.ft8Panel.Enter()
 	}
 	if tool == i18n.Source("text.7a1580c49e45") && screen.scanPanel != nil {
 		screen.scanPanel.Enter()
@@ -1729,6 +1771,9 @@ func (screen *MainScreen) selectTool(tool string) {
 			screen.sstvPanel.Enter()
 		}
 	}
+	if screen.ft8Panel != nil {
+		screen.ft8Panel.SetVisible(tool == ft8ToolID)
+	}
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.SetVisible(tool == i18n.Source("text.f69d86a86926"))
 		if tool == i18n.Source("text.f69d86a86926") && previous != i18n.Source("text.f69d86a86926") {
@@ -1825,6 +1870,9 @@ func (screen *MainScreen) setViewMode(mode int) {
 	if screen.sstvPanel != nil {
 		screen.sstvPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.820d4685bc9d"))
 	}
+	if screen.ft8Panel != nil {
+		screen.ft8Panel.SetVisible(showTool && screen.activeTool == ft8ToolID)
+	}
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.f69d86a86926"))
 	}
@@ -1903,6 +1951,9 @@ func (screen *MainScreen) stopAllDecodersForBandChange() {
 	}
 	if screen.sstvPanel != nil {
 		screen.sstvPanel.Leave()
+	}
+	if screen.ft8Panel != nil {
+		screen.ft8Panel.Leave()
 	}
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.Leave()
@@ -2339,7 +2390,7 @@ func (screen *MainScreen) updateSpectrumDrag() {
 // waterfall and spectrum share the same horizontal RF scale, so the selected
 // channel must be identical whichever view the user clicks.
 func (screen *MainScreen) updateWaterfallTune() {
-	if screen.overlayOpen() || !rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
+	if !screen.shouldDrawWaterfall() || screen.overlayOpen() || !rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
 		return
 	}
 	x, y, width, height := screen.waterfallGeometry()
@@ -2466,6 +2517,7 @@ func (screen *MainScreen) overlayOpen() bool {
 		(screen.filterSelector != nil && screen.filterSelector.OverlayOpen()) ||
 		(screen.memoryPanel != nil && screen.memoryPanel.OverlayOpen()) ||
 		(screen.dmrPanel != nil && screen.dmrPanel.OverlayOpen()) ||
+		(screen.tetrapolPanel != nil && screen.tetrapolPanel.OverlayOpen()) ||
 		(screen.voacapPanel != nil && screen.voacapPanel.OverlayOpen()) ||
 		(screen.contestLogPanel != nil && screen.contestLogPanel.viewer != nil && screen.contestLogPanel.viewer.OverlayOpen()) ||
 		(screen.contestLogPanel != nil && screen.contestLogPanel.templateEditor != nil && screen.contestLogPanel.templateEditor.OverlayOpen()) ||

@@ -17,6 +17,7 @@ import (
 	"go-zero/internal/digitalvoice"
 	"go-zero/internal/dmr"
 	"go-zero/internal/dsp"
+	"go-zero/internal/ft8"
 	"go-zero/internal/radiosonde"
 	"go-zero/internal/rtl433"
 	"go-zero/internal/sstv"
@@ -53,6 +54,7 @@ type Config struct {
 	RTL433Executable                                 string
 	APRSExecutable, APRSConfig, APRSWorkingDirectory string
 	SSTVExecutable, SSTVOutputDirectory              string
+	FT8Executable                                    string
 	DABExecutable                                    string
 	TETRACodec                                       string
 	TETRAPOLKitExecutable, TETRAPOLRPCELPExecutable  string
@@ -104,6 +106,7 @@ type Receiver struct {
 	aprs                 *aprs.Decoder
 	dab                  *dab.Decoder
 	sstv                 *sstv.Decoder
+	ft8                  *ft8.Decoder
 	tetra                *tetra.Decoder
 	tetrapol             *tetrapol.Decoder
 	tetrapolRuntime      *tetrapolruntime.Pipeline
@@ -250,6 +253,7 @@ func NewReceiver(config Config) *Receiver {
 	receiver.aprs = aprs.New(config.SampleRate, config.APRSExecutable, config.APRSConfig, config.APRSWorkingDirectory)
 	receiver.dab = dab.New(config.SampleRate, config.DABExecutable, receiver.enqueueDigitalAudio)
 	receiver.sstv = sstv.New(config.SSTVExecutable, config.SSTVOutputDirectory)
+	receiver.ft8 = ft8.New(config.FT8Executable)
 	receiver.tetra = tetra.New(config.SampleRate, config.TETRACodec, receiver.enqueueDigitalAudio)
 	receiver.tetrapol = tetrapol.New(config.SampleRate)
 	receiver.tetrapolRuntime = &tetrapolruntime.Pipeline{}
@@ -463,6 +467,9 @@ func (receiver *Receiver) Close() {
 		if receiver.sstv != nil {
 			receiver.sstv.Close()
 		}
+		if receiver.ft8 != nil {
+			receiver.ft8.Close()
+		}
 		if receiver.rtl433 != nil {
 			receiver.rtl433.Stop()
 		}
@@ -615,6 +622,9 @@ func (receiver *Receiver) StopAllDecoders() {
 	if receiver.sstv != nil {
 		receiver.sstv.Configure(false)
 	}
+	if receiver.ft8 != nil {
+		receiver.ft8.Configure(false)
+	}
 	if receiver.rtl433 != nil {
 		receiver.rtl433.Stop()
 	}
@@ -662,6 +672,27 @@ func (receiver *Receiver) ResyncDMR() bool { return receiver.dmr != nil && recei
 func (receiver *Receiver) ConfigureSSTV(enabled bool) {
 	if receiver.sstv != nil {
 		receiver.sstv.Configure(enabled)
+	}
+}
+func (receiver *Receiver) ConfigureFT8(enabled bool) {
+	if receiver.ft8 != nil {
+		receiver.ft8.Configure(enabled)
+	}
+}
+func (receiver *Receiver) SetFT8Depth(depth string) {
+	if receiver.ft8 != nil {
+		receiver.ft8.SetDepth(depth)
+	}
+}
+func (receiver *Receiver) FT8Status() ft8.Status {
+	if receiver.ft8 == nil {
+		return ft8.Status{State: "NO DISPONIBLE"}
+	}
+	return receiver.ft8.Snapshot()
+}
+func (receiver *Receiver) ClearFT8() {
+	if receiver.ft8 != nil {
+		receiver.ft8.Clear()
 	}
 }
 func (receiver *Receiver) SSTVStatus() sstv.Status {
@@ -1092,6 +1123,11 @@ func (receiver *Receiver) processAudio(iq []float32) {
 	// listening filters and RF squelch must never remove its timing tones.
 	if receiver.sstv != nil {
 		receiver.sstv.ProcessAudio(samples)
+	}
+	// FT8 consumes the same untouched 48 kHz stream and performs its own
+	// UTC-aligned 12 kHz slot conversion. Squelch must not gate weak signals.
+	if receiver.ft8 != nil {
+		receiver.ft8.ProcessAudio(samples)
 	}
 	receiver.mu.Lock()
 	if receiver.dabPlaybackEnabled {

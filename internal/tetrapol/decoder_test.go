@@ -62,3 +62,48 @@ func TestMonitorProducesHardSymbolsAcrossIQBlocks(t *testing.T) {
 		}
 	}
 }
+
+func TestMonitorAFCTracksCarrierOffset(t *testing.T) {
+	const (
+		rate          = 2_048_000.0
+		carrierOffset = 725.0
+		deviation     = 1_000.0
+		samples       = 256
+	)
+	pattern := []byte{1, 0, 1, 1, 0, 0, 1, 0}
+	iq := make([]float32, len(pattern)*80*samples*2)
+	phase := 0.0
+	for symbol := 0; symbol < len(pattern)*80; symbol++ {
+		frequency := carrierOffset - deviation
+		if pattern[symbol%len(pattern)] != 0 {
+			frequency = carrierOffset + deviation
+		}
+		for sample := 0; sample < samples; sample++ {
+			index := symbol*samples + sample
+			phase += 2 * math.Pi * frequency / rate
+			iq[index*2], iq[index*2+1] = float32(math.Cos(phase)), float32(math.Sin(phase))
+		}
+	}
+	d := New(rate)
+	d.Configure(true)
+	d.ProcessIQ(iq)
+	status := d.Snapshot()
+	if status.AFCState != "LOCKED" {
+		t.Fatalf("AFC state = %s, want LOCKED (%+v)", status.AFCState, status)
+	}
+	if math.Abs(status.CarrierOffsetHz-carrierOffset) > 80 {
+		t.Fatalf("carrier offset = %.1f Hz, want %.1f±80", status.CarrierOffsetHz, carrierOffset)
+	}
+	if math.Abs(status.AFCErrorHz) > 80 {
+		t.Fatalf("AFC residual = %.1f Hz", status.AFCErrorHz)
+	}
+}
+
+func TestMonitorCanDisableAFC(t *testing.T) {
+	d := New(2_048_000)
+	d.SetAFCEnabled(false)
+	d.Configure(true)
+	if got := d.Snapshot(); got.AFCState != "OFF" || got.CarrierOffsetHz != 0 {
+		t.Fatalf("disabled AFC status = %+v", got)
+	}
+}

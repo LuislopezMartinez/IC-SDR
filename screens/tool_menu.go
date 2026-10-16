@@ -32,6 +32,7 @@ var toolMenuItems = []toolMenuItem{
 	{id: i18n.Source("text.a8cbb160caa6"), label: i18n.Source("text.3ae4feb8250d"), icon: "menu-digital-auto.png", row: 1},
 	{id: dabToolID, label: "DAB / DAB+", row: 1},
 	{id: i18n.Source("text.820d4685bc9d"), label: i18n.Source("text.820d4685bc9d"), icon: "menu-sstv.png", row: 1},
+	{id: ft8ToolID, label: "FT8", icon: "menu-ft8.png", row: 1},
 	{id: i18n.Source("text.4c4310fd27fd"), label: i18n.Source("text.4c4310fd27fd"), icon: "menu-aprs.png", row: 1},
 	{id: i18n.Source("text.8be70e7cb2c4"), label: i18n.Source("text.8be70e7cb2c4"), icon: "menu-rtl433.png", row: 1},
 	{id: i18n.Source("text.7dd172035702"), label: i18n.Source("text.493b20493ea1"), icon: "menu-radiosonde.png", row: 1},

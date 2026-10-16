@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"go-zero/internal/ft8"
 	"go-zero/internal/i18n"
 
 	"encoding/json"
@@ -78,7 +79,9 @@ type persistedAppSettings struct {
 	SSTVAutomatic         *bool                         `json:"sstvAutomatic,omitempty"`
 	SSTVMode              string                        `json:"sstvMode,omitempty"`
 	SSTVCandidateModes    [4]string                     `json:"sstvCandidateModes,omitempty"`
+	FT8Depth              string                        `json:"ft8Depth,omitempty"`
 	TETRAPOLBand          string                        `json:"tetrapolBand,omitempty"`
+	TETRAPOLPlan          string                        `json:"tetrapolPlan,omitempty"`
 	TETRAPOLDirection     string                        `json:"tetrapolDirection,omitempty"`
 	Hardware              *sdr.HardwareSettings         `json:"hardware,omitempty"`
 	BandDisplayProfiles   map[string]bandDisplayProfile `json:"bandDisplayProfiles,omitempty"`
@@ -281,6 +284,9 @@ func loadAppSettings(path string, screen *MainScreen) {
 	if validSSTVMode(settings.SSTVMode) {
 		screen.sstvMode = settings.SSTVMode
 	}
+	if settings.FT8Depth == ft8.DepthFast || settings.FT8Depth == ft8.DepthBalanced || settings.FT8Depth == ft8.DepthDeep {
+		screen.ft8Depth = settings.FT8Depth
+	}
 	for i, mode := range settings.SSTVCandidateModes {
 		if validSSTVMode(mode) {
 			screen.sstvCandidateModes[i] = mode
@@ -288,6 +294,12 @@ func loadAppSettings(path string, screen *MainScreen) {
 	}
 	if settings.TETRAPOLBand == "VHF" || settings.TETRAPOLBand == "UHF" {
 		screen.tetrapolBand = settings.TETRAPOLBand
+	}
+	if _, exists := tetrapolChannelPlans[settings.TETRAPOLPlan]; exists {
+		screen.tetrapolPlan = settings.TETRAPOLPlan
+	} else if settings.TETRAPOLBand == "VHF" {
+		// Migrate settings written before channel plans were configurable.
+		screen.tetrapolPlan = tetrapolPlanVHF
 	}
 	if settings.TETRAPOLDirection == "UP" || settings.TETRAPOLDirection == "DOWN" {
 		screen.tetrapolDirection = settings.TETRAPOLDirection
@@ -441,7 +453,9 @@ func (screen *MainScreen) flushSettings(force bool) {
 		SSTVAutomatic:         boolSetting(screen.sstvAutomatic),
 		SSTVMode:              screen.sstvMode,
 		SSTVCandidateModes:    screen.sstvCandidateModes,
+		FT8Depth:              screen.ft8Depth,
 		TETRAPOLBand:          screen.tetrapolBand,
+		TETRAPOLPlan:          screen.tetrapolPlan,
 		TETRAPOLDirection:     screen.tetrapolDirection,
 		BandDisplayProfiles:   screen.bandDisplayProfiles,
 	}

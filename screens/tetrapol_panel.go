@@ -16,6 +16,11 @@ import (
 
 const tetrapolToolID = "TETRAPOL"
 
+const (
+	tetrapolTCHTimeout = 6 * time.Second
+	tetrapolRearmDelay = 3 * time.Second
+)
+
 type tetrapolPreset struct {
 	label string
 	hz    int64
@@ -27,34 +32,51 @@ var tetrapolPresets = map[string][]tetrapolPreset{
 }
 
 type TETRAPOLPanel struct {
-	screen                          *MainScreen
-	controls                        []simpleui.Element
-	start, events, capture          *simpleui.Button
-	presets                         [3]*simpleui.Button
-	channel, direction, band        *simpleui.Dropdown
-	audio, follow, autoCenter       *simpleui.Switch
-	enabled, visible, audioEnabled  bool
-	followEnabled, following        bool
-	controlFrequencyHz              int64
-	lastChannelEvent                uint64
-	pendingManualTune               bool
-	restartAfter                    time.Time
-	showEvents                      bool
-	channelType, bandType, linkType string
-	feedback                        string
-	iqWriter                        *iqcapture.Writer
+	simpleui.BaseElement
+	screen                                    *MainScreen
+	controls                                  []simpleui.Element
+	start, events, capture                    *simpleui.Button
+	presets                                   [3]*simpleui.Button
+	channel, direction, band                  *simpleui.Dropdown
+	audio, follow, autoCenter                 *simpleui.Switch
+	enabled, visible, audioEnabled            bool
+	followEnabled, following                  bool
+	controlFrequencyHz                        int64
+	lastChannelEvent                          uint64
+	followedChannel                           int
+	followStarted, lastTCHActivity            time.Time
+	lastTCHRecord                             time.Time
+	tchActivitySeen                           bool
+	blockedChannel                            int
+	blockedUntil                              time.Time
+	followState                               string
+	pendingManualTune                         bool
+	restartAfter                              time.Time
+	showEvents                                bool
+	networkOpen, networkLive                  bool
+	networkTab, networkOffset, networkPressed int
+	latestTelemetry, networkSnapshot          tetrapolruntime.Telemetry
+	channelType, bandType, planType, linkType string
+	feedback                                  string
+	iqWriter                                  *iqcapture.Writer
 }
 
 func NewTETRAPOLPanel(screen *MainScreen) *TETRAPOLPanel {
-	band := screen.tetrapolBand
-	if band != "VHF" {
-		band = "UHF"
+	planType := screen.tetrapolPlan
+	if _, exists := tetrapolChannelPlans[planType]; !exists {
+		if screen.tetrapolBand == "VHF" {
+			planType = tetrapolPlanVHF
+		} else {
+			planType = tetrapolPlanUHF125
+		}
 	}
+	plan := tetrapolPlan(planType)
+	band := plan.band
 	direction := screen.tetrapolDirection
 	if direction != "UP" {
 		direction = "DOWN"
 	}
-	panel := &TETRAPOLPanel{screen: screen, channelType: "CCH", bandType: band, linkType: direction, audioEnabled: true, followEnabled: true}
+	panel := &TETRAPOLPanel{BaseElement: simpleui.NewBaseElement("tetrapolNetworkOverlay", 0, 0, designWidth, designHeight), screen: screen, channelType: "CCH", bandType: band, planType: planType, linkType: direction, audioEnabled: true, followEnabled: true, followedChannel: -1, blockedChannel: -1, followState: "CCH", networkLive: true}
 	panel.start = simpleui.NewButton("tetrapolStart", 374, toolY+45, 132, 38, "INICIAR", 14)
 	panel.start.OnClick(func() { panel.enabled = !panel.enabled; panel.apply() })
 	panel.controls = append(panel.controls, panel.start)
@@ -92,13 +114,11 @@ func NewTETRAPOLPanel(screen *MainScreen) *TETRAPOLPanel {
 		panel.screen.markSettingsDirty()
 		panel.restartIfRunning()
 	})
-	panel.band = simpleui.NewDropdown("tetrapolProfile", 374, toolY+157, 132, 34, "PERFIL", []string{"UHF", "VHF"}, 12)
-	if band == "VHF" {
-		panel.band.SetSelected(1)
-	} else {
-		panel.band.SetSelected(0)
-	}
-	panel.band.OnChange(func(_ int, value string) { panel.setBand(value) })
+	panel.band = simpleui.NewDropdown("tetrapolProfile", 374, toolY+157, 132, 34, "PERFIL", []string{"UHF 12,5", "UHF 10", "VHF"}, 11)
+	panel.band.SetSelected(map[string]int{tetrapolPlanUHF125: 0, tetrapolPlanUHF10: 1, tetrapolPlanVHF: 2}[planType])
+	panel.band.OnChange(func(index int, _ string) {
+		panel.setPlan([]string{tetrapolPlanUHF125, tetrapolPlanUHF10, tetrapolPlanVHF}[index])
+	})
 	panel.audio = simpleui.NewSwitch("tetrapolAudio", 518, toolY+157, 145, 34, "AUDIO", true, 11)
 	panel.audio.OnChange(func(enabled bool) {
 		panel.audioEnabled = enabled
@@ -106,22 +126,14 @@ func NewTETRAPOLPanel(screen *MainScreen) *TETRAPOLPanel {
 			panel.screen.receiver.SetTETRAPOLAudioEnabled(enabled)
 		}
 	})
-	// FrequencyDeviationHz measures the average GMSK modulation deviation, not
-	// a carrier error. Using it as AFC made the VFO drift continuously. Keep
-	// the control visible but unavailable until the decoder exposes a genuine
-	// carrier-frequency estimate.
-	panel.autoCenter = simpleui.NewSwitch("tetrapolAFC", 704, toolY+157, 121, 30, "AFC", false, 11)
-	panel.autoCenter.SetDisabledText("NO DISP.")
-	panel.autoCenter.SetEnabled(false)
-	panel.events = simpleui.NewButton("tetrapolEvents", 966, toolY+157, 105, 30, "EVENTOS", 11)
-	panel.events.OnClick(func() {
-		panel.showEvents = !panel.showEvents
-		if panel.showEvents {
-			panel.events.SetLabel("ESTADO")
-		} else {
-			panel.events.SetLabel("EVENTOS")
+	panel.autoCenter = simpleui.NewSwitch("tetrapolAFC", 704, toolY+157, 121, 30, "AFC", true, 11)
+	panel.autoCenter.OnChange(func(enabled bool) {
+		if panel.screen.receiver != nil {
+			panel.screen.receiver.SetTETRAPOLAFCEnabled(enabled)
 		}
 	})
+	panel.events = simpleui.NewButton("tetrapolEvents", 966, toolY+157, 105, 30, "RED", 11)
+	panel.events.OnClick(panel.openNetwork)
 	panel.capture = simpleui.NewButton("tetrapolCapture", 835, toolY+157, 121, 30, "CAPTURAR IQ", 10)
 	panel.capture.SetColors(colors.blue, colors.border, colors.text)
 	panel.capture.OnClick(panel.toggleIQCapture)
@@ -132,11 +144,24 @@ func NewTETRAPOLPanel(screen *MainScreen) *TETRAPOLPanel {
 }
 
 func (panel *TETRAPOLPanel) setBand(band string) {
-	if band != "VHF" {
-		band = "UHF"
+	if band == "VHF" {
+		panel.setPlan(tetrapolPlanVHF)
+	} else {
+		panel.setPlan(tetrapolPlanUHF125)
 	}
-	panel.bandType = band
-	panel.screen.tetrapolBand = band
+}
+
+func (panel *TETRAPOLPanel) setPlan(planID string) {
+	plan := tetrapolPlan(planID)
+	panel.planType, panel.bandType = plan.id, plan.band
+	panel.screen.tetrapolPlan, panel.screen.tetrapolBand = plan.id, plan.band
+	panel.screen.tuningStepHz, panel.screen.demodBandwidthHz = plan.stepHz, int(plan.stepHz)
+	if panel.screen.stepSelector != nil {
+		panel.screen.stepSelector.SetSelected(plan.stepHz)
+	}
+	if panel.screen.receiver != nil {
+		panel.screen.receiver.SetDemodulator(tetrapolToolID, panel.screen.frequencyHz, int(plan.stepHz))
+	}
 	panel.refreshPresetControls()
 	panel.screen.markSettingsDirty()
 	panel.restartIfRunning()
@@ -187,26 +212,28 @@ func (panel *TETRAPOLPanel) Enter() {
 		}
 	}
 	panel.screen.savedMode = tetrapolToolID
-	panel.screen.demodBandwidthHz = 12_500
+	step := tetrapolPlan(panel.planType).stepHz
+	panel.screen.demodBandwidthHz = int(step)
 	if panel.screen.receiver != nil {
-		panel.screen.receiver.SetDemodulator(tetrapolToolID, panel.screen.frequencyHz, 12_500)
+		panel.screen.receiver.SetDemodulator(tetrapolToolID, panel.screen.frequencyHz, int(step))
 	}
-	panel.screen.tuningStepHz = 12_500
+	panel.screen.tuningStepHz = step
 	if panel.screen.stepSelector != nil {
 		panel.screen.stepSelector.SetSelected(panel.screen.tuningStepHz)
 	}
 }
 
 func (panel *TETRAPOLPanel) tune(hz int64) {
+	step := tetrapolPlan(panel.planType).stepHz
 	panel.screen.frequencyHz, panel.screen.centerFrequencyHz = hz, hz
-	panel.screen.spanHz, panel.screen.tuningStepHz = 250_000, 12_500
+	panel.screen.spanHz, panel.screen.tuningStepHz = 250_000, step
 	panel.screen.updateBandForFrequency(hz)
 	if panel.screen.stepSelector != nil {
 		panel.screen.stepSelector.SetSelected(panel.screen.tuningStepHz)
 	}
 	if panel.screen.receiver != nil {
 		panel.screen.receiver.SetCenterFrequency(hz)
-		panel.screen.receiver.SetDemodulator(tetrapolToolID, hz, 12_500)
+		panel.screen.receiver.SetDemodulator(tetrapolToolID, hz, int(step))
 	}
 	panel.screen.markSettingsDirty()
 }
@@ -263,33 +290,89 @@ func (panel *TETRAPOLPanel) Tick() {
 }
 
 func (panel *TETRAPOLPanel) handleChannelFollow(telemetry tetrapolruntime.Telemetry) {
-	if !panel.enabled || !panel.followEnabled || telemetry.ChannelEvent == 0 || telemetry.ChannelEvent == panel.lastChannelEvent {
+	panel.handleChannelFollowAt(telemetry, time.Now())
+}
+
+func (panel *TETRAPOLPanel) handleChannelFollowAt(telemetry tetrapolruntime.Telemetry, now time.Time) {
+	if !panel.enabled || !panel.followEnabled {
+		return
+	}
+	if panel.following {
+		if telemetry.ChannelAction == "return" && telemetry.ChannelEvent != 0 && telemetry.ChannelEvent != panel.lastChannelEvent {
+			panel.lastChannelEvent = telemetry.ChannelEvent
+			panel.returnToControl("Fin de comunicación · retorno automático al CCH", now)
+			return
+		}
+		freshRecord := !telemetry.LastRecord.IsZero() && telemetry.LastRecord.After(panel.lastTCHRecord)
+		if telemetry.VoiceActive || freshRecord || (telemetry.Synchronized && !panel.tchActivitySeen) {
+			panel.tchActivitySeen = true
+			panel.followState = "TCH ACTIVO"
+			panel.lastTCHActivity = now
+			if freshRecord {
+				panel.lastTCHRecord = telemetry.LastRecord
+			}
+		}
+		lastActivity := panel.followStarted
+		if panel.tchActivitySeen {
+			lastActivity = panel.lastTCHActivity
+		}
+		if !lastActivity.IsZero() && now.Sub(lastActivity) >= tetrapolTCHTimeout {
+			reason := "TCH sin actividad · retorno al CCH"
+			if !panel.tchActivitySeen {
+				reason = "TCH sin sincronismo · retorno al CCH"
+			}
+			panel.returnToControl(reason, now)
+		}
+		return
+	}
+	if telemetry.ChannelEvent == 0 || telemetry.ChannelEvent == panel.lastChannelEvent {
 		return
 	}
 	panel.lastChannelEvent = telemetry.ChannelEvent
 	if telemetry.ChannelAction == "follow" && panel.channelType == "CCH" {
+		if telemetry.ChannelID == panel.blockedChannel && now.Before(panel.blockedUntil) {
+			panel.feedback = fmt.Sprintf("TCH %d esperando rearme", telemetry.ChannelID)
+			return
+		}
 		controlHz := panel.screen.frequencyHz
-		targetHz, err := tetrapolChannelFrequency(panel.bandType, controlHz, telemetry.ChannelID)
+		targetHz, err := tetrapolChannelFrequencyForPlan(panel.planType, controlHz, telemetry.ChannelID)
 		if err != nil {
 			panel.feedback = err.Error()
 			return
 		}
 		panel.controlFrequencyHz = controlHz
 		panel.following = true
+		panel.followedChannel = telemetry.ChannelID
+		panel.followStarted = now
+		panel.lastTCHActivity = time.Time{}
+		panel.lastTCHRecord = time.Time{}
+		panel.tchActivitySeen = false
+		panel.followState = "ADQUIRIENDO TCH"
 		panel.channelType = "TCH"
 		panel.channel.SetSelected(1)
 		panel.tune(targetHz)
 		panel.feedback = fmt.Sprintf("Siguiendo TCH %d en %.4f MHz", telemetry.ChannelID, float64(targetHz)/1e6)
 		panel.restart()
-	} else if telemetry.ChannelAction == "return" && panel.following && panel.controlFrequencyHz > 0 {
-		controlHz := panel.controlFrequencyHz
-		panel.following = false
-		panel.channelType = "CCH"
-		panel.channel.SetSelected(0)
-		panel.tune(controlHz)
-		panel.feedback = "Retorno automático al CCH"
-		panel.restart()
 	}
+}
+
+func (panel *TETRAPOLPanel) returnToControl(reason string, now time.Time) {
+	if panel.controlFrequencyHz <= 0 {
+		return
+	}
+	controlHz := panel.controlFrequencyHz
+	panel.blockedChannel = panel.followedChannel
+	panel.blockedUntil = now.Add(tetrapolRearmDelay)
+	panel.following = false
+	panel.followedChannel = -1
+	panel.followStarted, panel.lastTCHActivity, panel.lastTCHRecord = time.Time{}, time.Time{}, time.Time{}
+	panel.tchActivitySeen = false
+	panel.followState = "CCH"
+	panel.channelType = "CCH"
+	panel.channel.SetSelected(0)
+	panel.tune(controlHz)
+	panel.feedback = reason
+	panel.restart()
 }
 
 func (panel *TETRAPOLPanel) Leave() { panel.stopIQCapture(); panel.enabled = false; panel.apply() }
@@ -334,6 +417,7 @@ func (panel *TETRAPOLPanel) apply() {
 	if panel.screen.receiver != nil {
 		if panel.enabled {
 			panel.screen.receiver.SetTETRAPOLAudioEnabled(panel.audioEnabled)
+			panel.screen.receiver.SetTETRAPOLAFCEnabled(panel.autoCenter.Active())
 			if err := panel.screen.receiver.StartTETRAPOLRuntimeConfigured(panel.channelType, panel.bandType, panel.linkType); err != nil {
 				panel.enabled = false
 				panel.feedback = err.Error()
@@ -353,6 +437,10 @@ func (panel *TETRAPOLPanel) apply() {
 
 func (panel *TETRAPOLPanel) SetVisible(visible bool) {
 	panel.visible = visible
+	panel.BaseElement.SetVisible(visible)
+	if !visible {
+		panel.networkOpen = false
+	}
 	for _, control := range panel.controls {
 		control.SetVisible(visible)
 	}
@@ -386,6 +474,7 @@ func (panel *TETRAPOLPanel) DrawPanel() {
 		}
 	}
 	panel.handleChannelFollow(telemetry)
+	panel.latestTelemetry = telemetry
 
 	drawTETRAPOLGroup(rl.Rectangle{X: 360, Y: toolY + 5, Width: 315, Height: 202}, "CONTROL TETRAPOL")
 	drawTETRAPOLGroup(rl.Rectangle{X: 686, Y: toolY + 5, Width: 400, Height: 202}, "SINTONÍA")
@@ -397,9 +486,10 @@ func (panel *TETRAPOLPanel) DrawPanel() {
 	simpleui.DrawText("RP-CELP", 518, toolY+143, 10, colors.muted)
 	simpleui.DrawText("ACCESOS DE BANDA", 704, toolY+34, 10, colors.muted)
 	simpleui.DrawText("PASO", 704, toolY+104, 10, colors.muted)
-	simpleui.DrawTextStyled("12,5 kHz", 704, toolY+120, 15, simpleui.FontMono, colors.text)
+	stepLabel := fmt.Sprintf("%.1f kHz", float64(tetrapolPlan(panel.planType).stepHz)/1_000)
+	simpleui.DrawTextStyled(stepLabel, 704, toolY+120, 15, simpleui.FontMono, colors.text)
 	simpleui.DrawText("CANAL", 835, toolY+104, 10, colors.muted)
-	simpleui.DrawTextStyled("12,5 kHz", 835, toolY+120, 15, simpleui.FontMono, colors.text)
+	simpleui.DrawTextStyled(stepLabel, 835, toolY+120, 15, simpleui.FontMono, colors.text)
 	simpleui.DrawText("MODULACIÓN", 966, toolY+104, 10, colors.muted)
 	simpleui.DrawTextStyled("GMSK 8 kBd", 966, toolY+120, 15, simpleui.FontMono, colors.text)
 	simpleui.DrawText("AJUSTE AUTOMÁTICO", 704, toolY+143, 10, colors.muted)
@@ -453,7 +543,7 @@ func (panel *TETRAPOLPanel) DrawPanel() {
 			cipher, cipherColor = "CIFRADO · AUDIO BLOQUEADO", colors.red
 		}
 		simpleui.DrawText(fmt.Sprintf("ASB %s · offset %d · %s", asb, telemetry.RXOffset, cipher), 1112, toolY+149, 11, cipherColor)
-		simpleui.DrawText(fmt.Sprintf("Runtime %s · %s/%s · nivel %.1f dBFS · desv. %.0f Hz · AFC no disponible", runtimeState, panel.bandType, panel.linkType, status.LevelDBFS, status.FrequencyDeviationHz), 1112, toolY+174, 10, colors.muted)
+		simpleui.DrawText(fmt.Sprintf("Runtime %s · %s · %s/%s · nivel %.1f dBFS · AFC %s %+.0f Hz · error %+.0f Hz", runtimeState, panel.followState, panel.bandType, panel.linkType, status.LevelDBFS, status.AFCState, status.CarrierOffsetHz, status.AFCErrorHz), 1112, toolY+174, 10, colors.muted)
 	}
 
 	activity := rl.Rectangle{X: 360, Y: toolY + 216, Width: 1232, Height: 39}
@@ -465,7 +555,11 @@ func (panel *TETRAPOLPanel) DrawPanel() {
 		height := float32(4 + (i*7+int(telemetry.ValidFrames))%15)
 		rl.DrawLineEx(rl.Vector2{X: barX + float32(i)*7, Y: toolY + 245}, rl.Vector2{X: barX + float32(i)*7, Y: toolY + 245 - height}, 2, colors.cyan)
 	}
-	summary := fmt.Sprintf("%s · trama %s (%s) · voz %s · %d válidas", syncText, frame, valueOrDash(telemetry.FrameType), voice, telemetry.ValidFrames)
+	network := fmt.Sprintf("red %d CH / %d grupos", len(telemetry.Channels), len(telemetry.Groups))
+	if telemetry.CODOPKnown {
+		network += fmt.Sprintf(" · CODOP %02X", telemetry.LastCODOP)
+	}
+	summary := fmt.Sprintf("%s · trama %s (%s) · voz %s · %d válidas · audio %d / PLC %d · %s", syncText, frame, valueOrDash(telemetry.FrameType), voice, telemetry.ValidFrames, telemetry.AudioDecoded, telemetry.AudioConcealed, network)
 	simpleui.DrawText(summary, 600, toolY+228, 11, colors.muted)
 	if panel.feedback != "" {
 		simpleui.DrawText(panel.feedback, 1240, toolY+228, 10, colors.red)

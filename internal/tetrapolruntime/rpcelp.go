@@ -53,19 +53,24 @@ func (decoder *RPCELP) readPCM(reader io.Reader, emit func([]float32)) {
 		_, _ = io.Copy(io.Discard, reader)
 		return
 	}
+	const frameBytes = 160 * 2
 	buffer := make([]byte, 4096)
-	carry := make([]byte, 0, 1)
+	carry := make([]byte, 0, frameBytes*2)
 	for {
 		read, err := reader.Read(buffer)
 		if read > 0 {
-			chunk := append(carry, buffer[:read]...)
-			complete := len(chunk) &^ 1
-			if complete > 0 {
-				emit(PCM16LEToFloat32(chunk[:complete]))
+			carry = append(carry, buffer[:read]...)
+			for len(carry) >= frameBytes {
+				emit(PCM16LEToFloat32(carry[:frameBytes]))
+				copy(carry, carry[frameBytes:])
+				carry = carry[:len(carry)-frameBytes]
 			}
-			carry = append(carry[:0], chunk[complete:]...)
 		}
 		if err != nil {
+			complete := len(carry) &^ 1
+			if complete > 0 {
+				emit(PCM16LEToFloat32(carry[:complete]))
+			}
 			return
 		}
 	}

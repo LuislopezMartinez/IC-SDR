@@ -58,6 +58,10 @@ func main() {
 		screens.RunRTL433Viewer(os.Args[2])
 		return
 	}
+	if len(os.Args) == 3 && os.Args[1] == "--ft8-viewer" {
+		screens.RunFT8Viewer(os.Args[2])
+		return
+	}
 	if len(os.Args) == 3 && os.Args[1] == "--aprs-viewer" {
 		startupStep("%s", i18n.Source("text.62c027f9cb9a"))
 		screens.RunAPRSViewer(os.Args[2])
@@ -147,6 +151,7 @@ func main() {
 		APRSConfig:                resources.Path("tools", "aprs", "config", "direwolf-rx.conf"),
 		APRSWorkingDirectory:      resources.Path("tools", "aprs", "runtime"),
 		SSTVExecutable:            resources.Path("tools", "sstv", "runtime", "bin", "sstv_decoder_runner.exe"),
+		FT8Executable:             resources.Path("tools", "ft8", "runtime", "bin", "ic-sdr-ft8-runtime.exe"),
 		DABExecutable:             resources.Path("tools", "dab", "runtime", "bin", "ic-sdr-dab-runtime.exe"),
 		TETRACodec:                resources.Path("tools", "tetra", "runtime", "bin", "libtetradec.dll"),
 		TETRAPOLKitExecutable:     resources.Path("tools", "tetrapol", "runtime", "bin", "tetrapol_dump.exe"),

@@ -12,11 +12,12 @@ const (
 
 type Label struct {
 	BaseElement
-	text      string
-	fontSize  int32
-	color     rl.Color
-	alignment TextAlignment
-	font      FontStyle
+	text        string
+	fontSize    int32
+	color       rl.Color
+	customColor bool
+	alignment   TextAlignment
+	font        FontStyle
 }
 
 func NewLabel(id string, x, y, width, height float32, text string, fontSize int32) *Label {
@@ -24,15 +25,17 @@ func NewLabel(id string, x, y, width, height float32, text string, fontSize int3
 		BaseElement: NewBaseElement(id, x, y, width, height),
 		text:        text,
 		fontSize:    fontSize,
-		color:       currentTheme.Text,
 		alignment:   AlignLeft,
 	}
 }
 
-func (label *Label) Update(Input) bool                { return false }
-func (label *Label) Text() string                     { return label.text }
-func (label *Label) SetText(text string)              { label.text = text }
-func (label *Label) SetColor(color rl.Color)          { label.color = color }
+func (label *Label) Update(Input) bool   { return false }
+func (label *Label) Text() string        { return label.text }
+func (label *Label) SetText(text string) { label.text = text }
+func (label *Label) SetColor(color rl.Color) {
+	label.color = color
+	label.customColor = true
+}
 func (label *Label) SetAlignment(value TextAlignment) { label.alignment = value }
 func (label *Label) SetFont(style FontStyle)          { label.font = style }
 
@@ -47,7 +50,10 @@ func (label *Label) Draw() {
 		x += bounds.Width - textSize.X
 	}
 	y := bounds.Y + (bounds.Height-textSize.Y)*0.5
-	color := label.color
+	color := currentTheme.Text
+	if label.customColor {
+		color = label.color
+	}
 	if !label.Enabled() {
 		color = currentTheme.TextMuted
 	}

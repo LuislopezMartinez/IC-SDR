@@ -3,6 +3,7 @@ package screens
 import (
 	"math"
 	"testing"
+	"time"
 )
 
 func TestDMRUsesBurstSizedPrebuffer(t *testing.T) {
@@ -11,6 +12,14 @@ func TestDMRUsesBurstSizedPrebuffer(t *testing.T) {
 	}
 	if playbackPrebufferSamples(false) != analogPrebufferSamples {
 		t.Fatal("analog prebuffer changed")
+	}
+}
+
+func TestPlaybackDelayHasStableStartupEstimate(t *testing.T) {
+	player := NewAudioPlayer(nil, nil)
+	want := 150 * time.Millisecond
+	if got := player.PlaybackDelay(); got != want {
+		t.Fatalf("startup playback delay = %v; want %v", got, want)
 	}
 }
 

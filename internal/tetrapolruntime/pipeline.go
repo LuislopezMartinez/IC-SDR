@@ -8,6 +8,7 @@ type Pipeline struct {
 	kit       Kit
 	rpcelp    RPCELP
 	telemetry telemetryTracker
+	audio     audioPLC
 }
 
 type Config struct {
@@ -20,7 +21,12 @@ type Config struct {
 
 func (pipeline *Pipeline) Start(config Config, emit func([]float32)) error {
 	pipeline.telemetry.reset()
-	if err := pipeline.rpcelp.Start(config.RPCELPExecutable, config.RPCELPArgs, emit); err != nil {
+	pipeline.audio.reset()
+	if err := pipeline.rpcelp.Start(config.RPCELPExecutable, config.RPCELPArgs, func(samples []float32) {
+		if emit != nil {
+			emit(pipeline.audio.process(samples, time.Now()))
+		}
+	}); err != nil {
 		return err
 	}
 	if err := pipeline.kit.Start(config.KitExecutable, config.KitArgs, func(record []byte) {
@@ -48,7 +54,11 @@ func (pipeline *Pipeline) Stop() error {
 
 func (pipeline *Pipeline) Running() bool { return pipeline.kit.Running() && pipeline.rpcelp.Running() }
 
-func (pipeline *Pipeline) Telemetry() Telemetry { return pipeline.telemetry.snapshot(time.Now()) }
+func (pipeline *Pipeline) Telemetry() Telemetry {
+	value := pipeline.telemetry.snapshot(time.Now())
+	value.AudioDecoded, value.AudioConcealed, value.AudioLongGaps = pipeline.audio.stats()
+	return value
+}
 
 func (pipeline *Pipeline) String() string {
 	if pipeline.Running() {

@@ -2,6 +2,9 @@ package screens
 
 import (
 	"testing"
+	"time"
+
+	"go-zero/internal/tetrapolruntime"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -10,6 +13,40 @@ func assertRectangle(t *testing.T, got, want rl.Rectangle) {
 	t.Helper()
 	if got != want {
 		t.Fatalf("bounds = %+v, want %+v", got, want)
+	}
+}
+
+func TestTETRAPOLFollowReturnsToCCHAfterAcquisitionTimeout(t *testing.T) {
+	screen := NewMainScreen(nil)
+	screen.frequencyHz = 390_000_000
+	panel := NewTETRAPOLPanel(screen)
+	panel.enabled = true
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{ChannelAction: "follow", ChannelID: 2528, ChannelEvent: 1}, now)
+	if !panel.following || panel.channelType != "TCH" || panel.followState != "ADQUIRIENDO TCH" {
+		t.Fatalf("follow state = following %v type %s state %s", panel.following, panel.channelType, panel.followState)
+	}
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{}, now.Add(tetrapolTCHTimeout))
+	if panel.following || panel.channelType != "CCH" || screen.frequencyHz != 390_000_000 {
+		t.Fatalf("timeout did not return to CCH: following=%v type=%s frequency=%d", panel.following, panel.channelType, screen.frequencyHz)
+	}
+}
+
+func TestTETRAPOLFollowTemporarilyBlocksStaleReactivation(t *testing.T) {
+	screen := NewMainScreen(nil)
+	screen.frequencyHz = 390_000_000
+	panel := NewTETRAPOLPanel(screen)
+	panel.enabled = true
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{ChannelAction: "follow", ChannelID: 2528, ChannelEvent: 1}, now)
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{ChannelAction: "return", ChannelEvent: 2}, now.Add(time.Second))
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{ChannelAction: "follow", ChannelID: 2528, ChannelEvent: 3}, now.Add(2*time.Second))
+	if panel.following || panel.channelType != "CCH" {
+		t.Fatal("stale TCH activation bypassed rearm delay")
+	}
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{ChannelAction: "follow", ChannelID: 2528, ChannelEvent: 4}, now.Add(5*time.Second))
+	if !panel.following || panel.channelType != "TCH" {
+		t.Fatal("fresh TCH activation was not accepted after rearm delay")
 	}
 }
 
@@ -35,10 +72,10 @@ func TestTETRAPOLPanelUsesNarrowbandChannelStep(t *testing.T) {
 	panel.Leave()
 }
 
-func TestTETRAPOLAFCIsDisabledWithoutCarrierEstimator(t *testing.T) {
+func TestTETRAPOLAFCStartsEnabledWithCarrierEstimator(t *testing.T) {
 	panel := NewTETRAPOLPanel(NewMainScreen(nil))
-	if panel.autoCenter.Enabled() || panel.autoCenter.Active() {
-		t.Fatal("AFC must remain disabled without a carrier-frequency estimator")
+	if !panel.autoCenter.Enabled() || !panel.autoCenter.Active() {
+		t.Fatal("AFC must start enabled now that the decoder estimates carrier frequency")
 	}
 }
 
@@ -78,6 +115,18 @@ func TestTETRAPOLBandPresetTunesChannelRaster(t *testing.T) {
 	}
 }
 
+func TestTETRAPOLTenKHzPlanUpdatesReceiverRaster(t *testing.T) {
+	screen := NewMainScreen(nil)
+	panel := NewTETRAPOLPanel(screen)
+	panel.setPlan(tetrapolPlanUHF10)
+	if panel.planType != tetrapolPlanUHF10 || panel.bandType != "UHF" {
+		t.Fatalf("plan = %q band = %q", panel.planType, panel.bandType)
+	}
+	if screen.tetrapolPlan != tetrapolPlanUHF10 || screen.tuningStepHz != 10_000 || screen.demodBandwidthHz != 10_000 {
+		t.Fatalf("screen plan/raster = %q/%d/%d", screen.tetrapolPlan, screen.tuningStepHz, screen.demodBandwidthHz)
+	}
+}
+
 func TestTETRAPOLPresetRefreshKeepsCollapsedWorkspaceLayout(t *testing.T) {
 	screen := NewMainScreen(nil)
 	panel := NewTETRAPOLPanel(screen)
@@ -91,4 +140,29 @@ func TestTETRAPOLPresetRefreshKeepsCollapsedWorkspaceLayout(t *testing.T) {
 	panel.setBand("VHF")
 	assertRectangle(t, panel.presets[0].Bounds(), collapsedToolBounds(rl.Rectangle{X: 704, Y: toolY + 50, Width: 178, Height: 34}))
 	assertRectangle(t, panel.presets[1].Bounds(), collapsedToolBounds(rl.Rectangle{X: 890, Y: toolY + 50, Width: 178, Height: 34}))
+}
+
+func TestTETRAPOLNetworkModalFreezesAndResumesTelemetry(t *testing.T) {
+	panel := NewTETRAPOLPanel(NewMainScreen(nil))
+	panel.latestTelemetry = tetrapolruntime.Telemetry{
+		TSDUCount: 7,
+		Channels:  []tetrapolruntime.ChannelObservation{{ChannelID: 42}},
+		Groups:    []tetrapolruntime.GroupObservation{{GroupID: 9}},
+	}
+	panel.openNetwork()
+	if !panel.OverlayOpen() || !panel.networkLive || panel.networkTab != 0 {
+		t.Fatalf("unexpected initial network modal state: open=%v live=%v tab=%d", panel.OverlayOpen(), panel.networkLive, panel.networkTab)
+	}
+	panel.networkLive = false
+	panel.networkSnapshot = cloneTETRAPOLTelemetry(panel.latestTelemetry)
+	panel.latestTelemetry.TSDUCount = 8
+	panel.latestTelemetry.Channels[0].ChannelID = 99
+	got := panel.networkTelemetry()
+	if got.TSDUCount != 7 || got.Channels[0].ChannelID != 42 {
+		t.Fatalf("paused modal did not retain snapshot: %+v", got)
+	}
+	panel.networkLive = true
+	if got := panel.networkTelemetry(); got.TSDUCount != 8 || got.Channels[0].ChannelID != 99 {
+		t.Fatalf("live modal did not resume current telemetry: %+v", got)
+	}
 }

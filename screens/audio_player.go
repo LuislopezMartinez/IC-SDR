@@ -5,6 +5,7 @@ import (
 
 	"math"
 	"sync/atomic"
+	"time"
 
 	"go-zero/internal/sdr"
 
@@ -51,6 +52,7 @@ type AudioPlayer struct {
 	squelchEnabled atomic.Bool
 	squelchOpen    atomic.Bool
 	meterPeakBits  atomic.Uint32
+	playbackDelay  atomic.Int64
 	digitalMode    atomic.Bool
 	wideFMMode     atomic.Bool
 	noiseMode      atomic.Bool
@@ -149,6 +151,10 @@ func (player *AudioPlayer) fillAudio(destination []float32) {
 	digital := player.digitalMode.Load()
 	target := playbackPrebufferSamples(digital)
 	buffered := player.receiver.AudioBufferedSamples() + player.sourceCount
+	// The newest demodulated sample is heard only after the receiver/source
+	// backlog and raylib's two output sub-buffers. Publish this measurement so
+	// time-sensitive visualizations can follow the sound reaching the speaker.
+	player.playbackDelay.Store(int64(buffered + 2*audioSubBufferSamples))
 	errorRatio := float64(buffered-target) / float64(target)
 	correctionLimit := .04
 	if digital {
@@ -219,6 +225,17 @@ func (player *AudioPlayer) fillAudio(destination []float32) {
 			sink.publish(destination)
 		}
 	}
+}
+
+// PlaybackDelay reports the current delay between freshly demodulated audio
+// and the sample reaching the speaker. Before the first callback, use the
+// configured prebuffer plus the device buffer as a stable estimate.
+func (player *AudioPlayer) PlaybackDelay() time.Duration {
+	samples := player.playbackDelay.Load()
+	if samples <= 0 {
+		samples = int64(analogPrebufferSamples + 2*audioSubBufferSamples)
+	}
+	return time.Duration(samples) * time.Second / audioSampleRate
 }
 
 func noiseReductionMode(mode string) bool {

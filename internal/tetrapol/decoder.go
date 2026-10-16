@@ -12,32 +12,58 @@ const SymbolRate = 8000.0
 type Status struct {
 	Running                                                         bool
 	InputRate, SymbolRate, LevelDBFS, FrequencyDeviationHz, Quality float64
+	CarrierOffsetHz, AFCErrorHz, SamplesPerSymbol, TimingError      float64
+	AFCState                                                        string
 	Samples, Symbols                                                uint64
 }
 type bitSink struct{ write func([]byte) }
 
 type Decoder struct {
-	mu                                            sync.RWMutex
-	rate                                          float64
-	enabled                                       bool
-	previous                                      complex128
-	havePrevious                                  bool
-	level, deviation                              float64
-	samples, symbols                              uint64
-	symbolClock, symbolFrequency, carrierEstimate float64
-	symbolSamples                                 int
-	bits                                          atomic.Pointer[bitSink]
-	channel                                       *channelizer
+	mu                                               sync.RWMutex
+	rate                                             float64
+	enabled                                          bool
+	previousRaw, previousCorrected                   complex128
+	havePreviousRaw, havePreviousCorrected           bool
+	level, deviation                                 float64
+	samples, symbols                                 uint64
+	symbolClock, symbolFrequency, rawSymbolFrequency float64
+	symbolSamples                                    int
+	afcEnabled                                       bool
+	afcPhase, afcOffset, afcError                    float64
+	carrierAverage                                   float64
+	carrierSamples                                   uint64
+	frequencyHigh, frequencyLow                      float64
+	frequencyLevelsReady                             bool
+	timingError, lastDiscriminator                   float64
+	haveDiscriminator                                bool
+	afcStableSymbols                                 int
+	bits                                             atomic.Pointer[bitSink]
+	channel                                          *channelizer
 }
 
-func New(rate float64) *Decoder { return &Decoder{rate: rate, channel: newChannelizer(rate)} }
+func New(rate float64) *Decoder {
+	return &Decoder{rate: rate, afcEnabled: true, channel: newChannelizer(rate)}
+}
 
 func (d *Decoder) Configure(on bool) {
 	d.mu.Lock()
 	d.enabled = on
-	d.havePrevious = false
+	d.havePreviousRaw, d.havePreviousCorrected, d.haveDiscriminator = false, false, false
 	d.channel.reset()
-	d.symbolClock, d.symbolFrequency, d.carrierEstimate, d.symbolSamples = 0, 0, 0, 0
+	d.symbolClock, d.symbolFrequency, d.rawSymbolFrequency, d.symbolSamples = 0, 0, 0, 0
+	d.afcPhase, d.afcOffset, d.afcError = 0, 0, 0
+	d.carrierAverage, d.carrierSamples = 0, 0
+	d.frequencyHigh, d.frequencyLow, d.frequencyLevelsReady = 0, 0, false
+	d.timingError, d.lastDiscriminator, d.afcStableSymbols = 0, 0, 0
+	d.mu.Unlock()
+}
+
+func (d *Decoder) SetAFCEnabled(enabled bool) {
+	d.mu.Lock()
+	d.afcEnabled = enabled
+	if !enabled {
+		d.afcPhase, d.afcOffset, d.afcError, d.afcStableSymbols = 0, 0, 0, 0
+	}
 	d.mu.Unlock()
 }
 
@@ -74,26 +100,69 @@ func (d *Decoder) ProcessIQ(iq []float32) {
 	output := make([]byte, 0, int(float64(len(baseband))*SymbolRate/workRate)+1)
 	for _, v := range baseband {
 		power += real(v)*real(v) + imag(v)*imag(v)
-		if d.havePrevious {
-			p := v * complex(real(d.previous), -imag(d.previous))
+		rawFrequency := 0.0
+		if d.havePreviousRaw {
+			p := v * complex(real(d.previousRaw), -imag(d.previousRaw))
+			rawFrequency = math.Atan2(imag(p), real(p)) * workRate / (2 * math.Pi)
+			dev += rawFrequency
+			// TETRAPOL scrambling makes the two GMSK polarities balanced over
+			// time. A robust, slow mean therefore estimates carrier offset
+			// without confusing either symbol deviation with frequency error.
+			if magnitude := real(v)*real(v) + imag(v)*imag(v); magnitude > 1e-10 && math.Abs(rawFrequency) < 6_000 {
+				if d.carrierSamples == 0 {
+					d.carrierAverage = rawFrequency
+				} else {
+					d.carrierAverage += .0002 * (rawFrequency - d.carrierAverage)
+				}
+				d.carrierSamples++
+			}
+		}
+		d.previousRaw, d.havePreviousRaw = v, true
+
+		correction := 0.0
+		if d.afcEnabled {
+			correction = d.afcOffset
+		}
+		rotation := complex(math.Cos(d.afcPhase), -math.Sin(d.afcPhase))
+		d.afcPhase = math.Mod(d.afcPhase+2*math.Pi*correction/workRate, 2*math.Pi)
+		corrected := v * rotation
+		if d.havePreviousCorrected {
+			p := corrected * complex(real(d.previousCorrected), -imag(d.previousCorrected))
 			frequency := math.Atan2(imag(p), real(p)) * workRate / (2 * math.Pi)
-			dev += frequency
 			d.symbolFrequency += frequency
+			d.rawSymbolFrequency += rawFrequency
 			d.symbolSamples++
+
+			// A GMSK transition is close to a symbol boundary. Nudging the
+			// integrate-and-dump clock at strong zero crossings compensates
+			// sample-rate error without making noise move the clock.
+			if d.haveDiscriminator && frequency*d.lastDiscriminator < 0 && math.Abs(frequency-d.lastDiscriminator) > 300 {
+				phaseError := d.symbolClock
+				if phaseError > .5 {
+					phaseError--
+				}
+				d.timingError = .9*d.timingError + .1*phaseError
+				d.symbolClock -= .08 * phaseError
+				if d.symbolClock < 0 {
+					d.symbolClock++
+				}
+			}
+			d.lastDiscriminator, d.haveDiscriminator = frequency, true
 			d.symbolClock += SymbolRate / workRate
 			if d.symbolClock >= 1 {
 				average := d.symbolFrequency / float64(d.symbolSamples)
-				d.carrierEstimate = .995*d.carrierEstimate + .005*average
-				if average >= d.carrierEstimate {
+				rawAverage := d.rawSymbolFrequency / float64(d.symbolSamples)
+				d.updateAFC(rawAverage)
+				if average >= 0 {
 					output = append(output, 1)
 				} else {
 					output = append(output, 0)
 				}
 				d.symbolClock -= 1
-				d.symbolFrequency, d.symbolSamples = 0, 0
+				d.symbolFrequency, d.rawSymbolFrequency, d.symbolSamples = 0, 0, 0
 			}
 		}
-		d.previous, d.havePrevious = v, true
+		d.previousCorrected, d.havePreviousCorrected = corrected, true
 		count++
 	}
 	d.samples += uint64(len(iq) / 2)
@@ -106,9 +175,71 @@ func (d *Decoder) ProcessIQ(iq []float32) {
 		sink.write(output)
 	}
 }
+
+func (d *Decoder) updateAFC(frequency float64) {
+	if !d.afcEnabled {
+		return
+	}
+	if !d.frequencyLevelsReady {
+		if d.symbols == 0 && d.frequencyHigh == 0 && d.frequencyLow == 0 {
+			d.frequencyHigh, d.frequencyLow = frequency, frequency
+		} else {
+			d.frequencyHigh = max(d.frequencyHigh, frequency)
+			d.frequencyLow = min(d.frequencyLow, frequency)
+		}
+		if d.frequencyHigh-d.frequencyLow >= 500 {
+			d.frequencyLevelsReady = true
+		}
+	} else {
+		midpoint := (d.frequencyHigh + d.frequencyLow) * .5
+		const levelAlpha = .04
+		if frequency >= midpoint {
+			d.frequencyHigh += levelAlpha * (frequency - d.frequencyHigh)
+		} else {
+			d.frequencyLow += levelAlpha * (frequency - d.frequencyLow)
+		}
+	}
+	if !d.frequencyLevelsReady {
+		return
+	}
+	if d.carrierSamples < uint64(d.channel.outputRate/20) {
+		return
+	}
+	target := d.carrierAverage
+	d.afcError = target - d.afcOffset
+	gain := .08
+	if d.afcStableSymbols >= 80 {
+		gain = .025
+	}
+	d.afcOffset += gain * d.afcError
+	d.afcOffset = max(-4_000.0, min(4_000.0, d.afcOffset))
+	if math.Abs(d.afcError) < 75 {
+		d.afcStableSymbols++
+	} else {
+		d.afcStableSymbols = max(0, d.afcStableSymbols-2)
+	}
+}
+
 func (d *Decoder) Snapshot() Status {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	quality := 100 - math.Min(100, math.Abs(d.deviation)/120)
-	return Status{d.enabled, d.rate, SymbolRate, d.level, d.deviation, quality, d.samples, d.symbols}
+	separation := d.frequencyHigh - d.frequencyLow
+	quality := math.Min(100, math.Max(0, separation/20))
+	state := "OFF"
+	if d.afcEnabled {
+		state = "ACQUIRE"
+		if d.frequencyLevelsReady {
+			state = "TRACK"
+		}
+		if d.afcStableSymbols >= 80 {
+			state = "LOCKED"
+		}
+	}
+	return Status{
+		Running: d.enabled, InputRate: d.rate, SymbolRate: SymbolRate,
+		LevelDBFS: d.level, FrequencyDeviationHz: d.deviation, Quality: quality,
+		CarrierOffsetHz: d.afcOffset, AFCErrorHz: d.afcError,
+		SamplesPerSymbol: d.channel.outputRate / SymbolRate, TimingError: d.timingError,
+		AFCState: state, Samples: d.samples, Symbols: d.symbols,
+	}
 }

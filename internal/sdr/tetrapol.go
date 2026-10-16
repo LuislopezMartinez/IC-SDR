@@ -18,6 +18,12 @@ func (r *Receiver) TETRAPOLStatus() tetrapol.Status {
 	return r.tetrapol.Snapshot()
 }
 
+func (r *Receiver) SetTETRAPOLAFCEnabled(enabled bool) {
+	if r.tetrapol != nil {
+		r.tetrapol.SetAFCEnabled(enabled)
+	}
+}
+
 type TETRAPOLRuntimeStatus struct {
 	Running   bool
 	Error     string

@@ -56,7 +56,7 @@ func main() {
 	telemetry := pipeline.Telemetry()
 	physical := decoder.Snapshot()
 	_ = pipeline.Stop()
-	fmt.Printf("IQ: %.0f sps · %.1f dBFS · %.0f Hz desviación · %d símbolos\n", physical.InputRate, physical.LevelDBFS, physical.FrequencyDeviationHz, physical.Symbols)
+	fmt.Printf("IQ: %.0f sps · %.1f dBFS · %.0f Hz desviación · AFC %s %+.0f Hz (error %+.0f) · %d símbolos\n", physical.InputRate, physical.LevelDBFS, physical.FrequencyDeviationHz, physical.AFCState, physical.CarrierOffsetHz, physical.AFCErrorHz, physical.Symbols)
 	fmt.Printf("TETRAPOL: %d válidas · %d CRC · calidad %.1f%% · voz=%v · SCR=%v/%d\n", telemetry.ValidFrames, telemetry.CRCFailures, telemetry.QualityPercent, telemetry.VoiceActive, telemetry.SCRKnown, telemetry.SCR)
 	if telemetry.ValidFrames == 0 {
 		os.Exit(1)

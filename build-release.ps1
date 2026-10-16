@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.13.0'
+    [string]$Version = '0.14.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -228,6 +228,7 @@ $copies = @(
     @{ Source = 'DATA\tools\aprs\runtime'; Destination = 'DATA\tools\aprs\runtime' },
     @{ Source = 'DATA\tools\aprs\config'; Destination = 'DATA\tools\aprs\config' },
     @{ Source = 'DATA\tools\sstv\runtime'; Destination = 'DATA\tools\sstv\runtime' },
+	@{ Source = 'DATA\tools\ft8\runtime'; Destination = 'DATA\tools\ft8\runtime' },
     @{ Source = 'DATA\tools\dab\runtime'; Destination = 'DATA\tools\dab\runtime' },
     @{ Source = 'DATA\tools\dab\runtime-version.json'; Destination = 'DATA\tools\dab\runtime-version.json' },
     @{ Source = 'DATA\tools\tetra\runtime'; Destination = 'DATA\tools\tetra\runtime' },

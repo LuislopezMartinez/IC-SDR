@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.13.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.13.0)**
+**Versión actual: [v0.14.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.14.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -39,6 +39,8 @@ IC-SDR integra herramientas para recibir y visualizar:
 
 ## Capturas actuales
 
+![Actividad global FT8 de IC-SDR, con mapa, países recibidos y decodificación en directo](docs/images/ic-sdr-ft8-global.png)
+
 ![Decodificador DAB+ de IC-SDR con servicios y texto dinámico DLS/DL+](docs/images/ic-sdr-dab-plus.png)
 
 ![Servidor web de IC-SDR en Windows](docs/images/ic-sdr-servidor-web.png)
@@ -46,6 +48,15 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.14.0
+
+- Nuevo decodificador **FT8** con sincronización de ciclos UTC, niveles de profundidad y vista de mensajes recibidos.
+- Nueva vista de actividad FT8 global: mapa interactivo, locators Maidenhead, rutas, países/regiones DXCC, banderas y filtros de actividad.
+- El runtime portable de FT8, basado en `ft8mon` y FFTW, se incluye en la distribución de Windows x64 con sus avisos de licencia.
+- TETRAPOL mejora la telemetría de red, el seguimiento de canal y la continuidad de audio ante tramas perdidas.
+- El panel SSTV ofrece una presentación ampliada de candidatos y mejoras de estabilidad en recepción.
+- Correcciones adicionales en reproducción de audio, FFT, ajustes de aplicación y controles de interfaz.
 
 ## Novedades de v0.13.0
 

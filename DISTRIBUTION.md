@@ -8,6 +8,11 @@ DATA contiene los runtimes de SoapySDR/SDRplay, DMR, Digital Auto (DSD-neo 2.9.0
 sus datos auxiliares y licencias. No es necesario iniciar el programa desde una
 carpeta concreta.
 
+FT8 integra como proceso externo el núcleo de `ft8mon` adaptado para audio
+PCM de IC-SDR. La herramienta trabaja en USB, sincroniza automáticamente los
+ciclos UTC de 15 segundos y conserva las fuentes y avisos de licencia en
+DATA\tools\ft8\runtime. FFTW se distribuye como DLL separada junto al decoder.
+
 El control CAT incluye OmniRig 1.20 y los perfiles de radio oficiales. Al
 activar RIG, IC-SDR utiliza una instalación existente si funciona; en caso
 contrario activa la copia incluida únicamente para el usuario actual, sin

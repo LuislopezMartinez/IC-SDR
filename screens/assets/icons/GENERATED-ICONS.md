@@ -8,6 +8,21 @@ Additional generated assets: menu-tetrapol.png, menu-omnirig.png and
 menu-digital-auto.png. These use the same dark gunmetal, cyan/violet lighting
 and transparent-background direction, with silhouettes designed for 80x80.
 
+Additional FT8 asset: `menu-ft8.png`. It uses eight narrow cyan signal columns,
+a waterfall and a segmented 15-second timing arc inside the same gunmetal
+instrument housing. One orange column marks a decoded signal. The original
+generated PNG is preserved at 1254 × 1254 with transparency.
+
+### ft8
+
+Create one premium FT8 digital-mode receiver icon matching the supplied IC-SDR
+menu icon references: rugged brushed-gunmetal radio instrument, chrome bevels,
+glossy dark blue display and cyan edge lighting. Show eight narrow, evenly
+spaced FT8 signal columns over a waterfall and a segmented 15-second timing
+arc, with one small orange decoded-signal accent. Large simple silhouette,
+readable at 80x80 pixels, genuinely transparent background, no text, letters,
+numbers, labels or watermark.
+
 ## Prompt set
 
 ### radiosonde
