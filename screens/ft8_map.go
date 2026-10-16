@@ -12,6 +12,7 @@ import (
 
 	"go-zero/internal/dxcc"
 	"go-zero/internal/ft8"
+	"go-zero/internal/localtime"
 	"go-zero/internal/resources"
 	"go-zero/simpleui"
 
@@ -663,7 +664,15 @@ func (p *FT8Panel) drawFT8SelectedCard(positioned int) {
 		location = fmt.Sprintf("%.0f km  ·  %.0f°  ·  SNR %+d dB", ft8DistanceKM(homeLat, homeLon, station.lat, station.lon), ft8Bearing(homeLat, homeLon, station.lat, station.lon), station.latest.SNR)
 	}
 	simpleui.DrawText(location, 1152, 641, uiBodyFontSize, colors.text)
+	localClock := "HORA LOCAL  NO DISPONIBLE"
+	if station.hasPosition {
+		if label, ok := localtime.Label(time.Now().UTC(), station.lat, station.lon); ok {
+			localClock = "HORA LOCAL  " + label
+		}
+	}
 	simpleui.DrawText(fmt.Sprintf("%d mensajes · %s", station.messageCount, station.latest.Slot.UTC().Format("15:04:05 UTC")), 1152, 665, 10, colors.muted)
+	clockWidth := simpleui.MeasureTextStyled(localClock, 10, simpleui.FontRegular).X
+	simpleui.DrawTextStyled(localClock, 1544-clockWidth, 665, 10, simpleui.FontRegular, colors.orange)
 	simpleui.DrawText(clipFT8(station.latest.Message, 42), 1152, 685, uiBodyFontSize, colors.text)
 }
 

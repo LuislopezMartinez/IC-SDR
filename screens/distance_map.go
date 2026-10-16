@@ -7,6 +7,7 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"go-zero/internal/distance"
 	"go-zero/internal/i18n"
+	"go-zero/internal/localtime"
 	"go-zero/internal/resources"
 	"go-zero/simpleui"
 	"math"
@@ -361,6 +362,7 @@ func (v *distanceMap) draw() {
 		rl.DrawCircleV(rl.Vector2{X: q.X, Y: q.Y - 23}, 15, mapCalloutEdge)
 		rl.DrawCircleV(rl.Vector2{X: q.X, Y: q.Y - 23}, 12, c)
 		simpleui.DrawText(string(rune('A'+i)), q.X-5, q.Y-31, 16, mapCalloutText)
+		drawDistancePinLocalTime(q, i, p, c)
 	}
 	v.drawPanel()
 	if v.library {
@@ -369,6 +371,25 @@ func (v *distanceMap) draw() {
 	v.layout()
 	v.manager.Draw()
 	simpleui.DrawText(i18n.Source("text.6ec2a8e7cdac"), 12, 880, 10, mapCalloutText)
+}
+
+func drawDistancePinLocalTime(anchor rl.Vector2, index int, point distance.Point, accent rl.Color) {
+	label := "HORA LOCAL  NO DISPONIBLE"
+	if value, ok := localtime.Label(time.Now().UTC(), point.Lat, point.Lon); ok {
+		label = "HORA LOCAL  " + value
+	}
+	label = fmt.Sprintf("%c · %s", 'A'+rune(index), label)
+	width := simpleui.MeasureTextStyled(label, 11, simpleui.FontSemiBold).X + 18
+	x := anchor.X + 20
+	if x+width > 1430 {
+		x = anchor.X - width - 20
+	}
+	y := max(float32(8), anchor.Y-51)
+	bounds := rl.Rectangle{X: x, Y: y, Width: width, Height: 25}
+	background := withAlpha(colors.background, 232)
+	rl.DrawRectangleRounded(bounds, .18, 5, background)
+	rl.DrawRectangleRoundedLinesEx(bounds, .18, 5, 1, accent)
+	simpleui.DrawTextStyled(label, x+9, y+6, 11, simpleui.FontSemiBold, simpleui.EnsureTextContrast(colors.text, background))
 }
 func (v *distanceMap) line(s string, y float32) {
 	simpleui.DrawText(s, v.panel.X+14, v.panel.Y+y, 14, colors.text)
@@ -411,7 +432,11 @@ func (v *distanceMap) drawPanel() {
 			prefix = sondeClip(v.labels[i], 18)
 		}
 		v.line(fmt.Sprintf("%s: %.5f, %.5f · %s", prefix, p.Lat, p.Lon, distance.Locator(p)), 135+float32(i)*45)
-		v.line(i18n.Source("text.b8aee5a60063")+alt, 156+float32(i)*45)
+		localClock := "NO DISPONIBLE"
+		if value, ok := localtime.Label(time.Now().UTC(), p.Lat, p.Lon); ok {
+			localClock = value
+		}
+		v.line(i18n.Source("text.b8aee5a60063")+alt+" · HORA LOCAL "+localClock, 156+float32(i)*45)
 	}
 	if len(v.elevations) > 0 && v.elevations[0] != nil && v.elevations[len(v.elevations)-1] != nil {
 		v.line(fmt.Sprintf(i18n.Source("text.d2317ec4971d"), *v.elevations[len(v.elevations)-1]-*v.elevations[0]), 225)

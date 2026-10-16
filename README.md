@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.14.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.14.0)**
+**Versión actual: [v0.14.1](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.14.1)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -48,6 +48,11 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.14.1
+
+- Los mapas de distancia y la actividad FT8 muestran la **hora local** de cada estación a partir de sus coordenadas, con zona horaria IANA y ajuste automático de horario de verano.
+- Mejora de fiabilidad al resolver zonas horarias geográficas, sin necesidad de conexión de red y compatible con la distribución portable de Windows.
 
 ## Novedades de v0.14.0
 
