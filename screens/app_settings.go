@@ -79,6 +79,8 @@ type persistedAppSettings struct {
 	SSTVAutomatic         *bool                         `json:"sstvAutomatic,omitempty"`
 	SSTVMode              string                        `json:"sstvMode,omitempty"`
 	SSTVCandidateModes    [4]string                     `json:"sstvCandidateModes,omitempty"`
+	SSTVReconstructLines  *bool                         `json:"sstvReconstructLines,omitempty"`
+	SSTVReduceNoise       *bool                         `json:"sstvReduceNoise,omitempty"`
 	FT8Depth              string                        `json:"ft8Depth,omitempty"`
 	TETRAPOLBand          string                        `json:"tetrapolBand,omitempty"`
 	TETRAPOLPlan          string                        `json:"tetrapolPlan,omitempty"`
@@ -281,6 +283,12 @@ func loadAppSettings(path string, screen *MainScreen) {
 	if settings.SSTVAutomatic != nil {
 		screen.sstvAutomatic = *settings.SSTVAutomatic
 	}
+	if settings.SSTVReconstructLines != nil {
+		screen.sstvReconstructLines = *settings.SSTVReconstructLines
+	}
+	if settings.SSTVReduceNoise != nil {
+		screen.sstvReduceNoise = *settings.SSTVReduceNoise
+	}
 	if validSSTVMode(settings.SSTVMode) {
 		screen.sstvMode = settings.SSTVMode
 	}
@@ -453,6 +461,8 @@ func (screen *MainScreen) flushSettings(force bool) {
 		SSTVAutomatic:         boolSetting(screen.sstvAutomatic),
 		SSTVMode:              screen.sstvMode,
 		SSTVCandidateModes:    screen.sstvCandidateModes,
+		SSTVReconstructLines:  boolSetting(screen.sstvReconstructLines),
+		SSTVReduceNoise:       boolSetting(screen.sstvReduceNoise),
 		FT8Depth:              screen.ft8Depth,
 		TETRAPOLBand:          screen.tetrapolBand,
 		TETRAPOLPlan:          screen.tetrapolPlan,

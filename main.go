@@ -62,6 +62,10 @@ func main() {
 		screens.RunFT8Viewer(os.Args[2])
 		return
 	}
+	if len(os.Args) == 3 && os.Args[1] == "--sstv-compare" {
+		screens.RunSSTVComparator(os.Args[2])
+		return
+	}
 	if len(os.Args) == 3 && os.Args[1] == "--aprs-viewer" {
 		startupStep("%s", i18n.Source("text.62c027f9cb9a"))
 		screens.RunAPRSViewer(os.Args[2])

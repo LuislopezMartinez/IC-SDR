@@ -262,6 +262,8 @@ type MainScreen struct {
 	sstvAutomatic          bool
 	sstvMode               string
 	sstvCandidateModes     [4]string
+	sstvReconstructLines   bool
+	sstvReduceNoise        bool
 	rtl433FrequencyHz      int64
 	rtl433BandwidthHz      int
 	subtonePanel           *SubtonePanel
@@ -338,6 +340,8 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		sstvMode:               "R36",
 		ft8Depth:               ft8.DepthBalanced,
 		sstvCandidateModes:     [4]string{"R36", "R72", "M1", "S1"},
+		sstvReconstructLines:   true,
+		sstvReduceNoise:        true,
 		subtoneMode:            i18n.Source("text.6ea56fae9eac"),
 		tetrapolBand:           "UHF",
 		tetrapolPlan:           tetrapolPlanUHF125,

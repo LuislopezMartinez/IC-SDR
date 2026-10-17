@@ -722,6 +722,16 @@ func (receiver *Receiver) SetSSTVCandidateMode(index int, value string) {
 		receiver.sstv.SetCandidateMode(index, value)
 	}
 }
+func (receiver *Receiver) SetSSTVReconstructLines(enabled bool) {
+	if receiver.sstv != nil {
+		receiver.sstv.SetReconstructLines(enabled)
+	}
+}
+func (receiver *Receiver) SetSSTVReduceNoise(enabled bool) {
+	if receiver.sstv != nil {
+		receiver.sstv.SetReduceNoise(enabled)
+	}
+}
 func (receiver *Receiver) ForceSSTV() bool {
 	return receiver.sstv != nil && receiver.sstv.Restart(true)
 }

@@ -56,6 +56,23 @@ func TestFT8AudibleProgressCompensatesPlaybackDelayAndWrapsSlot(t *testing.T) {
 	}
 }
 
+func TestFT8UTCCycleProgressRecalculatesAtEverySlot(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0).UTC().Truncate(15 * time.Second)
+	now := base.Add(14*time.Second + 900*time.Millisecond)
+	slot, progress := ft8UTCCycleProgress(now, 150*time.Millisecond)
+	wantSlot := base
+	if !slot.Equal(wantSlot) || math.Abs(float64(progress-.9833333)) > .0001 {
+		t.Fatalf("UTC progress = %v %.4f; want %v .9833", slot, progress, wantSlot)
+	}
+
+	// A delayed frame is derived afresh from UTC and therefore enters the next
+	// cycle instead of retaining or incrementing the previous percentage.
+	slot, progress = ft8UTCCycleProgress(now.Add(700*time.Millisecond), 150*time.Millisecond)
+	if !slot.Equal(wantSlot.Add(15*time.Second)) || math.Abs(float64(progress-.03)) > .0001 {
+		t.Fatalf("progress after slow frame = %v %.4f; want next slot .0300", slot, progress)
+	}
+}
+
 func TestFT8MapSessionMemoryEnrichesLaterMessages(t *testing.T) {
 	panel := NewFT8Panel(NewMainScreen(nil))
 	panel.mapWindow = 0
@@ -107,14 +124,45 @@ func TestFT8ActivityClassifiesDirectionAndQSOPhase(t *testing.T) {
 		message, from, to, kind string
 	}{
 		{"CQ DL1XYZ JO31", "DL1XYZ", "", "cq"},
-		{"EA4ABC DL1XYZ -12", "DL1XYZ", "EA4ABC", "report"},
-		{"DL1XYZ EA4ABC R-09", "EA4ABC", "DL1XYZ", "report"},
-		{"EA4ABC DL1XYZ RR73", "DL1XYZ", "EA4ABC", "complete"},
+		{"EA4ABC DL1XYZ -12", "DL1XYZ", "EA4ABC", ft8QSOReport},
+		{"DL1XYZ EA4ABC R-09", "EA4ABC", "DL1XYZ", ft8QSORogerReport},
+		{"EA4ABC DL1XYZ RRR", "DL1XYZ", "EA4ABC", ft8QSOConfirmed},
+		{"EA4ABC DL1XYZ RR73", "DL1XYZ", "EA4ABC", ft8QSOComplete},
 	} {
 		event, ok := classifyFT8Activity(ft8.Decode{Message: test.message})
 		if !ok || event.from != test.from || event.to != test.to || event.kind != test.kind {
 			t.Fatalf("classify %q = %+v, %v", test.message, event, ok)
 		}
+	}
+}
+
+func TestFT8QSOReconstructionTracksFullExchangeChronologically(t *testing.T) {
+	now := time.Now().UTC()
+	// Runtime history is newest first; reconstruction must still advance in
+	// chronological protocol order and never regress on a repeated report.
+	decodes := []ft8.Decode{
+		{Message: "EA4ABC DL1XYZ 73", ReceivedAt: now},
+		{Message: "DL1XYZ EA4ABC RRR", ReceivedAt: now.Add(-15 * time.Second)},
+		{Message: "EA4ABC DL1XYZ R-09", ReceivedAt: now.Add(-30 * time.Second)},
+		{Message: "DL1XYZ EA4ABC -12", ReceivedAt: now.Add(-45 * time.Second)},
+		{Message: "EA4ABC DL1XYZ JO31", ReceivedAt: now.Add(-60 * time.Second)},
+	}
+	qsos := reconstructFT8QSOs(decodes)
+	qso := qsos["DL1XYZ|EA4ABC"]
+	if qso.phase != ft8QSOComplete || qso.messages != 5 || !qso.first.Equal(now.Add(-60*time.Second)) || !qso.last.Equal(now) {
+		t.Fatalf("reconstructed QSO = %+v", qso)
+	}
+}
+
+func TestLatestFT8QSOForCallSelectsMostRecentConversation(t *testing.T) {
+	now := time.Now().UTC()
+	decodes := []ft8.Decode{
+		{Message: "EA4ABC DL1XYZ RR73", ReceivedAt: now.Add(-time.Minute)},
+		{Message: "EA4ABC F4AAA -12", ReceivedAt: now},
+	}
+	qso, ok := latestFT8QSOForCall(decodes, "EA4ABC")
+	if !ok || qso.callA != "EA4ABC" || qso.callB != "F4AAA" || qso.phase != ft8QSOReport {
+		t.Fatalf("latest QSO = %+v, %v", qso, ok)
 	}
 }
 
@@ -174,9 +222,31 @@ func TestFT8RegionFlagCountryAliases(t *testing.T) {
 		"Northern Ireland": countries.GB,
 		"Canary Islands":   countries.ES,
 		"Brasil":           countries.BR,
+		"The Gambia":       countries.GM,
+		"European Russia":  countries.RU,
+		"Kosovo":           countries.XK,
 	} {
 		if got := ft8RegionCountryCode(region); got != want {
 			t.Errorf("ft8RegionCountryCode(%q) = %s; want %s", region, got.Alpha2(), want.Alpha2())
+		}
+	}
+	if got := ft8RegionCountryCode("Otras regiones"); got != countries.Unknown {
+		t.Fatalf("generic region resolved to %s", got.Alpha2())
+	}
+	for region, alpha2 := range map[string]string{
+		"Agalega & St. Brandon": "MU", "Bouvet": "BV", "Peter 1 Island": "NO",
+		"Dem. Rep. of the Congo": "CD", "Trinidad & Tobago": "TT",
+		"San Felix & San Ambrosio": "CL", "Juan Fernandez Islands": "CL",
+		"St. Barthelemy": "BL", "Reunion Island": "RE", "St. Martin": "MF",
+		"Juan de Nova, Europa": "FR", "Galapagos Islands": "EC",
+		"San Andres & Providencia": "CO", "Republic of Korea": "KR",
+		"African Italy": "IT", "Sicily": "IT", "Minami Torishima": "JP", "Ogasawara": "JP",
+		"Bear Island": "NO", "Saba & St. Eustatius": "BQ", "St. Peter & St. Paul": "BR",
+		"Trindade & Martim Vaz": "BR", "Asiatic Turkey": "TR", "European Turkey": "TR",
+		"Heard Island": "HM", "Revillagigedo": "MX",
+	} {
+		if got := ft8RegionCountryCode(region).Alpha2(); got != alpha2 {
+			t.Errorf("ft8RegionCountryCode(%q) = %q; want %q", region, got, alpha2)
 		}
 	}
 }

@@ -2,6 +2,7 @@ package screens
 
 import (
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -23,18 +24,23 @@ import (
 //go:embed assets/flags/atlas.png
 var ft8FlagAtlasPNG []byte
 
+//go:embed assets/flags/dxcc-flags.json
+var ft8DXCCFlagsJSON []byte
+
 var (
-	ft8MapModal    = rl.Rectangle{X: 7, Y: 5, Width: 1586, Height: 890}
-	ft8MapBounds   = rl.Rectangle{X: 32, Y: 142, Width: 1080, Height: 718}
-	ft8MapMax      = rl.Rectangle{X: 1466, Y: 22, Width: 48, Height: 48}
-	ft8MapClose    = rl.Rectangle{X: 1524, Y: 22, Width: 48, Height: 48}
-	ft8MapBack     = rl.Rectangle{X: 1390, Y: 586, Width: 164, Height: 26}
-	ft8RegionClear = rl.Rectangle{X: 1448, Y: 299, Width: 108, Height: 28}
-	ft8DXCCOnce    sync.Once
-	ft8DXCCData    *dxcc.Database
-	ft8FlagOnce    sync.Once
-	ft8FlagAtlas   rl.Texture2D
-	ft8FlagIndex   map[string]int
+	ft8MapModal     = rl.Rectangle{X: 7, Y: 5, Width: 1586, Height: 890}
+	ft8MapBounds    = rl.Rectangle{X: 32, Y: 142, Width: 1080, Height: 718}
+	ft8MapMax       = rl.Rectangle{X: 1466, Y: 22, Width: 48, Height: 48}
+	ft8MapClose     = rl.Rectangle{X: 1524, Y: 22, Width: 48, Height: 48}
+	ft8MapBack      = rl.Rectangle{X: 1390, Y: 586, Width: 164, Height: 26}
+	ft8RegionClear  = rl.Rectangle{X: 1448, Y: 299, Width: 108, Height: 28}
+	ft8DXCCOnce     sync.Once
+	ft8DXCCData     *dxcc.Database
+	ft8FlagOnce     sync.Once
+	ft8FlagAtlas    rl.Texture2D
+	ft8FlagIndex    map[string]int
+	ft8DXCCFlagOnce sync.Once
+	ft8DXCCFlags    map[string]string
 )
 
 type ft8MapPoint struct {
@@ -54,13 +60,28 @@ type ft8MapStation struct {
 }
 
 type ft8ActivityEvent struct {
-	decode         ft8.Decode
-	from, to, kind string
+	decode                ft8.Decode
+	from, to, kind, phase string
 }
 
 type ft8QSOStats struct {
 	total, active, completed int
 }
+
+type ft8QSOConversation struct {
+	first, last  time.Time
+	callA, callB string
+	phase        string
+	messages     int
+}
+
+const (
+	ft8QSOReply       = "reply"
+	ft8QSOReport      = "report"
+	ft8QSORogerReport = "roger_report"
+	ft8QSOConfirmed   = "confirmed"
+	ft8QSOComplete    = "complete"
+)
 
 func (p *FT8Panel) openMap(index int) {
 	if index < 0 || index >= len(p.status.Decodes) {
@@ -434,9 +455,9 @@ func ft8RoutePosition(lat1, lon1, lat2, lon2, progress float64) ft8Location {
 
 func ft8EventColor(kind string) rl.Color {
 	switch kind {
-	case "report":
+	case ft8QSOReport, ft8QSORogerReport:
 		return colors.orange
-	case "complete":
+	case ft8QSOConfirmed, ft8QSOComplete:
 		return colors.green
 	default:
 		return colors.cyan
@@ -456,18 +477,36 @@ func classifyFT8Activity(decode ft8.Decode) (ft8ActivityEvent, bool) {
 	if !ft8PlausibleCall(from) || !ft8PlausibleCall(to) {
 		return ft8ActivityEvent{}, false
 	}
-	kind := "call"
+	phase := ft8QSOReply
 	for _, token := range fields[2:] {
-		token = strings.TrimSpace(token)
-		if token == "RRR" || token == "RR73" || token == "73" {
-			kind = "complete"
-			break
-		}
-		if strings.HasPrefix(token, "R+") || strings.HasPrefix(token, "R-") || strings.HasPrefix(token, "+") || strings.HasPrefix(token, "-") {
-			kind = "report"
+		token = strings.TrimSpace(strings.ToUpper(token))
+		switch {
+		case token == "RR73" || token == "73":
+			phase = ft8QSOComplete
+		case token == "RRR" && ft8QSOPhaseRank(phase) < ft8QSOPhaseRank(ft8QSOConfirmed):
+			phase = ft8QSOConfirmed
+		case (strings.HasPrefix(token, "R+") || strings.HasPrefix(token, "R-")) && ft8QSOPhaseRank(phase) < ft8QSOPhaseRank(ft8QSORogerReport):
+			phase = ft8QSORogerReport
+		case (strings.HasPrefix(token, "+") || strings.HasPrefix(token, "-")) && ft8QSOPhaseRank(phase) < ft8QSOPhaseRank(ft8QSOReport):
+			phase = ft8QSOReport
 		}
 	}
-	return ft8ActivityEvent{decode: decode, from: from, to: to, kind: kind}, true
+	return ft8ActivityEvent{decode: decode, from: from, to: to, kind: phase, phase: phase}, true
+}
+
+func ft8QSOPhaseRank(phase string) int {
+	switch phase {
+	case ft8QSOReport:
+		return 2
+	case ft8QSORogerReport:
+		return 3
+	case ft8QSOConfirmed:
+		return 4
+	case ft8QSOComplete:
+		return 5
+	default:
+		return 1
+	}
 }
 
 type ft8RegionActivity struct {
@@ -545,7 +584,10 @@ func (p *FT8Panel) drawFT8Dashboard() {
 	}
 	simpleui.DrawTextStyled(heading, 1140, 304, uiSectionFontSize, simpleui.FontSemiBold, colors.cyan)
 	simpleui.DrawText("REGIÓN", 1140, 335, 10, colors.muted)
-	simpleui.DrawText("EST.   MSG   SNR       DIST.", 1344, 335, 10, colors.muted)
+	drawFT8RightAligned("EST.", 1374, 335, 10, simpleui.FontRegular, colors.muted)
+	drawFT8RightAligned("MSG", 1420, 335, 10, simpleui.FontRegular, colors.muted)
+	drawFT8RightAligned("SNR", 1470, 335, 10, simpleui.FontRegular, colors.muted)
+	drawFT8RightAligned("DIST.", 1544, 335, 10, simpleui.FontRegular, colors.muted)
 	rl.DrawLine(1140, 354, 1556, 354, colors.border)
 	for row, region := range regions[p.mapRegionOffset:] {
 		if row >= 8 {
@@ -561,10 +603,10 @@ func (p *FT8Panel) drawFT8Dashboard() {
 		}
 		drawFT8RegionFlag(region.name, 1144, y+2)
 		simpleui.DrawText(clipFT8(region.name, 16), 1167, y+3, 10, colors.text)
-		simpleui.DrawTextStyled(fmt.Sprintf("%3d", region.stations), 1348, y+3, 10, simpleui.FontMono, colors.text)
-		simpleui.DrawTextStyled(fmt.Sprintf("%3d", region.messages), 1390, y+3, 10, simpleui.FontMono, colors.text)
-		simpleui.DrawTextStyled(fmt.Sprintf("%+3d", region.bestSNR), 1440, y+3, 10, simpleui.FontMono, ft8SNRColor(region.bestSNR))
-		simpleui.DrawTextStyled(fmt.Sprintf("%4.0f km", region.maxDistance), 1492, y+3, 10, simpleui.FontMono, colors.muted)
+		drawFT8RightAligned(fmt.Sprintf("%d", region.stations), 1374, y+3, 10, simpleui.FontMono, colors.text)
+		drawFT8RightAligned(fmt.Sprintf("%d", region.messages), 1420, y+3, 10, simpleui.FontMono, colors.text)
+		drawFT8RightAligned(fmt.Sprintf("%+d", region.bestSNR), 1470, y+3, 10, simpleui.FontMono, ft8SNRColor(region.bestSNR))
+		drawFT8RightAligned(fmt.Sprintf("%.0f km", region.maxDistance), 1544, y+3, 10, simpleui.FontMono, colors.muted)
 	}
 	if len(regions) > 8 {
 		track := rl.Rectangle{X: 1552, Y: 360, Width: 4, Height: 198}
@@ -581,13 +623,32 @@ func (p *FT8Panel) drawFT8Dashboard() {
 	p.drawFT8Timeline(visibleDecodes)
 }
 
+func drawFT8RightAligned(text string, right, y float32, size int32, font simpleui.FontStyle, color rl.Color) {
+	width := simpleui.MeasureTextStyled(text, size, font).X
+	simpleui.DrawTextStyled(text, right-width, y, size, font, color)
+}
+
 func calculateFT8QSOStats(decodes []ft8.Decode, now time.Time) ft8QSOStats {
-	type conversation struct {
-		last      time.Time
-		completed bool
+	conversations := reconstructFT8QSOs(decodes)
+	result := ft8QSOStats{total: len(conversations)}
+	for _, item := range conversations {
+		if ft8QSOPhaseRank(item.phase) >= ft8QSOPhaseRank(ft8QSOConfirmed) {
+			result.completed++
+		}
+		if ft8QSOPhaseRank(item.phase) < ft8QSOPhaseRank(ft8QSOConfirmed) && now.Sub(item.last) <= 2*time.Minute {
+			result.active++
+		}
 	}
-	conversations := make(map[string]conversation)
-	for _, decode := range decodes {
+	return result
+}
+
+func reconstructFT8QSOs(decodes []ft8.Decode) map[string]ft8QSOConversation {
+	ordered := append([]ft8.Decode(nil), decodes...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return ft8DecodeTime(ordered[i]).Before(ft8DecodeTime(ordered[j]))
+	})
+	conversations := make(map[string]ft8QSOConversation)
+	for _, decode := range ordered {
 		event, ok := classifyFT8Activity(decode)
 		if !ok || event.to == "" {
 			continue
@@ -598,26 +659,27 @@ func calculateFT8QSOStats(decodes []ft8.Decode, now time.Time) ft8QSOStats {
 		}
 		key := a + "|" + b
 		item := conversations[key]
-		when := decode.ReceivedAt
-		if when.IsZero() {
-			when = decode.Slot
+		when := ft8DecodeTime(decode)
+		if item.messages == 0 {
+			item.first, item.callA, item.callB = when, a, b
 		}
 		if when.After(item.last) {
 			item.last = when
 		}
-		item.completed = item.completed || event.kind == "complete"
+		item.messages++
+		if ft8QSOPhaseRank(event.phase) > ft8QSOPhaseRank(item.phase) {
+			item.phase = event.phase
+		}
 		conversations[key] = item
 	}
-	result := ft8QSOStats{total: len(conversations)}
-	for _, item := range conversations {
-		if item.completed {
-			result.completed++
-		}
-		if !item.completed && now.Sub(item.last) <= 2*time.Minute {
-			result.active++
-		}
+	return conversations
+}
+
+func ft8DecodeTime(decode ft8.Decode) time.Time {
+	if !decode.ReceivedAt.IsZero() {
+		return decode.ReceivedAt
 	}
-	return result
+	return decode.Slot
 }
 
 func (p *FT8Panel) drawFT8SelectedCard(positioned int) {
@@ -673,7 +735,44 @@ func (p *FT8Panel) drawFT8SelectedCard(positioned int) {
 	simpleui.DrawText(fmt.Sprintf("%d mensajes · %s", station.messageCount, station.latest.Slot.UTC().Format("15:04:05 UTC")), 1152, 665, 10, colors.muted)
 	clockWidth := simpleui.MeasureTextStyled(localClock, 10, simpleui.FontRegular).X
 	simpleui.DrawTextStyled(localClock, 1544-clockWidth, 665, 10, simpleui.FontRegular, colors.orange)
-	simpleui.DrawText(clipFT8(station.latest.Message, 42), 1152, 685, uiBodyFontSize, colors.text)
+	messageX := float32(1152)
+	if qso, ok := latestFT8QSOForCall(p.activityDecodes(), station.call); ok {
+		label, color := ft8QSOPhasePresentation(qso.phase)
+		label += "  ·  "
+		simpleui.DrawTextStyled(label, messageX, 685, uiCaptionFontSize, simpleui.FontSemiBold, color)
+		messageX += simpleui.MeasureTextStyled(label, uiCaptionFontSize, simpleui.FontSemiBold).X
+	}
+	simpleui.DrawText(clipFT8(station.latest.Message, 34), messageX, 685, uiBodyFontSize, colors.text)
+}
+
+func latestFT8QSOForCall(decodes []ft8.Decode, call string) (ft8QSOConversation, bool) {
+	call = strings.ToUpper(strings.TrimSpace(call))
+	var latest ft8QSOConversation
+	found := false
+	for _, qso := range reconstructFT8QSOs(decodes) {
+		if qso.callA != call && qso.callB != call {
+			continue
+		}
+		if !found || qso.last.After(latest.last) {
+			latest, found = qso, true
+		}
+	}
+	return latest, found
+}
+
+func ft8QSOPhasePresentation(phase string) (string, rl.Color) {
+	switch phase {
+	case ft8QSOReport:
+		return "QSO · REPORTE", colors.orange
+	case ft8QSORogerReport:
+		return "QSO · REPORTE R", colors.orange
+	case ft8QSOConfirmed:
+		return "QSO · CONFIRMADO", colors.green
+	case ft8QSOComplete:
+		return "QSO · CERRADO", colors.green
+	default:
+		return "QSO · RESPUESTA", colors.cyan
+	}
 }
 
 func (p *FT8Panel) drawFT8Timeline(decodes []ft8.Decode) {
@@ -900,6 +999,15 @@ func loadFT8FlagAtlas() {
 }
 
 func ft8RegionCountryCode(name string) countries.CountryCode {
+	ft8DXCCFlagOnce.Do(func() {
+		ft8DXCCFlags = make(map[string]string)
+		_ = json.Unmarshal(ft8DXCCFlagsJSON, &ft8DXCCFlags)
+	})
+	if code := ft8DXCCFlags[name]; code != "" {
+		if country := countries.ByName(code); country != countries.Unknown {
+			return country
+		}
+	}
 	aliases := map[string]string{
 		"España": "Spain", "Canary Islands": "Spain", "Balearic Islands": "Spain", "Ceuta & Melilla": "Spain",
 		"Alemania": "Germany", "Fed. Rep. of Germany": "Germany",
@@ -914,6 +1022,17 @@ func ft8RegionCountryCode(name string) countries.CountryCode {
 		"Irlanda": "Ireland", "Rumanía": "Romania", "Ucrania": "Ukraine",
 		"Sudáfrica": "South Africa", "Rusia europea": "Russia", "Rusia asiática": "Russia",
 		"Azores": "Portugal", "Madeira Islands": "Portugal",
+		"Agalega & St. Brandon": "Mauritius", "Bouvet": "Bouvet Island", "Peter 1 Island": "Norway",
+		"Dem. Rep. of the Congo": "CD", "Trinidad & Tobago": "Trinidad and Tobago",
+		"San Felix & San Ambrosio": "Chile", "Juan Fernandez Islands": "Chile",
+		"St. Barthelemy": "Saint Barthelemy", "Reunion Island": "Reunion", "St. Martin": "Saint Martin",
+		"Juan de Nova, Europa": "France", "Galapagos Islands": "Ecuador",
+		"San Andres & Providencia": "Colombia", "Republic of Korea": "South Korea",
+		"African Italy": "Italy", "Sicily": "Italy", "Minami Torishima": "Japan", "Ogasawara": "Japan",
+		"Bear Island": "Norway", "Saba & St. Eustatius": "Bonaire, Sint Eustatius and Saba",
+		"St. Peter & St. Paul": "Brazil", "Trindade & Martim Vaz": "Brazil",
+		"Asiatic Turkey": "Turkey", "European Turkey": "Turkey", "Heard Island": "Heard Island and McDonald Islands",
+		"Revillagigedo": "Mexico",
 	}
 	if alias, ok := aliases[name]; ok {
 		name = alias

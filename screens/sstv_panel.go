@@ -5,6 +5,7 @@ import (
 
 	"fmt"
 	"image/color"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -26,17 +27,30 @@ type sstvPreview struct {
 	pixels   []color.RGBA
 }
 
+type sstvHistoryPreview struct {
+	info    sstv.SavedImage
+	texture rl.Texture2D
+	ready   bool
+}
+
 type SSTVPanel struct {
-	screen         *MainScreen
-	controls       []simpleui.Element
-	candidateModes [4]*simpleui.Dropdown
-	auto, force    *simpleui.Button
-	stop, restart  *simpleui.Button
-	save, folder   *simpleui.Button
-	previews       [5]sstvPreview
-	status         sstv.Status
-	feedback       string
-	feedbackUntil  time.Time
+	screen             *MainScreen
+	controls           []simpleui.Element
+	candidateModes     [4]*simpleui.Dropdown
+	auto, force        *simpleui.Button
+	stop, restart      *simpleui.Button
+	save, folder       *simpleui.Button
+	reconstruct        *simpleui.Switch
+	reduceNoise        *simpleui.Switch
+	previews           [5]sstvPreview
+	status             sstv.Status
+	feedback           string
+	feedbackUntil      time.Time
+	history            []sstvHistoryPreview
+	lastHistoryClick   int
+	lastHistoryClickAt time.Time
+	compareViewer      *exec.Cmd
+	compareDone        chan struct{}
 }
 
 func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
@@ -65,6 +79,8 @@ func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
 	p.save = p.button("sstvSave", 560, 803, 148, 38, i18n.Source("text.65b42fff1e06"), colors.green)
 	p.save.SetColors(colors.green, colors.cyan, colors.background)
 	p.folder = p.button("sstvFolder", 718, 803, 190, 38, i18n.Source("text.f7aa514861ad"), colors.panelAlt)
+	p.reconstruct = simpleui.NewSwitch("sstvReconstruct", 970, 803, 180, 38, "RECONSTRUIR", screen.sstvReconstructLines, uiMinimumFontSize)
+	p.reduceNoise = simpleui.NewSwitch("sstvReduceNoise", 1160, 803, 180, 38, "REDUCIR RUIDO", screen.sstvReduceNoise, uiMinimumFontSize)
 	p.auto.OnClick(func() {
 		screen.sstvAutomatic = true
 		if screen.receiver != nil {
@@ -108,7 +124,21 @@ func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
 		}
 		_ = exec.Command("explorer.exe", screen.receiver.SSTVOutputFolder()).Start()
 	})
-	p.controls = []simpleui.Element{p.auto, p.force, p.stop, p.restart, p.save, p.folder}
+	p.reconstruct.OnChange(func(enabled bool) {
+		screen.sstvReconstructLines = enabled
+		if screen.receiver != nil {
+			screen.receiver.SetSSTVReconstructLines(enabled)
+		}
+		screen.markSettingsDirty()
+	})
+	p.reduceNoise.OnChange(func(enabled bool) {
+		screen.sstvReduceNoise = enabled
+		if screen.receiver != nil {
+			screen.receiver.SetSSTVReduceNoise(enabled)
+		}
+		screen.markSettingsDirty()
+	})
+	p.controls = []simpleui.Element{p.auto, p.force, p.stop, p.restart, p.save, p.folder, p.reconstruct, p.reduceNoise}
 	for _, dropdown := range p.candidateModes {
 		p.controls = append(p.controls, dropdown)
 	}
@@ -137,6 +167,8 @@ func (p *SSTVPanel) Enter() {
 	}
 	p.screen.receiver.ConfigureSSTV(true)
 	p.screen.receiver.SetSSTVAutomatic(p.screen.sstvAutomatic)
+	p.screen.receiver.SetSSTVReconstructLines(p.screen.sstvReconstructLines)
+	p.screen.receiver.SetSSTVReduceNoise(p.screen.sstvReduceNoise)
 	for i, mode := range p.screen.sstvCandidateModes[:len(p.candidateModes)] {
 		p.screen.receiver.SetSSTVCandidateMode(i, mode)
 	}
@@ -162,6 +194,29 @@ func (p *SSTVPanel) Tick() {
 		return
 	}
 	p.status = p.screen.receiver.SSTVStatus()
+	p.syncHistory()
+	if p.compareDone != nil {
+		select {
+		case <-p.compareDone:
+			p.compareViewer, p.compareDone = nil, nil
+		default:
+		}
+	}
+	if rl.IsMouseButtonReleased(rl.MouseButtonLeft) {
+		pointer := simpleui.MousePosition()
+		for index := 0; index < min(3, len(p.history)); index++ {
+			if rl.CheckCollisionPointRec(pointer, sstvHistoryBounds(index)) {
+				now := time.Now()
+				if p.lastHistoryClick == index && now.Sub(p.lastHistoryClickAt) <= 450*time.Millisecond {
+					p.openSSTVComparator(p.history[index].info)
+					p.lastHistoryClick, p.lastHistoryClickAt = -1, time.Time{}
+				} else {
+					p.lastHistoryClick, p.lastHistoryClickAt = index, now
+				}
+				break
+			}
+		}
+	}
 	for _, dropdown := range p.candidateModes {
 		dropdown.SetVisible(true)
 	}
@@ -177,6 +232,11 @@ func (p *SSTVPanel) updatePreview(channel int, frame sstv.Frame) {
 	preview := &p.previews[channel]
 	preview.sequence, preview.lines = frame.Sequence, frame.Lines
 	if frame.Width <= 0 || frame.Height <= 0 || len(frame.RGB) != frame.Width*frame.Height*3 {
+		if preview.ready {
+			rl.UnloadTexture(preview.texture)
+		}
+		preview.ready, preview.width, preview.height = false, 0, 0
+		preview.pixels = preview.pixels[:0]
 		return
 	}
 	if !preview.ready || preview.width != frame.Width || preview.height != frame.Height {
@@ -213,7 +273,8 @@ func (p *SSTVPanel) DrawPanel() {
 	drawSSTVCard(mainCard, colors.cyan)
 	simpleui.DrawTextStyled("IMAGEN PRINCIPAL · "+p.displayMode(), 56, 501, 14, simpleui.FontSemiBold, colors.cyan)
 	drawSSTVBadge(rl.Rectangle{X: 760, Y: 497, Width: 180, Height: 25}, p.status.State, stateColor)
-	p.drawImagePreview(rl.Rectangle{X: 55, Y: 530, Width: 890, Height: 216}, 0)
+	p.drawImagePreview(rl.Rectangle{X: 55, Y: 530, Width: 672, Height: 216}, 0)
+	p.drawHistory()
 
 	for index := range p.candidateModes {
 		p.drawCandidate(index)
@@ -233,6 +294,97 @@ func (p *SSTVPanel) DrawPanel() {
 	if p.feedback != "" && time.Now().Before(p.feedbackUntil) {
 		drawSmallText(p.feedback, 1210, 862, colors.cyan)
 	}
+}
+
+func (p *SSTVPanel) syncHistory() {
+	previous := make(map[string]sstvHistoryPreview, len(p.history))
+	for _, item := range p.history {
+		previous[item.info.Path] = item
+	}
+	next := make([]sstvHistoryPreview, 0, min(12, len(p.status.History)))
+	for _, item := range p.status.History {
+		if len(next) == 12 {
+			break
+		}
+		if cached, found := previous[item.Path]; found {
+			cached.info = item
+			next = append(next, cached)
+			delete(previous, item.Path)
+			continue
+		}
+		preview := sstvHistoryPreview{info: item}
+		if data, err := os.ReadFile(item.Path); err == nil {
+			image := rl.LoadImageFromMemory(".png", data, int32(len(data)))
+			if rl.IsImageValid(image) {
+				preview.texture = rl.LoadTextureFromImage(image)
+				rl.UnloadImage(image)
+				preview.ready = rl.IsTextureValid(preview.texture)
+				if preview.ready {
+					rl.SetTextureFilter(preview.texture, rl.FilterBilinear)
+				}
+			}
+		}
+		next = append(next, preview)
+	}
+	for _, removed := range previous {
+		if removed.ready {
+			rl.UnloadTexture(removed.texture)
+		}
+	}
+	p.history = next
+}
+
+func (p *SSTVPanel) drawHistory() {
+	simpleui.DrawTextStyled("ÚLTIMAS IMÁGENES", 746, 531, 11, simpleui.FontSemiBold, colors.orange)
+	simpleui.DrawText("Clic para abrir", 867, 533, 8, colors.muted)
+	if len(p.history) == 0 {
+		simpleui.DrawText("Las imágenes guardadas", 746, 558, 10, colors.muted)
+		simpleui.DrawText("aparecerán aquí.", 746, 574, 10, colors.muted)
+		return
+	}
+	for index := 0; index < min(3, len(p.history)); index++ {
+		item := p.history[index]
+		bounds := sstvHistoryBounds(index)
+		y := bounds.Y
+		accent := colors.green
+		state := "COMPLETA"
+		if item.info.Partial {
+			accent, state = colors.orange, "PARCIAL"
+		}
+		if item.info.Quality == "DEGRADADA" || item.info.Quality == "MUY INCOMPLETA" {
+			accent = colors.red
+		}
+		rl.DrawRectangleRounded(bounds, .08, 5, mixColor(colors.panelAlt, accent, .08))
+		border := mixColor(colors.border, accent, .45)
+		if rl.CheckCollisionPointRec(simpleui.MousePosition(), bounds) {
+			border = colors.cyan
+		}
+		rl.DrawRectangleRoundedLinesEx(bounds, .08, 5, 1, border)
+		thumb := rl.Rectangle{X: bounds.X + 5, Y: bounds.Y + 5, Width: 61, Height: 45}
+		rl.DrawRectangleRec(thumb, colors.background)
+		if item.ready {
+			src := rl.Rectangle{Width: float32(item.texture.Width), Height: float32(item.texture.Height)}
+			dst := fitRectangle(thumb.X, thumb.Y, thumb.Width, thumb.Height, src.Width, src.Height)
+			rl.DrawTexturePro(item.texture, src, dst, rl.Vector2{}, 0, rl.White)
+		}
+		simpleui.DrawTextStyled(trimMemory(state+" · "+item.info.Quality, 22), 814, y+6, 8, simpleui.FontSemiBold, accent)
+		simpleui.DrawText(item.info.SavedAt.Format("15:04:05")+" · "+trimMemory(item.info.Mode, 12), 814, y+21, 9, colors.text)
+		detail := fmt.Sprintf("%d/%d · %s", item.info.Lines, item.info.Height, item.info.Reason)
+		if item.info.CorrectedLines > 0 {
+			detail = fmt.Sprintf("%d/%d · %d alineadas", item.info.Lines, item.info.Height, item.info.CorrectedLines)
+		}
+		if item.info.ReconstructedLines > 0 {
+			detail = fmt.Sprintf("%d/%d · %d reconstruidas", item.info.Lines, item.info.Height, item.info.ReconstructedLines)
+		}
+		if item.info.DenoisedPixels > 0 {
+			detail = fmt.Sprintf("%d/%d · %d impulsos", item.info.Lines, item.info.Height, item.info.DenoisedPixels)
+		}
+		simpleui.DrawText(trimMemory(detail, 23), 814, y+36, 9, colors.muted)
+	}
+}
+
+func sstvHistoryBounds(index int) rl.Rectangle {
+	return rl.Rectangle{X: 744, Y: float32(554 + index*62), Width: 190, Height: 55}
 }
 
 func (p *SSTVPanel) displayMode() string {
@@ -335,5 +487,14 @@ func (p *SSTVPanel) Close() {
 			rl.UnloadTexture(p.previews[i].texture)
 			p.previews[i].ready = false
 		}
+	}
+	for i := range p.history {
+		if p.history[i].ready {
+			rl.UnloadTexture(p.history[i].texture)
+			p.history[i].ready = false
+		}
+	}
+	if p.compareViewer != nil && p.compareViewer.Process != nil {
+		_ = p.compareViewer.Process.Kill()
 	}
 }

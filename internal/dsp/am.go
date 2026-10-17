@@ -2,6 +2,15 @@ package dsp
 
 import "math"
 
+const (
+	// AM carries the audio as only a fraction of the RF envelope. Weak signals
+	// and modest modulation depths therefore need more reserve than NFM to
+	// reach the same perceived listening level.
+	amTargetRMS   = float32(.30)
+	amMaximumGain = float32(32)
+	amInitialGain = float32(6)
+)
+
 // AMDemodulator translates, filters and envelope-demodulates complex IQ.
 type AMDemodulator struct {
 	inputRate, outputRate float64
@@ -15,7 +24,7 @@ type AMDemodulator struct {
 }
 
 func NewAMDemodulator(inputRate, outputRate float64) *AMDemodulator {
-	return &AMDemodulator{inputRate: inputRate, outputRate: outputRate, rmsPower: .0001, audioGain: 1, limiterGain: 1}
+	return &AMDemodulator{inputRate: inputRate, outputRate: outputRate, rmsPower: 1e-6, audioGain: amInitialGain, limiterGain: 1}
 }
 
 func (demod *AMDemodulator) Process(iq []float32, frequencyOffsetHz float64, bandwidthHz int) []float32 {
@@ -63,8 +72,10 @@ func (demod *AMDemodulator) processDynamics(sample float32) float32 {
 	}
 	demod.rmsPower += rmsCoefficient * (power - demod.rmsPower)
 	rms := float32(math.Sqrt(float64(max(demod.rmsPower, 1e-8))))
-	desired := min(max(.22/max(rms, .008), .35), 12)
-	gainCoefficient := coefficient(.750, demod.outputRate)
+	desired := min(max(amTargetRMS/max(rms, .002), .45), amMaximumGain)
+	// Rise promptly when a weak AM transmission appears, while retaining the
+	// fast downward attack that prevents a strong carrier from clipping.
+	gainCoefficient := coefficient(.300, demod.outputRate)
 	if desired < demod.audioGain {
 		gainCoefficient = coefficient(.030, demod.outputRate)
 	}

@@ -158,6 +158,10 @@ func (d *Decoder) Configure(enabled bool) {
 }
 
 func (d *Decoder) ProcessAudio(samples []float32) {
+	d.processAudioAt(samples, time.Now())
+}
+
+func (d *Decoder) processAudioAt(samples []float32, now time.Time) {
 	if len(samples) == 0 || !d.running.Load() {
 		return
 	}
@@ -166,22 +170,22 @@ func (d *Decoder) ProcessAudio(samples []float32) {
 		d.mu.Unlock()
 		return
 	}
-	now := time.Now()
 	if drift, resync := inputDiscontinuity(d.lastInputAt, d.lastInputDuration, now); resync {
-		d.resetCaptureLocked(now)
-		d.status.ResyncCount++
-		d.status.LastResyncDrift = drift
-		d.status.State = "ESPERANDO CICLO"
-		d.status.Detail = fmt.Sprintf("Pausa de audio detectada (%d ms); esperando un ciclo UTC completo", drift.Milliseconds())
+		d.resyncCaptureLocked(now, drift, "Pausa de audio detectada")
 	}
 	d.lastInputAt = now
 	blockDuration := samplesDuration(len(samples), InputRate)
 	d.lastInputDuration = blockDuration
+	if drift, resync := cursorDiscontinuity(d.audioCursor, now); resync {
+		d.resyncCaptureLocked(now, drift, "Desfase acumulado del audio detectado")
+		d.lastInputAt = now
+		d.lastInputDuration = blockDuration
+	}
 	blockStart := d.audioCursor
-	if blockStart.IsZero() {
+	if blockStart.IsZero() || d.status.Waiting {
 		// A callback contains audio accumulated before it was delivered. Anchor
-		// its first sample at the beginning of that interval so activation never
-		// mistakes stale audio for the start of a new FT8 slot.
+		// every waiting block to wall time. This prevents a rapidly drained stale
+		// buffer from crossing the next UTC boundary before the clock does.
 		blockStart = now.Add(-blockDuration)
 	}
 	d.audioCursor = blockStart.Add(blockDuration)
@@ -210,11 +214,7 @@ func (d *Decoder) ProcessAudio(samples []float32) {
 		d.phase, d.phaseSum = 0, 0
 		if len(d.pcm) == SlotSamples {
 			packet := slotPacket{start: d.captureSlot, samples: d.pcm}
-			select {
-			case d.queue <- packet:
-			default:
-				d.dropped.Add(1)
-			}
+			d.enqueueLatest(packet)
 			d.captureSlot += SlotSeconds
 			d.pcm = make([]int16, 0, SlotSamples)
 		}
@@ -222,6 +222,26 @@ func (d *Decoder) ProcessAudio(samples []float32) {
 	d.status.Slot = time.Unix(d.captureSlot, 0).UTC()
 	d.status.Progress = float32(len(d.pcm)) / SlotSamples
 	d.mu.Unlock()
+}
+
+func (d *Decoder) enqueueLatest(packet slotPacket) {
+	select {
+	case d.queue <- packet:
+		return
+	default:
+	}
+	// Decoding an old FT8 slot after a slowdown is less useful than decoding
+	// the newest complete slot. Evict one stale packet and retry once.
+	select {
+	case <-d.queue:
+		d.dropped.Add(1)
+	default:
+	}
+	select {
+	case d.queue <- packet:
+	default:
+		d.dropped.Add(1)
+	}
 }
 
 func inputDiscontinuity(previous time.Time, previousDuration time.Duration, now time.Time) (time.Duration, bool) {
@@ -235,6 +255,14 @@ func inputDiscontinuity(previous time.Time, previousDuration time.Duration, now 
 		return drift, false
 	}
 	return drift, drift > continuityTolerance
+}
+
+func cursorDiscontinuity(cursor, now time.Time) (time.Duration, bool) {
+	if cursor.IsZero() {
+		return 0, false
+	}
+	drift := now.Sub(cursor)
+	return drift, drift > continuityTolerance || drift < -continuityTolerance
 }
 
 func (d *Decoder) Snapshot() Status {
@@ -291,6 +319,14 @@ func (d *Decoder) resetCaptureLocked(now time.Time) {
 	d.status.State = "ESPERANDO CICLO"
 	d.status.Detail = "Descartando la trama parcial hasta el próximo límite UTC"
 	d.lastInputAt, d.lastInputDuration = time.Time{}, 0
+}
+
+func (d *Decoder) resyncCaptureLocked(now time.Time, drift time.Duration, reason string) {
+	d.resetCaptureLocked(now)
+	d.status.ResyncCount++
+	d.status.LastResyncDrift = drift
+	d.status.State = "ESPERANDO CICLO"
+	d.status.Detail = fmt.Sprintf("%s (%d ms); esperando un ciclo UTC completo", reason, drift.Milliseconds())
 }
 
 func samplesDuration(count, rate int) time.Duration {

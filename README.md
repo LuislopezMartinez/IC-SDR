@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.14.1](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.14.1)**
+**Versión actual: [v0.15.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.15.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -48,6 +48,14 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.15.0
+
+- Nuevo comparador de imágenes **SSTV** para revisar la captura original y su versión mejorada, con divisor ajustable, zoom y acceso a la carpeta de salida.
+- Mejora de SSTV: corrección conservadora de filas, reconstrucción de huecos cortos y reducción de ruido impulsivo, manteniendo siempre intacta la imagen original.
+- El decodificador FT8 detecta pausas y desfases de audio, resincroniza la captura y espera el siguiente ciclo UTC completo para evitar decodificaciones desplazadas.
+- El mapa FT8 amplía la identificación visual de entidades DXCC mediante banderas específicas.
+- Ajustes de nivel y dinámica para mejorar la escucha de AM débil, junto con correcciones de estabilidad en audio e interfaz.
 
 ## Novedades de v0.14.1
 

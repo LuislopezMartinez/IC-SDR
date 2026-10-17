@@ -51,7 +51,7 @@ func TestCaptureDiscardsPartialAudioBeforeArmedBoundary(t *testing.T) {
 	d.audioCursor = start
 	d.waitUntil = start.Add(10 * time.Millisecond)
 	d.status.Waiting = true
-	d.ProcessAudio(make([]float32, 960)) // 20 ms: only the final 10 ms belong to the slot.
+	d.processAudioAt(make([]float32, 960), start.Add(20*time.Millisecond)) // Only the final 10 ms belong to the slot.
 	status := d.Snapshot()
 	if status.Waiting || status.State != "ESCUCHANDO" {
 		t.Fatalf("decoder did not enter the clean slot: %+v", status)
@@ -92,6 +92,30 @@ func TestInputContinuityDetectsARealPauseButAllowsCallbackCadence(t *testing.T) 
 	}
 }
 
+func TestCursorContinuityDetectsAccumulatedLagAndLead(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	if drift, resync := cursorDiscontinuity(now.Add(-400*time.Millisecond), now); resync || drift != 400*time.Millisecond {
+		t.Fatalf("normal cursor offset = %v, %v", drift, resync)
+	}
+	if drift, resync := cursorDiscontinuity(now.Add(-700*time.Millisecond), now); !resync || drift != 700*time.Millisecond {
+		t.Fatalf("accumulated lag = %v, %v; want resync", drift, resync)
+	}
+	if drift, resync := cursorDiscontinuity(now.Add(700*time.Millisecond), now); !resync || drift != -700*time.Millisecond {
+		t.Fatalf("buffer lead = %v, %v; want resync", drift, resync)
+	}
+}
+
+func TestQueueKeepsNewestCompleteSlots(t *testing.T) {
+	d := New("missing")
+	d.enqueueLatest(slotPacket{start: 15})
+	d.enqueueLatest(slotPacket{start: 30})
+	d.enqueueLatest(slotPacket{start: 45})
+	first, second := <-d.queue, <-d.queue
+	if first.start != 30 || second.start != 45 || d.dropped.Load() != 1 {
+		t.Fatalf("queue contains %d, %d; dropped=%d", first.start, second.start, d.dropped.Load())
+	}
+}
+
 func TestProcessAudioResynchronizesAfterInputPause(t *testing.T) {
 	d := New("missing")
 	d.running.Store(true)
@@ -99,7 +123,7 @@ func TestProcessAudioResynchronizesAfterInputPause(t *testing.T) {
 	d.captureSlot = time.Now().UTC().Truncate(15 * time.Second).Unix()
 	d.lastInputAt = time.Now().Add(-time.Second)
 	d.lastInputDuration = 20 * time.Millisecond
-	d.ProcessAudio(make([]float32, 960))
+	d.processAudioAt(make([]float32, 960), time.Now())
 	status := d.Snapshot()
 	if status.ResyncCount != 1 || status.State != "ESPERANDO CICLO" || !status.Waiting {
 		t.Fatalf("status after pause = %+v", status)

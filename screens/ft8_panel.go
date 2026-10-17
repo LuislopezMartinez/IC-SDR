@@ -229,8 +229,12 @@ func (p *FT8Panel) DrawPanel() {
 	bar := rl.Rectangle{X: 608, Y: toolY + 45, Width: 955, Height: 7}
 	rl.DrawRectangleRounded(bar, .5, 6, colors.panelAlt)
 	displaySlot, displayProgress := status.Slot, status.Progress
-	if !status.Waiting && p.screen.audioPlayer != nil {
-		displaySlot, displayProgress = ft8AudibleProgress(status.Slot, status.Progress, p.screen.audioPlayer.PlaybackDelay())
+	if !status.Waiting {
+		playbackDelay := time.Duration(0)
+		if p.screen.audioPlayer != nil {
+			playbackDelay = p.screen.audioPlayer.PlaybackDelay()
+		}
+		displaySlot, displayProgress = ft8UTCCycleProgress(time.Now(), playbackDelay)
 	}
 	if status.Waiting {
 		displayProgress = 0
@@ -306,6 +310,21 @@ func ft8AudibleProgress(slot time.Time, progress float32, delay time.Duration) (
 		slot = slot.Add(ft8.SlotSeconds * time.Second)
 	}
 	return slot, progress
+}
+
+// ft8UTCCycleProgress derives the presentation directly from the UTC clock on
+// every frame. It deliberately does not accumulate frame time or decoder
+// samples, so a slow frame cannot leave the bar permanently displaced. The
+// playback delay keeps the visual cycle aligned with the audio at the speaker.
+func ft8UTCCycleProgress(now time.Time, playbackDelay time.Duration) (time.Time, float32) {
+	if playbackDelay < 0 {
+		playbackDelay = 0
+	}
+	audibleNow := now.UTC().Add(-playbackDelay)
+	slotDuration := ft8.SlotSeconds * time.Second
+	slot := audibleNow.Truncate(slotDuration)
+	progress := float32(audibleNow.Sub(slot)) / float32(slotDuration)
+	return slot, max(float32(0), min(progress, float32(1)))
 }
 
 func ft8ClockPresentation(status ft8.Status) (string, rl.Color) {

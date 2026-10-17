@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +29,14 @@ var ValidModes = []string{"M1", "M2", "S1", "S2", i18n.Source("text.542213f49bef
 type Frame struct {
 	Sequence, Width, Height, Lines int
 	RGB                            []byte
+	LineQuality                    []uint8
+}
+
+type SavedImage struct {
+	Path, EnhancedPath, Mode, Reason, Quality                         string
+	SavedAt                                                           time.Time
+	Lines, Height, CorrectedLines, ReconstructedLines, DenoisedPixels int
+	Partial                                                           bool
 }
 
 type Status struct {
@@ -38,6 +47,7 @@ type Status struct {
 	Dropped                                             uint64
 	CandidateModes                                      [candidateCount]string
 	CandidateProgress, CandidateSync                    [candidateCount]int
+	History                                             []SavedImage
 }
 
 type Decoder struct {
@@ -46,28 +56,41 @@ type Decoder struct {
 	pool                     sync.Pool
 	running                  atomic.Bool
 	dropped                  atomic.Uint64
+	reconstructLines         atomic.Bool
+	reduceNoise              atomic.Bool
 
-	mu             sync.RWMutex
-	enabled        bool
-	automatic      bool
-	selectedMode   string
-	candidateModes [candidateCount]string
-	status         Status
-	frames         [candidateCount + 1]Frame
-	cmd            *exec.Cmd
-	stdin          io.WriteCloser
-	stop           chan struct{}
-	generation     uint64
-	restarting     bool
+	mu                sync.RWMutex
+	enabled           bool
+	automatic         bool
+	selectedMode      string
+	candidateModes    [candidateCount]string
+	status            Status
+	frames            [candidateCount + 1]Frame
+	cmd               *exec.Cmd
+	stdin             io.WriteCloser
+	stop              chan struct{}
+	generation        uint64
+	restarting        bool
+	visResetPending   bool
+	visLeaderAt       time.Time
+	visCandidateAt    time.Time
+	pendingVISFrame   Frame
+	pendingVISMode    string
+	lastArchivedFrame string
 }
 
 func New(executable, outputFolder string) *Decoder {
 	d := &Decoder{executable: executable, outputFolder: outputFolder, queue: make(chan []float32, 16), automatic: true, selectedMode: "R36", candidateModes: [4]string{"R36", "R72", "M1", "S1"}}
 	d.pool.New = func() any { return make([]float32, 0, 4096) }
+	d.reconstructLines.Store(true)
+	d.reduceNoise.Store(true)
 	d.status.State, d.status.Mode, d.status.ToneLevel = i18n.Source("text.38cca6bea010"), i18n.Source("text.80e4cf374a8a"), -120
 	d.syncStatusLocked()
 	return d
 }
+
+func (d *Decoder) SetReconstructLines(enabled bool) { d.reconstructLines.Store(enabled) }
+func (d *Decoder) SetReduceNoise(enabled bool)      { d.reduceNoise.Store(enabled) }
 
 func (d *Decoder) Configure(enabled bool) {
 	d.mu.Lock()
@@ -171,6 +194,7 @@ func (d *Decoder) Snapshot() Status {
 	d.mu.RLock()
 	s := d.status
 	s.Running, s.Queued, s.Dropped = d.running.Load(), len(d.queue), d.dropped.Load()
+	s.History = append([]SavedImage(nil), d.status.History...)
 	d.mu.RUnlock()
 	return s
 }
@@ -187,6 +211,7 @@ func (d *Decoder) Frame(channel, previousSequence int) (Frame, bool) {
 	}
 	result := source
 	result.RGB = append([]byte(nil), source.RGB...)
+	result.LineQuality = append([]uint8(nil), source.LineQuality...)
 	d.mu.RUnlock()
 	return result, true
 }
@@ -206,14 +231,34 @@ func (d *Decoder) SavePartial() (string, error) {
 		frame = d.frames[best]
 	}
 	frame.RGB = append([]byte(nil), frame.RGB...)
+	frame.LineQuality = append([]uint8(nil), frame.LineQuality...)
 	d.mu.RUnlock()
+	if frame.Width <= 0 || frame.Height <= 0 || len(frame.RGB) != frame.Width*frame.Height*3 {
+		return "", fmt.Errorf("%s", i18n.Source("text.24ffe7ce2262"))
+	}
+	path, err := d.saveFramePNG(frame, "sstv-partial")
+	if err == nil {
+		enhancedPath, corrected, reconstructed, denoised, _ := d.saveEnhancedFramePNG(frame, path)
+		d.mu.Lock()
+		d.status.LastSaved = path
+		d.recordSavedLocked(path, enhancedPath, frame, corrected, reconstructed, denoised, "Guardado manual", d.status.Mode)
+		d.mu.Unlock()
+	}
+	return path, err
+}
+
+func (d *Decoder) saveFramePNG(frame Frame, prefix string) (string, error) {
 	if frame.Width <= 0 || frame.Height <= 0 || len(frame.RGB) != frame.Width*frame.Height*3 {
 		return "", fmt.Errorf("%s", i18n.Source("text.24ffe7ce2262"))
 	}
 	if err := os.MkdirAll(d.outputFolder, 0o755); err != nil {
 		return "", err
 	}
-	path := filepath.Join(d.outputFolder, "sstv-partial-"+time.Now().Format("20060102-150405")+".png")
+	path := filepath.Join(d.outputFolder, prefix+"-"+time.Now().Format("20060102-150405.000000000")+".png")
+	return path, writeSSTVFramePNG(frame, path)
+}
+
+func writeSSTVFramePNG(frame Frame, path string) error {
 	img := image.NewRGBA(image.Rect(0, 0, frame.Width, frame.Height))
 	for y := 0; y < frame.Height; y++ {
 		for x := 0; x < frame.Width; x++ {
@@ -228,17 +273,40 @@ func (d *Decoder) SavePartial() (string, error) {
 			err = closeErr
 		}
 	}
-	if err == nil {
-		d.mu.Lock()
-		d.status.LastSaved = path
-		d.mu.Unlock()
+	return err
+}
+
+func (d *Decoder) saveEnhancedFramePNG(frame Frame, originalPath string) (string, int, int, int, error) {
+	enhanced, corrected := alignSSTVRows(frame)
+	reconstructed := 0
+	if d.reconstructLines.Load() {
+		enhanced, reconstructed = reconstructSSTVLines(enhanced, 6)
 	}
-	return path, err
+	denoised := 0
+	if d.reduceNoise.Load() {
+		enhanced, denoised = reduceSSTVImpulseNoise(enhanced)
+	}
+	if corrected == 0 && reconstructed == 0 && denoised == 0 {
+		return "", 0, 0, 0, nil
+	}
+	path := strings.TrimSuffix(originalPath, filepath.Ext(originalPath)) + "-mejorada.png"
+	return path, corrected, reconstructed, denoised, writeSSTVFramePNG(enhanced, path)
 }
 
 func (d *Decoder) Close() { d.Configure(false) }
 
-func (d *Decoder) start(forceCandidates bool) error {
+func (d *Decoder) runtimeArgs(forceStart bool) []string {
+	args := []string{"--stream", "--sample-rate", "48000", "--output", d.outputFolder, "--weak", "--candidate-modes", strings.Join(d.candidateModes[:], ","), "--force-candidates"}
+	if !d.automatic || forceStart {
+		args = append(args, "--forced-mode", d.selectedMode)
+	}
+	if forceStart {
+		args = append(args, "--force-start")
+	}
+	return args
+}
+
+func (d *Decoder) start(forceStart bool) error {
 	d.mu.Lock()
 	if d.running.Load() || !d.enabled {
 		d.mu.Unlock()
@@ -258,11 +326,7 @@ func (d *Decoder) start(forceCandidates bool) error {
 	// Keep the automatic primary decoder and the manual candidates running
 	// together. The UI exposes RX1 as AUTO and RX2-RX4 as independently
 	// selectable manual decoders.
-	args := []string{"--stream", "--sample-rate", "48000", "--output", d.outputFolder, "--weak", "--candidate-modes", strings.Join(d.candidateModes[:], ","), "--force-candidates"}
-	if !d.automatic {
-		args = append(args, "--forced-mode", d.selectedMode)
-	}
-	_ = forceCandidates
+	args := d.runtimeArgs(forceStart)
 	cmd := exec.Command(executable, args...)
 	cmd.Dir = filepath.Dir(executable)
 	cmd.SysProcAttr = hiddenProcessAttributes()
@@ -402,7 +466,11 @@ func (d *Decoder) applyFullLocked(channel, sequence int, payload []byte) {
 	if w <= 0 || h <= 0 || len(payload)-16 != w*h*3 {
 		return
 	}
-	d.frames[channel] = Frame{Sequence: sequence, Width: w, Height: h, Lines: lines, RGB: append([]byte(nil), payload[16:]...)}
+	quality := make([]uint8, h)
+	for row := 0; row < min(lines, h); row++ {
+		quality[row] = 1
+	}
+	d.frames[channel] = Frame{Sequence: sequence, Width: w, Height: h, Lines: lines, RGB: append([]byte(nil), payload[16:]...), LineQuality: quality}
 	if channel == 0 {
 		d.status.Width, d.status.Height, d.status.Lines = w, h, lines
 	}
@@ -420,9 +488,13 @@ func (d *Decoder) applyRowsLocked(channel, sequence int, payload []byte) {
 	f := &d.frames[channel]
 	if f.Width != w || f.Height != h || len(f.RGB) != w*h*3 {
 		f.RGB = make([]byte, w*h*3)
+		f.LineQuality = make([]uint8, h)
 	}
 	f.Sequence, f.Width, f.Height, f.Lines = sequence, w, h, lines
 	copy(f.RGB[first*w*3:(first+count)*w*3], payload[24:])
+	for row := first; row < first+count; row++ {
+		f.LineQuality[row] = 1
+	}
 	if channel == 0 {
 		d.status.Width, d.status.Height, d.status.Lines = w, h, lines
 	}
@@ -441,6 +513,22 @@ func (d *Decoder) parseStatus(generation uint64, line string) {
 		return
 	}
 	value := strings.TrimPrefix(line, i18n.Source("text.4c476f9afd36"))
+	if strings.HasPrefix(value, "PRIMARY RESET ") {
+		d.handlePrimaryReset(generation, strings.TrimSpace(strings.TrimPrefix(value, "PRIMARY RESET ")))
+		return
+	}
+	if strings.HasPrefix(value, "MODE ") {
+		d.handleMode(generation, value)
+		return
+	}
+	if strings.HasPrefix(value, "WATCHDOG SAVE_PARTIAL") {
+		d.archiveCurrentFrame(generation, "sstv-partial-timeout", i18n.Source("text.764a55c35afa"), "Señal perdida / timeout")
+		return
+	}
+	if strings.HasPrefix(value, "COMPLETE ") {
+		d.archiveCurrentFrame(generation, "sstv-complete", i18n.Source("text.894981ff0205"), "Completada")
+		return
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.generation != generation {
@@ -448,12 +536,19 @@ func (d *Decoder) parseStatus(generation uint64, line string) {
 	}
 	switch {
 	case strings.HasPrefix(value, "STATE "):
-		d.status.State = normalizeState(strings.TrimPrefix(value, i18n.Source("text.495cafe389de")))
-	case strings.HasPrefix(value, "MODE "):
-		parts := strings.Fields(value)
-		if len(parts) >= 4 {
-			d.status.Mode = strings.ToUpper(strings.Join(parts[1:len(parts)-2], " "))
+		raw := strings.ToUpper(strings.TrimSpace(strings.TrimPrefix(value, i18n.Source("text.495cafe389de"))))
+		now := time.Now()
+		if raw == "LEADER LOCK" {
+			d.visLeaderAt = now
 		}
+		if raw == "VIS" {
+			if !d.visLeaderAt.IsZero() && now.Sub(d.visLeaderAt) <= 4*time.Second {
+				d.visCandidateAt = now
+			} else {
+				d.visCandidateAt = time.Time{}
+			}
+		}
+		d.status.State = normalizeState(raw)
 	case strings.HasPrefix(value, "PROGRESS "):
 		parts := strings.Fields(value)
 		if len(parts) >= 8 {
@@ -474,15 +569,356 @@ func (d *Decoder) parseStatus(generation uint64, line string) {
 		d.status.Candidates, d.status.State = true, i18n.Source("text.483d04905f7c")
 	case strings.HasPrefix(value, "CANDIDATES INACTIVE"):
 		d.status.Candidates = false
-	case strings.HasPrefix(value, "WATCHDOG SAVE_PARTIAL"):
-		d.status.State = i18n.Source("text.764a55c35afa")
 	case strings.HasPrefix(value, "RESYNC "):
 		d.status.State = i18n.Source("text.fb0fb383ce84")
-	case strings.HasPrefix(value, "COMPLETE "):
-		d.status.State, d.status.LastSaved = i18n.Source("text.894981ff0205"), strings.TrimPrefix(value, i18n.Source("text.e5e55040c5e2"))
 	case strings.HasPrefix(value, "ERROR "):
 		d.status.State, d.status.Detail = i18n.Source("text.d98ee0e5f939"), strings.TrimPrefix(value, i18n.Source("text.db7f988cb492"))
 	}
+}
+
+func (d *Decoder) handlePrimaryReset(generation uint64, reason string) {
+	d.mu.Lock()
+	if d.generation != generation {
+		d.mu.Unlock()
+		return
+	}
+	if reason == "VIS_LOCKED" {
+		now := time.Now()
+		if d.visCandidateAt.IsZero() || now.Sub(d.visCandidateAt) > 3*time.Second {
+			d.status.Detail = "VIS descartado: falta una secuencia leader/VIS válida"
+			d.mu.Unlock()
+			return
+		}
+		d.pendingVISFrame = d.bestFrameLocked()
+		d.pendingVISFrame.RGB = append([]byte(nil), d.pendingVISFrame.RGB...)
+		d.pendingVISFrame.LineQuality = append([]uint8(nil), d.pendingVISFrame.LineQuality...)
+		d.pendingVISMode = d.status.Mode
+		d.visResetPending = true
+		d.status.State = "VALIDANDO NUEVO VIS"
+		d.status.Detail = "Esperando la confirmación del modo antes de sustituir la imagen"
+		d.mu.Unlock()
+		return
+	}
+	d.clearFramesLocked()
+	d.mu.Unlock()
+}
+
+func (d *Decoder) handleMode(generation uint64, value string) {
+	parts := strings.Fields(value)
+	if len(parts) < 4 {
+		return
+	}
+	mode := strings.ToUpper(strings.Join(parts[1:len(parts)-2], " "))
+	d.mu.Lock()
+	if d.generation != generation {
+		d.mu.Unlock()
+		return
+	}
+	frame, oldMode := d.pendingVISFrame, d.pendingVISMode
+	commit := d.visResetPending && !d.visCandidateAt.IsZero() && time.Since(d.visCandidateAt) <= 4*time.Second
+	// A watchdog may already have archived this exact partial frame before a
+	// later VIS confirms the next image. Preserve that knowledge until the old
+	// frame has been assessed, then reset it for the new reception.
+	archivePrevious := commit && frame.Lines > 0 && sstvFrameSignature(frame) != d.lastArchivedFrame
+	if commit {
+		d.clearFramesLocked()
+	}
+	d.visResetPending = false
+	d.pendingVISFrame, d.pendingVISMode = Frame{}, ""
+	d.visLeaderAt, d.visCandidateAt = time.Time{}, time.Time{}
+	d.lastArchivedFrame = ""
+	d.status.Mode = mode
+	d.status.State = i18n.Source("text.fb0fb383ce84")
+	d.status.Detail = "VIS confirmado; iniciando una imagen limpia"
+	d.mu.Unlock()
+	if archivePrevious {
+		d.archiveFrame(generation, frame, "sstv-partial-vis", "Interrumpida por nuevo VIS", oldMode)
+	}
+}
+
+func (d *Decoder) archiveCurrentFrame(generation uint64, prefix, state, reason string) {
+	d.mu.Lock()
+	if d.generation != generation {
+		d.mu.Unlock()
+		return
+	}
+	frame := d.bestFrameLocked()
+	frame.RGB = append([]byte(nil), frame.RGB...)
+	frame.LineQuality = append([]uint8(nil), frame.LineQuality...)
+	signature := sstvFrameSignature(frame)
+	if frame.Lines <= 0 || frame.Width <= 0 || frame.Height <= 0 || signature == d.lastArchivedFrame {
+		d.status.State = state
+		d.mu.Unlock()
+		return
+	}
+	d.lastArchivedFrame = signature
+	d.status.State = state
+	d.status.Detail = "Guardando la imagen recibida en PNG"
+	mode := d.status.Mode
+	d.mu.Unlock()
+	d.archiveFrame(generation, frame, prefix, reason, mode)
+	d.mu.Lock()
+	if d.generation == generation {
+		d.status.State = state
+	}
+	d.mu.Unlock()
+}
+
+func (d *Decoder) archiveFrame(generation uint64, frame Frame, prefix, reason, mode string) {
+	path, err := d.saveFramePNG(frame, prefix)
+	enhancedPath, corrected, reconstructed, denoised := "", 0, 0, 0
+	if err == nil {
+		enhancedPath, corrected, reconstructed, denoised, err = d.saveEnhancedFramePNG(frame, path)
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.generation != generation {
+		return
+	}
+	if err != nil {
+		d.status.Detail = "No se pudo guardar la imagen recibida: " + err.Error()
+		return
+	}
+	d.status.LastSaved = path
+	d.recordSavedLocked(path, enhancedPath, frame, corrected, reconstructed, denoised, reason, mode)
+	if frame.Lines < frame.Height {
+		d.status.Detail = fmt.Sprintf("Imagen parcial guardada en PNG (%d/%d líneas)", frame.Lines, frame.Height)
+	} else {
+		d.status.Detail = "Imagen completa guardada en PNG"
+	}
+}
+
+func (d *Decoder) recordSavedLocked(path, enhancedPath string, frame Frame, corrected, reconstructed, denoised int, reason, mode string) {
+	item := SavedImage{
+		Path: path, EnhancedPath: enhancedPath, Mode: mode, Reason: reason, Quality: sstvQualityLabel(frame, corrected, reconstructed), SavedAt: time.Now(),
+		Lines: frame.Lines, Height: frame.Height, CorrectedLines: corrected, ReconstructedLines: reconstructed, DenoisedPixels: denoised, Partial: frame.Lines < frame.Height,
+	}
+	d.status.History = append([]SavedImage{item}, d.status.History...)
+	if len(d.status.History) > 12 {
+		d.status.History = d.status.History[:12]
+	}
+}
+
+func sstvQualityLabel(frame Frame, corrected, reconstructed int) string {
+	if frame.Height <= 0 {
+		return "MUY INCOMPLETA"
+	}
+	received := min(max(frame.Lines, 0), frame.Height)
+	ratio := float64(received) / float64(frame.Height)
+	altered := corrected + reconstructed
+	switch {
+	case ratio >= .95 && altered <= max(4, frame.Height/20):
+		return "BUENA"
+	case ratio >= .75:
+		return "ACEPTABLE"
+	case ratio >= .40:
+		return "DEGRADADA"
+	default:
+		return "MUY INCOMPLETA"
+	}
+}
+
+// alignSSTVRows performs a deliberately conservative correction. A row is
+// moved only when a nearby horizontal offset reduces its RGB difference to
+// the preceding valid row by at least 30 percent. The received frame remains
+// untouched; this function operates on a copy used for the enhanced PNG.
+func alignSSTVRows(frame Frame) (Frame, int) {
+	result := frame
+	result.RGB = append([]byte(nil), frame.RGB...)
+	result.LineQuality = append([]uint8(nil), frame.LineQuality...)
+	if frame.Width < 24 || frame.Height < 2 || len(frame.RGB) != frame.Width*frame.Height*3 {
+		return result, 0
+	}
+	quality := frame.LineQuality
+	if len(quality) != frame.Height {
+		quality = make([]uint8, frame.Height)
+		for row := 0; row < min(frame.Lines, frame.Height); row++ {
+			quality[row] = 1
+		}
+		result.LineQuality = append([]uint8(nil), quality...)
+	}
+	corrected := 0
+	for row := 1; row < min(frame.Lines, frame.Height); row++ {
+		if quality[row] == 0 || quality[row-1] == 0 {
+			continue
+		}
+		previous := result.RGB[(row-1)*frame.Width*3 : row*frame.Width*3]
+		current := frame.RGB[row*frame.Width*3 : (row+1)*frame.Width*3]
+		baseline := sstvRowDifference(previous, current, frame.Width, 0)
+		bestCost, bestShift := baseline, 0
+		for shift := -6; shift <= 6; shift++ {
+			if shift == 0 {
+				continue
+			}
+			if cost := sstvRowDifference(previous, current, frame.Width, shift); cost < bestCost {
+				bestCost, bestShift = cost, shift
+			}
+		}
+		if bestShift == 0 || baseline < uint64(frame.Width*6) || bestCost*100 >= baseline*70 {
+			continue
+		}
+		destination := result.RGB[row*frame.Width*3 : (row+1)*frame.Width*3]
+		for x := 0; x < frame.Width; x++ {
+			sourceX := min(max(x+bestShift, 0), frame.Width-1)
+			copy(destination[x*3:x*3+3], current[sourceX*3:sourceX*3+3])
+		}
+		result.LineQuality[row] = 2
+		corrected++
+	}
+	return result, corrected
+}
+
+// reconstructSSTVLines fills only short, bounded gaps between two genuinely
+// received lines. Long gaps and missing image tails remain untouched so the
+// enhanced image never invents a substantial part of the transmission.
+func reconstructSSTVLines(frame Frame, maximumGap int) (Frame, int) {
+	result := frame
+	result.RGB = append([]byte(nil), frame.RGB...)
+	result.LineQuality = append([]uint8(nil), frame.LineQuality...)
+	if maximumGap <= 0 || frame.Width <= 0 || frame.Height < 3 || len(frame.LineQuality) != frame.Height {
+		return result, 0
+	}
+	reconstructed := 0
+	limit := min(frame.Lines, frame.Height)
+	for row := 1; row < limit-1; {
+		if frame.LineQuality[row] != 0 {
+			row++
+			continue
+		}
+		start := row
+		for row < limit && frame.LineQuality[row] == 0 {
+			row++
+		}
+		end := row
+		gap := end - start
+		if gap > maximumGap || end >= limit || frame.LineQuality[start-1] == 0 || frame.LineQuality[end] == 0 {
+			continue
+		}
+		before := result.RGB[(start-1)*frame.Width*3 : start*frame.Width*3]
+		after := result.RGB[end*frame.Width*3 : (end+1)*frame.Width*3]
+		for missing := 0; missing < gap; missing++ {
+			weightAfter := missing + 1
+			weightBefore := gap + 1 - weightAfter
+			destination := result.RGB[(start+missing)*frame.Width*3 : (start+missing+1)*frame.Width*3]
+			for index := range destination {
+				destination[index] = byte((int(before[index])*weightBefore + int(after[index])*weightAfter) / (gap + 1))
+			}
+			result.LineQuality[start+missing] = 3
+			reconstructed++
+		}
+	}
+	return result, reconstructed
+}
+
+// reduceSSTVImpulseNoise removes isolated salt-and-pepper pixels only when at
+// least six neighbours agree around a very different centre pixel. Requiring
+// that consensus preserves ordinary edges, thin lettering and image detail.
+func reduceSSTVImpulseNoise(frame Frame) (Frame, int) {
+	result := frame
+	result.RGB = append([]byte(nil), frame.RGB...)
+	if frame.Width < 3 || frame.Height < 3 || len(frame.RGB) != frame.Width*frame.Height*3 {
+		return result, 0
+	}
+	limit := min(frame.Lines, frame.Height)
+	changed := 0
+	for y := 1; y < limit-1; y++ {
+		if len(frame.LineQuality) == frame.Height && frame.LineQuality[y] == 0 {
+			continue
+		}
+		for x := 1; x < frame.Width-1; x++ {
+			var samples [3][9]int
+			index := 0
+			for dy := -1; dy <= 1; dy++ {
+				for dx := -1; dx <= 1; dx++ {
+					pixel := ((y+dy)*frame.Width + x + dx) * 3
+					for channel := 0; channel < 3; channel++ {
+						samples[channel][index] = int(frame.RGB[pixel+channel])
+					}
+					index++
+				}
+			}
+			median := [3]int{}
+			for channel := 0; channel < 3; channel++ {
+				sort.Ints(samples[channel][:])
+				median[channel] = samples[channel][4]
+			}
+			centre := (y*frame.Width + x) * 3
+			difference := 0
+			for channel := 0; channel < 3; channel++ {
+				difference += absInt(int(frame.RGB[centre+channel]) - median[channel])
+			}
+			if difference < 150 {
+				continue
+			}
+			consensus, similarCentre := 0, 0
+			for dy := -1; dy <= 1; dy++ {
+				for dx := -1; dx <= 1; dx++ {
+					if dx == 0 && dy == 0 {
+						continue
+					}
+					pixel := ((y+dy)*frame.Width + x + dx) * 3
+					medianDistance, centreDistance := 0, 0
+					for channel := 0; channel < 3; channel++ {
+						medianDistance += absInt(int(frame.RGB[pixel+channel]) - median[channel])
+						centreDistance += absInt(int(frame.RGB[pixel+channel]) - int(frame.RGB[centre+channel]))
+					}
+					if medianDistance <= 75 {
+						consensus++
+					}
+					if centreDistance <= 75 {
+						similarCentre++
+					}
+				}
+			}
+			if consensus < 6 || similarCentre > 1 {
+				continue
+			}
+			for channel := 0; channel < 3; channel++ {
+				result.RGB[centre+channel] = byte(median[channel])
+			}
+			changed++
+		}
+	}
+	return result, changed
+}
+
+func absInt(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
+func sstvRowDifference(previous, current []byte, width, shift int) uint64 {
+	start, end := 6, width-6
+	var difference uint64
+	for x := start; x < end; x += 2 {
+		sourceX := x + shift
+		if sourceX < 0 || sourceX >= width {
+			continue
+		}
+		for channel := 0; channel < 3; channel++ {
+			a, b := int(previous[x*3+channel]), int(current[sourceX*3+channel])
+			difference += uint64(max(a-b, b-a))
+		}
+	}
+	return difference
+}
+
+func sstvFrameSignature(frame Frame) string {
+	return fmt.Sprintf("%d:%d:%d:%d", frame.Sequence, frame.Width, frame.Height, frame.Lines)
+}
+
+func (d *Decoder) bestFrameLocked() Frame {
+	frame := d.frames[0]
+	if d.status.Candidates {
+		for i := 1; i <= candidateCount; i++ {
+			if d.frames[i].Lines > frame.Lines {
+				frame = d.frames[i]
+			}
+		}
+	}
+	return frame
 }
 
 func (d *Decoder) stopProcess(state string) {
@@ -518,11 +954,14 @@ func (d *Decoder) fail(generation uint64, err error) {
 
 func (d *Decoder) clearFrames() {
 	d.mu.Lock()
+	d.clearFramesLocked()
+	d.mu.Unlock()
+}
+func (d *Decoder) clearFramesLocked() {
 	for i := range d.frames {
 		d.frames[i] = Frame{Sequence: d.frames[i].Sequence + 1}
 	}
 	d.status.Width, d.status.Height, d.status.Lines, d.status.Progress = 0, 0, 0, 0
-	d.mu.Unlock()
 }
 func (d *Decoder) drainQueue() {
 	for {
