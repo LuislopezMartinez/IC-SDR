@@ -157,9 +157,9 @@ if ((Get-FileHash -LiteralPath $datvLDPC -Algorithm SHA256).Hash.ToLowerInvarian
 }
 
 # Windows locks the executable, runtime DLLs and startup.log while IC-SDR is
-# running. Close only instances launched from this distribution before copying
-# user data or deleting anything so a release attempt cannot leave a
-# half-rebuilt portable directory.
+# running. Close only instances launched from this distribution before
+# rebuilding it so a release attempt cannot leave a half-rebuilt portable
+# directory.
 $runningFromDist = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
     try {
         $_.Path -and [System.IO.Path]::GetFullPath($_.Path).StartsWith($distRoot, [System.StringComparison]::OrdinalIgnoreCase)
@@ -201,14 +201,6 @@ if ($runningFromDist.Count -gt 0) {
 }
 
 $mutableData = @('cache', 'captures', 'config', 'exports', 'logs', 'recordings')
-foreach ($name in $mutableData) {
-    $existing = Join-Path $distRoot (Join-Path 'DATA' $name)
-    if (Test-Path -LiteralPath $existing) {
-        $saved = Join-Path $projectRoot (Join-Path 'DATA' $name)
-        New-Item -ItemType Directory -Path $saved -Force | Out-Null
-        Get-ChildItem -LiteralPath $existing -Force | Copy-Item -Destination $saved -Recurse -Force
-    }
-}
 
 if (Test-Path -LiteralPath $distRoot) {
     Remove-Item -LiteralPath $distRoot -Recurse -Force
@@ -291,13 +283,12 @@ foreach ($name in $vcRuntimeFiles) {
     Copy-Item -LiteralPath $bundled -Destination (Join-Path $runtimeBin $name) -Force
 }
 
+# A public package must never include a user's receiver settings, API tokens,
+# logbook, captures or recordings.  Keep the writable structure empty; the
+# application creates its defaults at first start and the local workspace data
+# remains untouched.
 foreach ($name in $mutableData) {
-    $saved = Join-Path $projectRoot (Join-Path 'DATA' $name)
-    if (Test-Path -LiteralPath $saved) {
-        $destination = Join-Path $distRoot (Join-Path 'DATA' $name)
-        New-Item -ItemType Directory -Path $destination -Force | Out-Null
-        Get-ChildItem -LiteralPath $saved -Force | Copy-Item -Destination $destination -Recurse -Force
-    }
+    New-Item -ItemType Directory -Path (Join-Path $distRoot (Join-Path 'DATA' $name)) -Force | Out-Null
 }
 
 Copy-Item -LiteralPath (Join-Path $projectRoot 'DISTRIBUTION.md') -Destination (Join-Path $distRoot 'LEEME.txt')
