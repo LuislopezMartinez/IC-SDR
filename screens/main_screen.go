@@ -235,6 +235,7 @@ type MainScreen struct {
 	scanPanel              *ScanPanel
 	dmrPanel               *DMRPanel
 	dabPanel               *DABPanel
+	datvPanel              *DATVPanel
 	digitalVoicePanel      *DigitalVoicePanel
 	voacapPanel            *VOACAPPanel
 	contestLogPanel        *ContestLogPanel
@@ -503,6 +504,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.scanPanel = NewScanPanel(screen)
 	screen.dmrPanel = NewDMRPanel(screen)
 	screen.dabPanel = NewDABPanel(screen)
+	screen.datvPanel = NewDATVPanel(screen)
 	screen.aprsPanel = NewAPRSPanel(screen)
 	if screen.aprsView != "" {
 		screen.aprsPanel.view = screen.aprsView
@@ -585,6 +587,9 @@ func (screen *MainScreen) CreateControls() {
 	}
 	simpleui.Add(screen.dmrPanel)
 	for _, element := range screen.dabPanel.controls {
+		simpleui.Add(element)
+	}
+	for _, element := range screen.datvPanel.controls {
 		simpleui.Add(element)
 	}
 	for _, element := range screen.digitalVoicePanel.controls {
@@ -689,6 +694,9 @@ func (screen *MainScreen) CreateControls() {
 	if screen.activeTool == dabToolID {
 		screen.dabPanel.Enter()
 	}
+	if screen.activeTool == datvToolID {
+		screen.datvPanel.Enter()
+	}
 	if screen.activeTool == tetrapolToolID {
 		screen.tetrapolPanel.Enter()
 	}
@@ -773,6 +781,9 @@ func (screen *MainScreen) Draw() {
 	if screen.digitalVoicePanel != nil {
 		screen.digitalVoicePanel.Tick()
 	}
+	if screen.datvPanel != nil {
+		screen.datvPanel.Tick()
+	}
 	if screen.voacapPanel != nil {
 		screen.voacapPanel.Tick()
 	}
@@ -799,6 +810,10 @@ func (screen *MainScreen) Draw() {
 	rl.DrawRectangle(0, 0, int32(designWidth), int32(designHeight), colors.background)
 	screen.drawHeader()
 	screen.drawSpectrum()
+	if screen.datvPanel != nil {
+		x, y, w, h := screen.spectrumGeometry()
+		screen.datvPanel.DrawSpectrumOverlay(x, y, w, h)
+	}
 	if screen.shouldDrawWaterfall() {
 		if screen.receiver != nil {
 			screen.waterfall.Update(screen.receiver, screen.stats.SampleRate, screen.spanHz)
@@ -816,6 +831,9 @@ func (screen *MainScreen) shouldDrawWaterfall() bool {
 }
 
 func (screen *MainScreen) Close() {
+	if screen.datvPanel != nil {
+		screen.datvPanel.Close()
+	}
 	if screen.rigClient != nil {
 		screen.rigClient.Stop()
 	}
@@ -1365,6 +1383,10 @@ func (screen *MainScreen) drawLowerWorkspaceContent(outerScale float32) {
 		screen.dabPanel.DrawPanel()
 		return
 	}
+	if screen.activeTool == datvToolID {
+		screen.datvPanel.DrawPanel()
+		return
+	}
 	if screen.activeTool == tetrapolToolID {
 		screen.tetrapolPanel.DrawPanel()
 		return
@@ -1415,6 +1437,7 @@ func (screen *MainScreen) toolWorkspaceElements() []simpleui.Element {
 	appendControls(screen.recorderPanel.toolControls)
 	appendControls(screen.dmrPanel.controls)
 	appendControls(screen.dabPanel.controls)
+	appendControls(screen.datvPanel.controls)
 	appendControls(screen.digitalVoicePanel.controls)
 	appendControls(screen.voacapPanel.controls)
 	appendControls(screen.contestLogPanel.controls)
@@ -1634,6 +1657,9 @@ func (screen *MainScreen) selectTool(tool string) {
 	if previous == dabToolID && tool != dabToolID && screen.dabPanel != nil {
 		screen.dabPanel.Leave()
 	}
+	if previous == datvToolID && tool != datvToolID && screen.datvPanel != nil {
+		screen.datvPanel.Leave()
+	}
 	if previous == contestLogToolID && tool != contestLogToolID && screen.contestLogPanel != nil {
 		screen.contestLogPanel.Leave()
 	}
@@ -1719,6 +1745,12 @@ func (screen *MainScreen) selectTool(tool string) {
 		screen.dabPanel.SetVisible(tool == dabToolID)
 		if tool == dabToolID && previous != dabToolID {
 			screen.dabPanel.Enter()
+		}
+	}
+	if screen.datvPanel != nil {
+		screen.datvPanel.SetVisible(tool == datvToolID)
+		if tool == datvToolID && previous != datvToolID {
+			screen.datvPanel.Enter()
 		}
 	}
 	if screen.digitalVoicePanel != nil {
@@ -1847,6 +1879,9 @@ func (screen *MainScreen) setViewMode(mode int) {
 	if screen.dabPanel != nil {
 		screen.dabPanel.SetVisible(showTool && screen.activeTool == dabToolID)
 	}
+	if screen.datvPanel != nil {
+		screen.datvPanel.SetVisible(showTool && screen.activeTool == datvToolID)
+	}
 	if screen.digitalVoicePanel != nil {
 		screen.digitalVoicePanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.a8cbb160caa6"))
 	}
@@ -1937,6 +1972,9 @@ func (screen *MainScreen) stopAllDecodersForBandChange() {
 	}
 	if screen.dabPanel != nil {
 		screen.dabPanel.Leave()
+	}
+	if screen.datvPanel != nil {
+		screen.datvPanel.Leave()
 	}
 	if screen.rtl433Panel != nil {
 		screen.rtl433Panel.Leave()
@@ -2301,6 +2339,10 @@ func (screen *MainScreen) updateSpectrumDrag() {
 	over := mouse.X >= x && mouse.X <= x+width && mouse.Y >= y && mouse.Y <= y+height
 	wheel := rl.GetMouseWheelMove()
 	if screen.rtl433Panel != nil && screen.rtl433Panel.HandleSpectrumInput(mouse, x, y, width, height) {
+		screen.draggingSpectrum = false
+		return
+	}
+	if screen.datvPanel != nil && screen.datvPanel.HandleSpectrumInput(mouse, x, y, width, height) {
 		screen.draggingSpectrum = false
 		return
 	}

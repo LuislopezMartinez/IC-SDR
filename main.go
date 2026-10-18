@@ -157,6 +157,8 @@ func main() {
 		SSTVExecutable:            resources.Path("tools", "sstv", "runtime", "bin", "sstv_decoder_runner.exe"),
 		FT8Executable:             resources.Path("tools", "ft8", "runtime", "bin", "ic-sdr-ft8-runtime.exe"),
 		DABExecutable:             resources.Path("tools", "dab", "runtime", "bin", "ic-sdr-dab-runtime.exe"),
+		DATVExecutable:            resources.Path("tools", "datv", "runtime", "bin", "leandvb.exe"),
+		VLCExecutable:             resources.Path("tools", "datv", "runtime", "vlc", "vlc.exe"),
 		TETRACodec:                resources.Path("tools", "tetra", "runtime", "bin", "libtetradec.dll"),
 		TETRAPOLKitExecutable:     resources.Path("tools", "tetrapol", "runtime", "bin", "tetrapol_dump.exe"),
 		TETRAPOLRPCELPExecutable:  resources.Path("tools", "tetrapol", "runtime", "bin", "rpcelp.exe"),

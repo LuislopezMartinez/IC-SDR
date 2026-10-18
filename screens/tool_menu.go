@@ -31,6 +31,7 @@ var toolMenuItems = []toolMenuItem{
 	{id: i18n.Source("text.93239b223632"), label: i18n.Source("text.ade0cbd42252"), icon: "menu-dmr-if.png", row: 1},
 	{id: i18n.Source("text.a8cbb160caa6"), label: i18n.Source("text.3ae4feb8250d"), icon: "menu-digital-auto.png", row: 1},
 	{id: dabToolID, label: "DAB / DAB+", row: 1},
+	{id: datvToolID, label: "DATV", row: 1},
 	{id: i18n.Source("text.820d4685bc9d"), label: i18n.Source("text.820d4685bc9d"), icon: "menu-sstv.png", row: 1},
 	{id: ft8ToolID, label: "FT8", icon: "menu-ft8.png", row: 1},
 	{id: i18n.Source("text.4c4310fd27fd"), label: i18n.Source("text.4c4310fd27fd"), icon: "menu-aprs.png", row: 1},
@@ -375,6 +376,32 @@ func (menu *ToolMenu) drawCustomIcon(id string, center rl.Vector2, active bool, 
 		rl.DrawRectangleRounded(rl.Rectangle{X: center.X - 39, Y: center.Y - 25, Width: 78, Height: 50}, .14, 6, colors.panelAlt)
 		rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: center.X - 39, Y: center.Y - 25, Width: 78, Height: 50}, .14, 6, 2, accent)
 		drawCenteredStyled("DAB+", rl.Rectangle{X: center.X - 38, Y: center.Y - 22, Width: 76, Height: 44}, 16, simpleui.FontSemiBold, accent)
+	case datvToolID:
+		// Television screen + dipole and RF marks: this distinguishes amateur
+		// digital television from a generic media-player icon.
+		antennaBase := rl.Vector2{X: center.X, Y: center.Y - 19}
+		rl.DrawLineEx(antennaBase, rl.Vector2{X: center.X - 20, Y: center.Y - 34}, 2.5, accent)
+		rl.DrawLineEx(antennaBase, rl.Vector2{X: center.X + 20, Y: center.Y - 34}, 2.5, accent)
+		rl.DrawCircleV(antennaBase, 3, colors.orange)
+		for side := float32(-1); side <= 1; side += 2 {
+			x := center.X + side*27
+			rl.DrawLineEx(rl.Vector2{X: x, Y: center.Y - 31}, rl.Vector2{X: x + side*7, Y: center.Y - 26}, 2, colors.muted)
+			rl.DrawLineEx(rl.Vector2{X: x + side*7, Y: center.Y - 26}, rl.Vector2{X: x, Y: center.Y - 21}, 2, colors.muted)
+		}
+		screen := rl.Rectangle{X: center.X - 36, Y: center.Y - 19, Width: 72, Height: 43}
+		rl.DrawRectangleRounded(screen, .12, 6, colors.panelAlt)
+		rl.DrawRectangleRoundedLinesEx(screen, .12, 6, 2.5, accent)
+		// A tiny digital raster remains legible at menu size.
+		for row := 0; row < 3; row++ {
+			for column := 0; column < 5; column++ {
+				if (row+column)%3 == 1 {
+					continue
+				}
+				rl.DrawRectangle(int32(center.X-27+float32(column)*7), int32(center.Y-10+float32(row)*7), 4, 4, accent)
+			}
+		}
+		rl.DrawTriangle(rl.Vector2{X: center.X + 12, Y: center.Y - 10}, rl.Vector2{X: center.X + 12, Y: center.Y + 12}, rl.Vector2{X: center.X + 30, Y: center.Y + 1}, colors.orange)
+		rl.DrawLineEx(rl.Vector2{X: center.X - 18, Y: center.Y + 27}, rl.Vector2{X: center.X + 18, Y: center.Y + 27}, 3, colors.muted)
 	case qrzToolID:
 		rl.DrawCircleLines(int32(center.X-17), int32(center.Y), 27, accent)
 		rl.DrawEllipseLines(int32(center.X-17), int32(center.Y), 11, 27, colors.muted)

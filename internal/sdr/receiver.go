@@ -14,6 +14,7 @@ import (
 	"go-zero/internal/ais"
 	"go-zero/internal/aprs"
 	"go-zero/internal/dab"
+	"go-zero/internal/datv"
 	"go-zero/internal/digitalvoice"
 	"go-zero/internal/dmr"
 	"go-zero/internal/dsp"
@@ -56,6 +57,7 @@ type Config struct {
 	SSTVExecutable, SSTVOutputDirectory              string
 	FT8Executable                                    string
 	DABExecutable                                    string
+	DATVExecutable, VLCExecutable                    string
 	TETRACodec                                       string
 	TETRAPOLKitExecutable, TETRAPOLRPCELPExecutable  string
 	StartupLog                                       func(string, ...any)
@@ -105,6 +107,7 @@ type Receiver struct {
 	rtl433               *rtl433.Decoder
 	aprs                 *aprs.Decoder
 	dab                  *dab.Decoder
+	datv                 *datv.Decoder
 	sstv                 *sstv.Decoder
 	ft8                  *ft8.Decoder
 	tetra                *tetra.Decoder
@@ -252,6 +255,7 @@ func NewReceiver(config Config) *Receiver {
 	receiver.aircraft = aircraft.New(config.SampleRate, config.Aircraft1090Executable, config.Aircraft978Executable, config.AircraftUATTextExecutable)
 	receiver.aprs = aprs.New(config.SampleRate, config.APRSExecutable, config.APRSConfig, config.APRSWorkingDirectory)
 	receiver.dab = dab.New(config.SampleRate, config.DABExecutable, receiver.enqueueDigitalAudio)
+	receiver.datv = datv.New(config.SampleRate, config.DATVExecutable, config.VLCExecutable)
 	receiver.sstv = sstv.New(config.SSTVExecutable, config.SSTVOutputDirectory)
 	receiver.ft8 = ft8.New(config.FT8Executable)
 	receiver.tetra = tetra.New(config.SampleRate, config.TETRACodec, receiver.enqueueDigitalAudio)
@@ -488,6 +492,9 @@ func (receiver *Receiver) Close() {
 		if receiver.dab != nil {
 			receiver.dab.Close()
 		}
+		if receiver.datv != nil {
+			receiver.datv.Close()
+		}
 		if receiver.tetra != nil {
 			receiver.tetra.Close()
 		}
@@ -618,6 +625,9 @@ func (receiver *Receiver) StopAllDecoders() {
 	}
 	if receiver.dab != nil {
 		receiver.dab.Stop()
+	}
+	if receiver.datv != nil {
+		receiver.datv.Stop()
 	}
 	if receiver.sstv != nil {
 		receiver.sstv.Configure(false)
@@ -1014,6 +1024,9 @@ func (receiver *Receiver) run() {
 		}
 		if receiver.dab != nil {
 			receiver.dab.ProcessIQ(readBuffer[:read*2])
+		}
+		if receiver.datv != nil {
+			receiver.datv.ProcessIQ(readBuffer[:read*2])
 		}
 		if receiver.tetra != nil {
 			receiver.tetra.ProcessIQ(readBuffer[:read*2])

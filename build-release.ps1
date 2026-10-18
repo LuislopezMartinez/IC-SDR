@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.15.1'
+    [string]$Version = '0.16.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,6 +19,8 @@ $omniRigManifestPath = Join-Path $omniRigRuntime 'runtime-version.json'
 $voacapRuntime = Join-Path $projectRoot 'DATA\tools\voacap\runtime'
 $voacapManifestPath = Join-Path $voacapRuntime 'runtime-version.json'
 $dabManifestPath = Join-Path $projectRoot 'DATA\tools\dab\runtime-version.json'
+$datvRuntime = Join-Path $projectRoot 'DATA\tools\datv\runtime'
+$datvManifestPath = Join-Path $datvRuntime 'runtime-version.json'
 
 if ($distRoot -ne $expectedDist -or -not $distRoot.StartsWith($projectRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Ruta de distribución no segura: $distRoot"
@@ -133,6 +135,27 @@ if ($dabExeHash -ne $dabManifest.executableSha256.ToLowerInvariant()) {
     throw "El runtime DAB no coincide con el manifiesto: $dabExeHash"
 }
 
+if (-not (Test-Path -LiteralPath $datvManifestPath)) {
+    throw "Falta el manifiesto del runtime DATV: $datvManifestPath"
+}
+$datvManifest = Get-Content -LiteralPath $datvManifestPath -Raw | ConvertFrom-Json
+if ($datvManifest.leanCommit -ne 'c005645edfa0dfdc45ffab3a5e6297b21ede26bf' -or
+    $datvManifest.ldpcCommit -ne '6ada4aac6d853835eeaefb7e12a0136481647b01' -or
+    -not $datvManifest.dvbS2Extensions) {
+    throw 'La versión del runtime DATV no coincide con la versión validada.'
+}
+$datvExe = Join-Path $datvRuntime $datvManifest.executable
+$datvLDPC = Join-Path $datvRuntime $datvManifest.ldpcHelper
+foreach ($required in @($datvExe, $datvLDPC, (Join-Path $datvRuntime 'source\leandvb-LICENSE.txt'), (Join-Path $datvRuntime 'source\ldpc-LICENSE.txt'))) {
+    if (-not (Test-Path -LiteralPath $required)) { throw "Falta un componente requerido del runtime DATV: $required" }
+}
+if ((Get-FileHash -LiteralPath $datvExe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $datvManifest.executableSha256.ToLowerInvariant()) {
+    throw 'LeanDVB no coincide con el manifiesto DATV.'
+}
+if ((Get-FileHash -LiteralPath $datvLDPC -Algorithm SHA256).Hash.ToLowerInvariant() -ne $datvManifest.ldpcHelperSha256.ToLowerInvariant()) {
+    throw 'ldpc_tool no coincide con el manifiesto DATV.'
+}
+
 # Windows locks the executable, runtime DLLs and startup.log while IC-SDR is
 # running. Close only instances launched from this distribution before copying
 # user data or deleting anything so a release attempt cannot leave a
@@ -231,6 +254,7 @@ $copies = @(
 	@{ Source = 'DATA\tools\ft8\runtime'; Destination = 'DATA\tools\ft8\runtime' },
     @{ Source = 'DATA\tools\dab\runtime'; Destination = 'DATA\tools\dab\runtime' },
     @{ Source = 'DATA\tools\dab\runtime-version.json'; Destination = 'DATA\tools\dab\runtime-version.json' },
+    @{ Source = 'DATA\tools\datv\runtime'; Destination = 'DATA\tools\datv\runtime' },
     @{ Source = 'DATA\tools\tetra\runtime'; Destination = 'DATA\tools\tetra\runtime' },
     @{ Source = 'DATA\tools\tetrapol\runtime'; Destination = 'DATA\tools\tetrapol\runtime' },
     @{ Source = 'DATA\tools\voacap\runtime'; Destination = 'DATA\tools\voacap\runtime' },

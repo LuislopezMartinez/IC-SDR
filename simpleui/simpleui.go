@@ -221,6 +221,14 @@ func Scale() rl.Vector2 {
 	return runtime.canvas.Viewport.Scale()
 }
 
+// Offset returns the physical top-left of the logical canvas in the window.
+func Offset() rl.Vector2 {
+	if runtime.canvas == nil {
+		return rl.Vector2{}
+	}
+	return runtime.canvas.Viewport.Offset()
+}
+
 func handleWindowShortcuts() {
 	if runtime.maximizeKey != 0 && rl.IsKeyPressed(runtime.maximizeKey) {
 		if rl.IsWindowMaximized() {
