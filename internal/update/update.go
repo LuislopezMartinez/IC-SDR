@@ -253,14 +253,30 @@ func extractPackage(packagePath, destination string) (string, error) {
 			return "", closeErr
 		}
 	}
+	// Releases published before v0.17.1 used a single portable directory,
+	// whereas newer release packages may place the two launchers directly at
+	// the archive root.  Both layouts are safe and describe the same portable
+	// application; accepting both prevents the updater itself becoming a
+	// compatibility barrier between releases.
+	if portablePackageAt(cleanDestination) {
+		return cleanDestination, nil
+	}
 	entries, err := os.ReadDir(cleanDestination)
 	if err != nil {
 		return "", err
 	}
-	if len(entries) != 1 || !entries[0].IsDir() {
-		return "", fmt.Errorf("el ZIP debe contener una única carpeta raíz")
+	if len(entries) == 1 && entries[0].IsDir() {
+		root := filepath.Join(cleanDestination, entries[0].Name())
+		if portablePackageAt(root) {
+			return root, nil
+		}
 	}
-	return filepath.Join(cleanDestination, entries[0].Name()), nil
+	return "", fmt.Errorf("el ZIP debe contener IC-SDR-Go.exe e IC-SDR-Updater.exe, en la raíz o dentro de una única carpeta raíz")
+}
+
+func portablePackageAt(root string) bool {
+	return regularFile(filepath.Join(root, "IC-SDR-Go.exe")) &&
+		regularFile(filepath.Join(root, "IC-SDR-Updater.exe"))
 }
 
 func destinationFileClose(file *os.File) error {

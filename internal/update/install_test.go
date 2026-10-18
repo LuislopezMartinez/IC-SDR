@@ -82,6 +82,45 @@ func TestExtractPackageReturnsSinglePortableRoot(t *testing.T) {
 	}
 }
 
+func TestExtractPackageReturnsPortableArchiveRoot(t *testing.T) {
+	archivePath := filepath.Join(t.TempDir(), "update.zip")
+	file, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(file)
+	for name, content := range map[string]string{
+		"IC-SDR-Go.exe":      "application",
+		"IC-SDR-Updater.exe": "updater",
+	} {
+		entry, createErr := writer.Create(name)
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		if _, writeErr := entry.Write([]byte(content)); writeErr != nil {
+			t.Fatal(writeErr)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	destination := filepath.Join(t.TempDir(), "payload")
+	root, err := extractPackage(archivePath, destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != destination {
+		t.Fatalf("root = %q, want archive root %q", root, destination)
+	}
+	if !portablePackageAt(root) {
+		t.Fatal("portable executables were not extracted at the archive root")
+	}
+}
+
 func TestRestoreMutableDataKeepsUserConfiguration(t *testing.T) {
 	root := t.TempDir()
 	backup := filepath.Join(root, "backup")

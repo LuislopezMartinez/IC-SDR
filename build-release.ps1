@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.17.0'
+    [string]$Version = '0.17.1'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -293,5 +293,35 @@ foreach ($name in $mutableData) {
 
 Copy-Item -LiteralPath (Join-Path $projectRoot 'DISTRIBUTION.md') -Destination (Join-Path $distRoot 'LEEME.txt')
 
+# Keep a single portable directory at the root of the archive.  This layout is
+# accepted by all released updater versions, including the one in v0.17.0.
+# The two files below are also checked explicitly so a release cannot be
+# published with an archive that the updater cannot install.
+$packagePath = Join-Path $projectRoot 'dist\IC-SDR-Go-windows-x64.zip'
+$checksumPath = "$packagePath.sha256"
+Remove-Item -LiteralPath $packagePath -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $checksumPath -Force -ErrorAction SilentlyContinue
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory(
+    $distRoot,
+    $packagePath,
+    [System.IO.Compression.CompressionLevel]::Optimal,
+    $true
+)
+$archive = [System.IO.Compression.ZipFile]::OpenRead($packagePath)
+try {
+    $requiredEntries = @('IC-SDR-Go/IC-SDR-Go.exe', 'IC-SDR-Go/IC-SDR-Updater.exe')
+    foreach ($required in $requiredEntries) {
+        if (-not ($archive.Entries.FullName -contains $required)) {
+            throw "El paquete no contiene el archivo requerido: $required"
+        }
+    }
+} finally {
+    $archive.Dispose()
+}
+$hash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+[System.IO.File]::WriteAllText($checksumPath, "$hash  IC-SDR-Go-windows-x64.zip`n", [System.Text.UTF8Encoding]::new($false))
+
 $size = (Get-ChildItem -LiteralPath $distRoot -Recurse -File | Measure-Object Length -Sum).Sum
 Write-Host ("Distribución lista: {0} ({1:N1} MB)" -f $distRoot, ($size / 1MB)) -ForegroundColor Green
+Write-Host "Paquete de actualización: $packagePath" -ForegroundColor Green
