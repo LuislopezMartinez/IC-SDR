@@ -2452,6 +2452,38 @@ func (screen *MainScreen) tuneAtFraction(fraction float32) {
 	}
 }
 
+// positionVFOAt applies an absolute tune without changing the selected
+// CENTER/FIX interaction mode. In FIX, keep the IQ capture stationary while
+// the complete passband remains visible and pan it only near an edge.
+func (screen *MainScreen) positionVFOAt(hz int64) bool {
+	previousCenter := screen.centerFrequencyHz
+	screen.frequencyHz = max(hz, 1_000)
+	if screen.centerMode || screen.spanHz <= 0 {
+		screen.centerFrequencyHz = screen.frequencyHz
+		return screen.centerFrequencyHz != previousCenter
+	}
+
+	halfSpan := screen.spanHz / 2
+	guardHz := max(int64(math.Round(float64(screen.spanHz)*0.05)), int64(screen.demodBandwidthHz/2))
+	mode := ""
+	if screen.mode != nil {
+		mode = screen.mode.SelectedText()
+	}
+	if mode == i18n.Source("text.61f0acff1735") || mode == i18n.Source("text.6323db4948ad") {
+		guardHz = max(guardHz, int64(screen.demodBandwidthHz))
+	}
+	guardHz = min(guardHz, int64(math.Round(float64(screen.spanHz)*0.40)))
+	lowerGuard := screen.centerFrequencyHz - halfSpan + guardHz
+	upperGuard := screen.centerFrequencyHz + halfSpan - guardHz
+	if screen.frequencyHz < lowerGuard {
+		screen.centerFrequencyHz += screen.frequencyHz - lowerGuard
+	} else if screen.frequencyHz > upperGuard {
+		screen.centerFrequencyHz += screen.frequencyHz - upperGuard
+	}
+	screen.centerFrequencyHz = max(screen.centerFrequencyHz, halfSpan)
+	return screen.centerFrequencyHz != previousCenter
+}
+
 func wheelSteps(wheel float32) int64 {
 	if wheel > 0 {
 		return max(int64(math.Round(float64(wheel))), 1)

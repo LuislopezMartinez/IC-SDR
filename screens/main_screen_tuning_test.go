@@ -50,6 +50,39 @@ func TestTuneFixedAtFractionRoundsToNearestStep(t *testing.T) {
 	}
 }
 
+func TestPositionVFOAtPreservesCenterMode(t *testing.T) {
+	screen := &MainScreen{frequencyHz: 145_800_000, centerFrequencyHz: 145_800_000, spanHz: 1_000_000, centerMode: true}
+
+	if changed := screen.positionVFOAt(145_900_000); !changed {
+		t.Fatal("CENTER absolute tune did not move the IQ center")
+	}
+	if screen.frequencyHz != 145_900_000 || screen.centerFrequencyHz != 145_900_000 || !screen.centerMode {
+		t.Fatalf("CENTER tune = frequency %d, center %d, centerMode %v", screen.frequencyHz, screen.centerFrequencyHz, screen.centerMode)
+	}
+}
+
+func TestPositionVFOAtPreservesFixedCaptureWhileTargetIsVisible(t *testing.T) {
+	screen := &MainScreen{frequencyHz: 145_800_000, centerFrequencyHz: 145_800_000, spanHz: 1_000_000, demodBandwidthHz: 12_500, centerMode: false}
+
+	if changed := screen.positionVFOAt(145_900_000); changed {
+		t.Fatal("FIX absolute tune moved the IQ center for a visible target")
+	}
+	if screen.frequencyHz != 145_900_000 || screen.centerFrequencyHz != 145_800_000 || screen.centerMode {
+		t.Fatalf("FIX tune = frequency %d, center %d, centerMode %v", screen.frequencyHz, screen.centerFrequencyHz, screen.centerMode)
+	}
+}
+
+func TestPositionVFOAtPansFixedCaptureForTargetOutsideView(t *testing.T) {
+	screen := &MainScreen{frequencyHz: 145_800_000, centerFrequencyHz: 145_800_000, spanHz: 1_000_000, demodBandwidthHz: 12_500, centerMode: false}
+
+	if changed := screen.positionVFOAt(146_400_000); !changed {
+		t.Fatal("FIX absolute tune did not pan the IQ center for an off-screen target")
+	}
+	if screen.frequencyHz != 146_400_000 || screen.centerFrequencyHz != 145_950_000 || screen.centerMode {
+		t.Fatalf("FIX off-screen tune = frequency %d, center %d, centerMode %v", screen.frequencyHz, screen.centerFrequencyHz, screen.centerMode)
+	}
+}
+
 func TestViewGeometriesAndToolSelection(t *testing.T) {
 	screen := &MainScreen{viewMode: 2, activeTool: "FFT", draggingSpectrum: true}
 	screen.scanPanel = &ScanPanel{screen: screen, dragTarget: 2}

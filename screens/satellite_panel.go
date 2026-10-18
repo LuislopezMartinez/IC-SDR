@@ -382,18 +382,28 @@ func (p *SatellitePanel) tune() {
 		return
 	}
 	hz := signals[j].DownlinkHz
-	p.screen.frequencyHz = hz
-	p.screen.centerFrequencyHz = hz
-	p.screen.centerMode = true
+	centerChanged := p.screen.positionVFOAt(hz)
 	p.screen.updateBandForFrequency(hz)
+	mode := p.selectSignalMode(signals[j].Mode)
 	if p.screen.receiver != nil {
-		p.screen.receiver.SetCenterFrequency(hz)
-		mode := satellite.DemodForSignal(signals[j].Mode)
+		if centerChanged {
+			p.screen.receiver.SetCenterFrequency(p.screen.centerFrequencyHz)
+		}
 		p.screen.receiver.SetDemodulator(mode, hz, p.screen.demodBandwidthHz)
+	}
+	if centerChanged && p.screen.waterfall != nil {
+		p.screen.waterfall.Reset()
 	}
 	p.feedback = fmt.Sprintf(i18n.Source("text.e0ded35ec1e8"), float64(hz)/1e6)
 	p.screen.markSettingsDirty()
 }
+
+func (p *SatellitePanel) selectSignalMode(signalMode string) string {
+	mode := satellite.DemodForSignal(signalMode)
+	p.screen.selectMode(mode)
+	return mode
+}
+
 func (p *SatellitePanel) writeSnapshot(force bool) {
 	if !force && time.Now().Before(p.nextSnapshot) {
 		return
