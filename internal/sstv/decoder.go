@@ -43,6 +43,7 @@ type Status struct {
 	Running, Automatic, Candidates                      bool
 	State, Mode, SelectedMode, LastSaved, Detail        string
 	Width, Height, Lines, Progress, SyncPercent, Queued int
+	TimeoutRemaining                                    int
 	SyncRMS, ToneFrequency, ToneLevel                   float32
 	Dropped                                             uint64
 	CandidateModes                                      [candidateCount]string
@@ -77,6 +78,11 @@ type Decoder struct {
 	pendingVISFrame   Frame
 	pendingVISMode    string
 	lastArchivedFrame string
+	receptionActive   bool
+	receptionStarted  time.Time
+	lastProgressAt    time.Time
+	lastProgressLines int
+	receptionDeadline time.Time
 }
 
 func New(executable, outputFolder string) *Decoder {
@@ -255,7 +261,14 @@ func (d *Decoder) saveFramePNG(frame Frame, prefix string) (string, error) {
 		return "", err
 	}
 	path := filepath.Join(d.outputFolder, prefix+"-"+time.Now().Format("20060102-150405.000000000")+".png")
-	return path, writeSSTVFramePNG(frame, path)
+	return path, writeSSTVFrameWithMetadata(frame, path)
+}
+
+func writeSSTVFrameWithMetadata(frame Frame, path string) error {
+	if err := writeSSTVFramePNG(frame, path); err != nil {
+		return err
+	}
+	return writeSSTVFrameMetadata(path, frame)
 }
 
 func writeSSTVFramePNG(frame Frame, path string) error {
@@ -290,7 +303,7 @@ func (d *Decoder) saveEnhancedFramePNG(frame Frame, originalPath string) (string
 		return "", 0, 0, 0, nil
 	}
 	path := strings.TrimSuffix(originalPath, filepath.Ext(originalPath)) + "-mejorada.png"
-	return path, corrected, reconstructed, denoised, writeSSTVFramePNG(enhanced, path)
+	return path, corrected, reconstructed, denoised, writeSSTVFrameWithMetadata(enhanced, path)
 }
 
 func (d *Decoder) Close() { d.Configure(false) }
@@ -363,6 +376,7 @@ func (d *Decoder) start(forceStart bool) error {
 	go d.writer(generation, stop)
 	go d.readFrames(stdout, generation)
 	go d.readStatus(stderr, generation)
+	go d.watchReception(generation, stop)
 	go func() {
 		err := cmd.Wait()
 		d.mu.Lock()
@@ -473,6 +487,7 @@ func (d *Decoder) applyFullLocked(channel, sequence int, payload []byte) {
 	d.frames[channel] = Frame{Sequence: sequence, Width: w, Height: h, Lines: lines, RGB: append([]byte(nil), payload[16:]...), LineQuality: quality}
 	if channel == 0 {
 		d.status.Width, d.status.Height, d.status.Lines = w, h, lines
+		d.noteProgressLocked(lines)
 	}
 }
 
@@ -497,6 +512,7 @@ func (d *Decoder) applyRowsLocked(channel, sequence int, payload []byte) {
 	}
 	if channel == 0 {
 		d.status.Width, d.status.Height, d.status.Lines = w, h, lines
+		d.noteProgressLocked(lines)
 	}
 }
 
@@ -522,10 +538,16 @@ func (d *Decoder) parseStatus(generation uint64, line string) {
 		return
 	}
 	if strings.HasPrefix(value, "WATCHDOG SAVE_PARTIAL") {
-		d.archiveCurrentFrame(generation, "sstv-partial-timeout", i18n.Source("text.764a55c35afa"), "Señal perdida / timeout")
+		d.handleReceptionTimeout(generation, "Señal perdida / timeout")
 		return
 	}
 	if strings.HasPrefix(value, "COMPLETE ") {
+		d.mu.Lock()
+		if d.generation == generation {
+			d.receptionActive = false
+			d.status.TimeoutRemaining = 0
+		}
+		d.mu.Unlock()
 		d.archiveCurrentFrame(generation, "sstv-complete", i18n.Source("text.894981ff0205"), "Completada")
 		return
 	}
@@ -576,6 +598,23 @@ func (d *Decoder) parseStatus(generation uint64, line string) {
 	}
 }
 
+func (d *Decoder) handleReceptionTimeout(generation uint64, reason string) {
+	d.mu.Lock()
+	if d.generation != generation {
+		d.mu.Unlock()
+		return
+	}
+	d.receptionActive = false
+	d.status.TimeoutRemaining = 0
+	d.status.State = "SEÑAL PERDIDA"
+	d.status.Detail = reason + "; guardando parcial y reiniciando receptores"
+	d.mu.Unlock()
+	d.archiveCurrentFrame(generation, "sstv-partial-timeout", "SEÑAL PERDIDA", reason)
+	// Restarting the child is intentionally the recovery boundary: its audio
+	// queue, AUTO VIS decoder and all four manual candidates start empty.
+	d.Restart(false)
+}
+
 func (d *Decoder) handlePrimaryReset(generation uint64, reason string) {
 	d.mu.Lock()
 	if d.generation != generation {
@@ -622,6 +661,7 @@ func (d *Decoder) handleMode(generation uint64, value string) {
 	archivePrevious := commit && frame.Lines > 0 && sstvFrameSignature(frame) != d.lastArchivedFrame
 	if commit {
 		d.clearFramesLocked()
+		d.armReceptionWatchdogLocked(mode)
 	}
 	d.visResetPending = false
 	d.pendingVISFrame, d.pendingVISMode = Frame{}, ""
@@ -633,6 +673,100 @@ func (d *Decoder) handleMode(generation uint64, value string) {
 	d.mu.Unlock()
 	if archivePrevious {
 		d.archiveFrame(generation, frame, "sstv-partial-vis", "Interrumpida por nuevo VIS", oldMode)
+	}
+}
+
+// watchReception is deliberately owned by the Go side of IC-SDR.  The
+// external decoder has its own timeout, but this second guard makes sure a
+// stalled child process cannot leave the panel indefinitely at SIGNAL LOST.
+func (d *Decoder) watchReception(generation uint64, stop <-chan struct{}) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case now := <-ticker.C:
+			reason := ""
+			d.mu.Lock()
+			if d.generation == generation && d.receptionActive {
+				switch {
+				case !d.receptionDeadline.IsZero() && !now.Before(d.receptionDeadline):
+					reason = "Tiempo máximo del modo agotado"
+				case !d.lastProgressAt.IsZero() && now.Sub(d.lastProgressAt) >= 15*time.Second:
+					reason = "Sin líneas nuevas durante 15 s"
+				}
+				if reason != "" {
+					d.receptionActive = false
+					d.status.State = "SEÑAL PERDIDA"
+					d.status.Detail = reason + "; guardando parcial y reiniciando receptores"
+					d.status.TimeoutRemaining = 0
+				} else if !d.receptionDeadline.IsZero() {
+					d.status.TimeoutRemaining = max(0, int(time.Until(d.receptionDeadline).Seconds()))
+				}
+			}
+			d.mu.Unlock()
+			if reason != "" {
+				d.handleReceptionTimeout(generation, reason)
+				return
+			}
+		}
+	}
+}
+
+func (d *Decoder) noteProgressLocked(lines int) {
+	if !d.receptionActive || lines <= d.lastProgressLines {
+		return
+	}
+	d.lastProgressLines = lines
+	d.lastProgressAt = time.Now()
+}
+
+func (d *Decoder) armReceptionWatchdogLocked(mode string) {
+	now := time.Now()
+	d.receptionActive = true
+	d.receptionStarted = now
+	d.lastProgressAt = now
+	d.lastProgressLines = 0
+	d.receptionDeadline = now.Add(sstvExpectedDuration(mode) + 15*time.Second)
+	d.status.TimeoutRemaining = max(0, int(time.Until(d.receptionDeadline).Seconds()))
+}
+
+// sstvExpectedDuration returns a conservative maximum image duration.  The
+// extra grace period is applied by armReceptionWatchdogLocked, so a real
+// transmission is not cut off for small clock or synchronization variations.
+func sstvExpectedDuration(mode string) time.Duration {
+	upper := strings.ToUpper(strings.TrimSpace(mode))
+	switch {
+	case strings.Contains(upper, "MARTIN 1"):
+		return 114 * time.Second
+	case strings.Contains(upper, "MARTIN 2"):
+		return 58 * time.Second
+	case strings.Contains(upper, "SCOTTIE S1"):
+		return 110 * time.Second
+	case strings.Contains(upper, "SCOTTIE S2"):
+		return 71 * time.Second
+	case strings.Contains(upper, "ROBOT 36"):
+		return 36 * time.Second
+	case strings.Contains(upper, "ROBOT 72"):
+		return 72 * time.Second
+	case strings.Contains(upper, "PD50"):
+		return 50 * time.Second
+	case strings.Contains(upper, "PD90"):
+		return 90 * time.Second
+	case strings.Contains(upper, "PD120"):
+		return 120 * time.Second
+	case strings.Contains(upper, "PD160"):
+		return 160 * time.Second
+	case strings.Contains(upper, "PD180"):
+		return 180 * time.Second
+	case strings.Contains(upper, "PD240"):
+		return 240 * time.Second
+	case strings.Contains(upper, "PD290"):
+		return 290 * time.Second
+	default:
+		// Unknown modes remain bounded too, rather than hanging forever.
+		return 120 * time.Second
 	}
 }
 
@@ -936,6 +1070,9 @@ func (d *Decoder) stopProcess(state string) {
 		_ = d.cmd.Process.Kill()
 	}
 	d.stdin, d.cmd = nil, nil
+	d.receptionActive = false
+	d.receptionStarted, d.lastProgressAt, d.receptionDeadline = time.Time{}, time.Time{}, time.Time{}
+	d.lastProgressLines, d.status.TimeoutRemaining = 0, 0
 	d.status.State = state
 	d.mu.Unlock()
 	d.drainQueue()

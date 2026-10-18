@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestFrameCarriesReceivedLineQuality(t *testing.T) {
@@ -122,6 +123,40 @@ func TestNoiseReductionSwitchControlsEnhancedOutput(t *testing.T) {
 	d.SetReduceNoise(true)
 	if path, _, _, denoised, err := d.saveEnhancedFramePNG(frame, original); err != nil || path == "" || denoised != 1 {
 		t.Fatalf("enabled noise reduction produced %q, %d, %v", path, denoised, err)
+	}
+}
+
+func TestGalleryRecoveryUsesSavedLineQualityMetadata(t *testing.T) {
+	d := New("missing", t.TempDir())
+	frame := Frame{Width: 1, Height: 3, Lines: 3, RGB: make([]byte, 9), LineQuality: []uint8{1, 0, 1}}
+	frame.RGB[6], frame.RGB[7], frame.RGB[8] = 180, 180, 180
+	source, err := d.saveFramePNG(frame, "metadata-recovery")
+	if err != nil {
+		t.Fatal(err)
+	}
+	destination := source + ".copy.png"
+	result, err := EnhancePNG(source, destination, EnhancementOptions{RecoverLines: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ReconstructedLines != 1 {
+		t.Fatalf("reconstructed lines = %d, want 1", result.ReconstructedLines)
+	}
+	file, err := os.Open(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := png.Decode(file)
+	_ = file.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	red, _, _, _ := decoded.At(0, 1).RGBA()
+	if got := byte(red >> 8); got != 90 {
+		t.Fatalf("reconstructed pixel = %d, want 90", got)
+	}
+	if _, err := os.Stat(destination + sstvMetadataSuffix); err != nil {
+		t.Fatalf("output metadata was not written: %v", err)
 	}
 }
 
@@ -269,5 +304,41 @@ func TestNewVISDoesNotSaveWatchdogFrameTwice(t *testing.T) {
 	}
 	if d.frames[0].Width != 0 || d.status.Mode != "MARTIN 1" {
 		t.Fatalf("new reception was not reset correctly: frame=%+v mode=%q", d.frames[0], d.status.Mode)
+	}
+}
+
+func TestSSTVExpectedDurationUsesDetectedMode(t *testing.T) {
+	for mode, want := range map[string]time.Duration{
+		"MARTIN 1":       114 * time.Second,
+		"MARTIN 2":       58 * time.Second,
+		"SCOTTIE S1":     110 * time.Second,
+		"SCOTTIE S2":     71 * time.Second,
+		"ROBOT 36 COLOR": 36 * time.Second,
+		"ROBOT 72":       72 * time.Second,
+		"PD120":          120 * time.Second,
+		"PD290":          290 * time.Second,
+	} {
+		if got := sstvExpectedDuration(mode); got != want {
+			t.Errorf("duration(%q) = %v, want %v", mode, got, want)
+		}
+	}
+	if got := sstvExpectedDuration("unknown mode"); got != 120*time.Second {
+		t.Fatalf("fallback duration = %v", got)
+	}
+}
+
+func TestReceptionTimeoutArchivesPartialAndClearsWatchdog(t *testing.T) {
+	d := New("missing", t.TempDir())
+	d.generation = 13
+	d.receptionActive = true
+	d.status.TimeoutRemaining = 42
+	d.frames[0] = Frame{Sequence: 1, Width: 1, Height: 3, Lines: 1, RGB: make([]byte, 9), LineQuality: []uint8{1, 0, 0}}
+
+	d.handleReceptionTimeout(13, "Sin líneas nuevas durante 15 s")
+	if d.receptionActive || d.status.TimeoutRemaining != 0 {
+		t.Fatalf("watchdog remained active: active=%v remaining=%d", d.receptionActive, d.status.TimeoutRemaining)
+	}
+	if len(d.status.History) != 1 || d.status.History[0].Reason != "Sin líneas nuevas durante 15 s" || !d.status.History[0].Partial {
+		t.Fatalf("timeout was not archived as partial: %+v", d.status.History)
 	}
 }

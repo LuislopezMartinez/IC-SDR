@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.16.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.16.0)**
+**Versión actual: [v0.17.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.17.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -49,6 +49,14 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.17.0
+
+- Nueva **Galería y editor SSTV** en ventana maximizable, con carrusel de imágenes, comparación original/mejorada mediante divisor móvil y exportación de copias sin modificar nunca la recepción original.
+- Nuevas mejoras SSTV aplicables bajo demanda: corrección y balance de color, contraste, recuperación y alineación de filas, reducción de ruido y bandas horizontales, suavizado, nitidez y detección de contornos.
+- Cada captura SSTV conserva ahora metadatos de calidad por línea, para que la recuperación de líneas funcione también al reabrir imágenes guardadas.
+- El decodificador SSTV confirma VIS antes de sustituir una recepción y protege las recepciones automáticas con tiempos máximos por modo y un detector de falta de progreso. Las imágenes parciales se guardan y todos los receptores se reinician limpiamente tras pérdida de señal.
+- Mejoras de legibilidad y distribución del panel SSTV: historial ampliado, estados sin solapes, vista previa proporcional y contador del límite de recepción.
 
 ## Novedades de v0.16.0
 

@@ -39,7 +39,7 @@ type SSTVPanel struct {
 	candidateModes     [4]*simpleui.Dropdown
 	auto, force        *simpleui.Button
 	stop, restart      *simpleui.Button
-	save, folder       *simpleui.Button
+	save, gallery      *simpleui.Button
 	reconstruct        *simpleui.Switch
 	reduceNoise        *simpleui.Switch
 	previews           [5]sstvPreview
@@ -51,6 +51,8 @@ type SSTVPanel struct {
 	lastHistoryClickAt time.Time
 	compareViewer      *exec.Cmd
 	compareDone        chan struct{}
+	galleryViewer      *exec.Cmd
+	galleryDone        chan struct{}
 }
 
 func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
@@ -78,7 +80,7 @@ func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
 	p.restart = p.button("sstvRestart", 1364, 803, 176, 38, i18n.Source("text.d3eb9ea922cf"), colors.panelAlt)
 	p.save = p.button("sstvSave", 560, 803, 148, 38, i18n.Source("text.65b42fff1e06"), colors.green)
 	p.save.SetColors(colors.green, colors.cyan, colors.background)
-	p.folder = p.button("sstvFolder", 718, 803, 190, 38, i18n.Source("text.f7aa514861ad"), colors.panelAlt)
+	p.gallery = p.button("sstvGallery", 718, 803, 190, 38, "ABRIR GALERÍA", colors.panelAlt)
 	p.reconstruct = simpleui.NewSwitch("sstvReconstruct", 970, 803, 180, 38, "RECONSTRUIR", screen.sstvReconstructLines, uiMinimumFontSize)
 	p.reduceNoise = simpleui.NewSwitch("sstvReduceNoise", 1160, 803, 180, 38, "REDUCIR RUIDO", screen.sstvReduceNoise, uiMinimumFontSize)
 	p.auto.OnClick(func() {
@@ -118,12 +120,7 @@ func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
 		}
 		p.flash(i18n.Source("text.1dd5699b1655") + filepath.Base(path))
 	})
-	p.folder.OnClick(func() {
-		if screen.receiver == nil {
-			return
-		}
-		_ = exec.Command("explorer.exe", screen.receiver.SSTVOutputFolder()).Start()
-	})
+	p.gallery.OnClick(p.openSSTVGallery)
 	p.reconstruct.OnChange(func(enabled bool) {
 		screen.sstvReconstructLines = enabled
 		if screen.receiver != nil {
@@ -138,7 +135,7 @@ func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
 		}
 		screen.markSettingsDirty()
 	})
-	p.controls = []simpleui.Element{p.auto, p.force, p.stop, p.restart, p.save, p.folder, p.reconstruct, p.reduceNoise}
+	p.controls = []simpleui.Element{p.auto, p.force, p.stop, p.restart, p.save, p.gallery, p.reconstruct, p.reduceNoise}
 	for _, dropdown := range p.candidateModes {
 		p.controls = append(p.controls, dropdown)
 	}
@@ -199,6 +196,13 @@ func (p *SSTVPanel) Tick() {
 		select {
 		case <-p.compareDone:
 			p.compareViewer, p.compareDone = nil, nil
+		default:
+		}
+	}
+	if p.galleryDone != nil {
+		select {
+		case <-p.galleryDone:
+			p.galleryViewer, p.galleryDone = nil, nil
 		default:
 		}
 	}
@@ -267,13 +271,22 @@ func (p *SSTVPanel) DrawPanel() {
 		stateColor = colors.green
 	}
 	simpleui.DrawTextStyled(i18n.Source("text.c46d72363117"), 40, 468, 15, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawText("FFT visible · el waterfall se oculta para ampliar la imagen", 286, 470, 11, colors.muted)
+	// Leave a deliberate gap after the translated tool title. In some locales
+	// it is considerably wider than the original Spanish caption.
+	simpleui.DrawText("FFT visible · el waterfall se oculta para ampliar la imagen", 390, 470, 11, colors.muted)
 
 	mainCard := rl.Rectangle{X: 40, Y: 490, Width: 920, Height: 270}
 	drawSSTVCard(mainCard, colors.cyan)
 	simpleui.DrawTextStyled("IMAGEN PRINCIPAL · "+p.displayMode(), 56, 501, 14, simpleui.FontSemiBold, colors.cyan)
-	drawSSTVBadge(rl.Rectangle{X: 760, Y: 497, Width: 180, Height: 25}, p.status.State, stateColor)
-	p.drawImagePreview(rl.Rectangle{X: 55, Y: 530, Width: 672, Height: 216}, 0)
+	// SSTV pictures are normally close to 4:3. A very wide preview created
+	// large black side bands and left too little room for the history labels.
+	// Keep the receiver preview near its native shape and give that reclaimed
+	// space to the readable image history.
+	// Keep the live state in its own right-aligned lane. Its text can be
+	// "RECEIVING" or a longer translated status, so it must not share the
+	// heading row with "IMAGEN PRINCIPAL".
+	drawSSTVBadge(rl.Rectangle{X: 720, Y: 496, Width: 220, Height: 29}, p.status.State, stateColor)
+	p.drawImagePreview(rl.Rectangle{X: 55, Y: 530, Width: 350, Height: 216}, 0)
 	p.drawHistory()
 
 	for index := range p.candidateModes {
@@ -284,12 +297,15 @@ func (p *SSTVPanel) DrawPanel() {
 	drawSSTVControlGroup(rl.Rectangle{X: 520, Y: 776, Width: 408, Height: 75}, "IMAGEN", colors.orange)
 	drawSSTVControlGroup(rl.Rectangle{X: 950, Y: 776, Width: 606, Height: 75}, "SERVICIO DEL DECODER", colors.green)
 
-	drawSmallText(p.status.State+" · "+p.displayMode(), 56, 862, stateColor)
-	drawSmallText(fmt.Sprintf(i18n.Source("text.1960c0d8a5da"), p.status.Progress, p.status.SyncPercent, p.status.Queued, p.status.Dropped), 430, 862, colors.text)
+	drawSmallText(trimMemory(p.status.State+" · "+p.displayMode(), 30), 56, 862, stateColor)
+	drawSmallText(fmt.Sprintf(i18n.Source("text.1960c0d8a5da"), p.status.Progress, p.status.SyncPercent, p.status.Queued, p.status.Dropped), 410, 862, colors.text)
 	bar := rl.Rectangle{X: 56, Y: 881, Width: 880, Height: 7}
 	rl.DrawRectangleRec(bar, colors.grid)
 	rl.DrawRectangleRec(rl.Rectangle{X: bar.X, Y: bar.Y, Width: bar.Width * float32(p.status.Progress) / 100, Height: bar.Height}, colors.green)
 	tone := fmt.Sprintf(i18n.Source("text.c5e82496da50"), p.status.ToneFrequency, p.status.ToneLevel)
+	if p.status.TimeoutRemaining > 0 {
+		tone = fmt.Sprintf("LÍMITE %ds · %s", p.status.TimeoutRemaining, tone)
+	}
 	drawSmallText(tone, 970, 862, colors.muted)
 	if p.feedback != "" && time.Now().Before(p.feedbackUntil) {
 		drawSmallText(p.feedback, 1210, 862, colors.cyan)
@@ -335,11 +351,13 @@ func (p *SSTVPanel) syncHistory() {
 }
 
 func (p *SSTVPanel) drawHistory() {
-	simpleui.DrawTextStyled("ÚLTIMAS IMÁGENES", 746, 531, 11, simpleui.FontSemiBold, colors.orange)
-	simpleui.DrawText("Clic para abrir", 867, 533, 8, colors.muted)
+	simpleui.DrawTextStyled("ÚLTIMAS IMÁGENES", 425, 531, 13, simpleui.FontSemiBold, colors.orange)
+	// This column is deliberately narrow after the utilities rail maps the
+	// legacy SSTV layout into the remaining workspace. Keep the hint below the
+	// heading instead of placing two independent text runs on one short line.
+	simpleui.DrawText("DOBLE CLIC SOBRE UNA IMAGEN PARA COMPARAR", 425, 546, 10, colors.muted)
 	if len(p.history) == 0 {
-		simpleui.DrawText("Las imágenes guardadas", 746, 558, 10, colors.muted)
-		simpleui.DrawText("aparecerán aquí.", 746, 574, 10, colors.muted)
+		simpleui.DrawText("Las imágenes guardadas aparecerán aquí.", 425, 580, 12, colors.muted)
 		return
 	}
 	for index := 0; index < min(3, len(p.history)); index++ {
@@ -360,31 +378,31 @@ func (p *SSTVPanel) drawHistory() {
 			border = colors.cyan
 		}
 		rl.DrawRectangleRoundedLinesEx(bounds, .08, 5, 1, border)
-		thumb := rl.Rectangle{X: bounds.X + 5, Y: bounds.Y + 5, Width: 61, Height: 45}
+		thumb := rl.Rectangle{X: bounds.X + 6, Y: bounds.Y + 5, Width: 82, Height: 48}
 		rl.DrawRectangleRec(thumb, colors.background)
 		if item.ready {
 			src := rl.Rectangle{Width: float32(item.texture.Width), Height: float32(item.texture.Height)}
 			dst := fitRectangle(thumb.X, thumb.Y, thumb.Width, thumb.Height, src.Width, src.Height)
 			rl.DrawTexturePro(item.texture, src, dst, rl.Vector2{}, 0, rl.White)
 		}
-		simpleui.DrawTextStyled(trimMemory(state+" · "+item.info.Quality, 22), 814, y+6, 8, simpleui.FontSemiBold, accent)
-		simpleui.DrawText(item.info.SavedAt.Format("15:04:05")+" · "+trimMemory(item.info.Mode, 12), 814, y+21, 9, colors.text)
-		detail := fmt.Sprintf("%d/%d · %s", item.info.Lines, item.info.Height, item.info.Reason)
+		simpleui.DrawTextStyled(trimMemory(state+" · "+item.info.Quality, 42), 522, y+6, 11, simpleui.FontSemiBold, accent)
+		simpleui.DrawText(trimMemory(item.info.SavedAt.Format("15:04:05")+" · "+item.info.Mode, 34), 522, y+23, 10, colors.text)
+		detail := fmt.Sprintf("%d/%d líneas", item.info.Lines, item.info.Height)
 		if item.info.CorrectedLines > 0 {
-			detail = fmt.Sprintf("%d/%d · %d alineadas", item.info.Lines, item.info.Height, item.info.CorrectedLines)
+			detail = fmt.Sprintf("%d/%d · A:%d", item.info.Lines, item.info.Height, item.info.CorrectedLines)
 		}
 		if item.info.ReconstructedLines > 0 {
-			detail = fmt.Sprintf("%d/%d · %d reconstruidas", item.info.Lines, item.info.Height, item.info.ReconstructedLines)
+			detail = fmt.Sprintf("%d/%d · R:%d", item.info.Lines, item.info.Height, item.info.ReconstructedLines)
 		}
 		if item.info.DenoisedPixels > 0 {
-			detail = fmt.Sprintf("%d/%d · %d impulsos", item.info.Lines, item.info.Height, item.info.DenoisedPixels)
+			detail = fmt.Sprintf("%d/%d · N:%d", item.info.Lines, item.info.Height, item.info.DenoisedPixels)
 		}
-		simpleui.DrawText(trimMemory(detail, 23), 814, y+36, 9, colors.muted)
+		simpleui.DrawText(trimMemory(detail, 45), 522, y+40, 10, colors.muted)
 	}
 }
 
 func sstvHistoryBounds(index int) rl.Rectangle {
-	return rl.Rectangle{X: 744, Y: float32(554 + index*62), Width: 190, Height: 55}
+	return rl.Rectangle{X: 423, Y: float32(564 + index*62), Width: 515, Height: 58}
 }
 
 func (p *SSTVPanel) displayMode() string {
@@ -424,14 +442,14 @@ func (p *SSTVPanel) drawCandidate(index int) {
 	}
 	bounds := rl.Rectangle{X: x, Y: y, Width: 276, Height: 130}
 	drawSSTVCard(bounds, accent)
-	simpleui.DrawTextStyled(fmt.Sprintf("RX%d", index+2), x+12, y+11, 12, simpleui.FontSemiBold, accent)
+	simpleui.DrawTextStyled(fmt.Sprintf("RX%d", index+2), x+12, y+11, 13, simpleui.FontSemiBold, accent)
 	p.drawImagePreview(rl.Rectangle{X: x + 12, Y: y + 43, Width: 126, Height: 75}, index+1)
-	simpleui.DrawText(fmt.Sprintf("PROGRESO  %d%%", p.status.CandidateProgress[index]), x+150, y+52, 10, colors.text)
+	simpleui.DrawText(fmt.Sprintf("PROGRESO  %d%%", p.status.CandidateProgress[index]), x+150, y+52, 11, colors.text)
 	drawSSTVMeter(rl.Rectangle{X: x + 150, Y: y + 69, Width: 108, Height: 6}, p.status.CandidateProgress[index], accent)
-	simpleui.DrawText(fmt.Sprintf("SYNC  %d%%", p.status.CandidateSync[index]), x+150, y+83, 10, colors.text)
+	simpleui.DrawText(fmt.Sprintf("SYNC  %d%%", p.status.CandidateSync[index]), x+150, y+83, 11, colors.text)
 	drawSSTVMeter(rl.Rectangle{X: x + 150, Y: y + 100, Width: 108, Height: 6}, p.status.CandidateSync[index], accent)
 	lines := p.previews[index+1].lines
-	simpleui.DrawText(fmt.Sprintf("%d líneas", lines), x+150, y+111, 9, colors.muted)
+	simpleui.DrawText(fmt.Sprintf("%d líneas", lines), x+150, y+111, 10, colors.muted)
 }
 
 func drawSSTVCard(bounds rl.Rectangle, accent rl.Color) {
@@ -442,14 +460,14 @@ func drawSSTVCard(bounds rl.Rectangle, accent rl.Color) {
 
 func drawSSTVControlGroup(bounds rl.Rectangle, title string, accent rl.Color) {
 	drawSSTVCard(bounds, accent)
-	simpleui.DrawTextStyled(title, bounds.X+14, bounds.Y+7, 11, simpleui.FontSemiBold, accent)
+	simpleui.DrawTextStyled(title, bounds.X+14, bounds.Y+7, 12, simpleui.FontSemiBold, accent)
 }
 
 func drawSSTVBadge(bounds rl.Rectangle, label string, accent rl.Color) {
 	fill := mixColor(colors.panelAlt, accent, .28)
 	rl.DrawRectangleRounded(bounds, .45, 8, fill)
 	rl.DrawRectangleRoundedLinesEx(bounds, .45, 8, 1, accent)
-	drawCentered(trimMemory(label, 24), bounds, 10, simpleui.EnsureTextContrast(colors.text, fill))
+	drawCentered(trimMemory(label, 28), bounds, 12, simpleui.EnsureTextContrast(colors.text, fill))
 }
 
 func drawSSTVMeter(bounds rl.Rectangle, value int, accent rl.Color) {
@@ -496,5 +514,8 @@ func (p *SSTVPanel) Close() {
 	}
 	if p.compareViewer != nil && p.compareViewer.Process != nil {
 		_ = p.compareViewer.Process.Kill()
+	}
+	if p.galleryViewer != nil && p.galleryViewer.Process != nil {
+		_ = p.galleryViewer.Process.Kill()
 	}
 }

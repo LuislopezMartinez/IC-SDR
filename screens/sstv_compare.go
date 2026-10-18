@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"go-zero/internal/resources"
 	"go-zero/internal/sstv"
 	"go-zero/simpleui"
 
@@ -20,35 +19,10 @@ type sstvCompareSnapshot struct {
 }
 
 func (p *SSTVPanel) openSSTVComparator(item sstv.SavedImage) {
-	snapshot := sstvCompareSnapshot{Image: item, Theme: p.screen.themeName}
-	data, err := json.Marshal(snapshot)
-	if err != nil {
-		return
-	}
-	path := resources.WritablePath("cache", fmt.Sprintf("sstv-compare-%d.json", os.Getpid()))
-	if os.MkdirAll(filepath.Dir(path), 0o755) != nil || os.WriteFile(path, data, 0o644) != nil {
-		return
-	}
-	if p.compareViewer != nil && p.compareViewer.Process != nil {
-		_ = p.compareViewer.Process.Kill()
-	}
-	executable, err := os.Executable()
-	if err != nil {
-		return
-	}
-	command := exec.Command(executable, "--sstv-compare", path)
-	command.SysProcAttr = rtl433ViewerProcessAttributes()
-	if command.Start() != nil {
-		return
-	}
-	p.compareViewer = command
-	p.compareDone = make(chan struct{})
-	done := p.compareDone
-	go func() {
-		_ = command.Wait()
-		_ = os.Remove(path)
-		close(done)
-	}()
+	// The earlier compact comparator could fail to present a decoded texture in
+	// its separate window. Use the gallery editor for both entry points, which
+	// has the same comparison tools and selects the exact clicked image.
+	p.openSSTVGalleryFor(item)
 }
 
 type sstvComparator struct {
