@@ -239,7 +239,23 @@ func (tracker *telemetryTracker) update(line []byte, now time.Time) {
 func (tracker *telemetryTracker) voiceAllowed(clearOnly bool) bool {
 	tracker.mu.RLock()
 	defer tracker.mu.RUnlock()
-	return !clearOnly || tracker.value.CipherState == "clear"
+	// A receiver tuned directly to a TCH does not see the CCH call setup that
+	// carries the key reference.  The same is true after the channel follower
+	// restarts tetrapol_dump on the assigned TCH, because runtime telemetry is
+	// intentionally reset.  Treating that missing metadata as encrypted muted
+	// every such call, including clear calls.  An explicitly encrypted call is
+	// still blocked; an unknown call can safely be passed to the speech codec
+	// (RP-CELP cannot decrypt it and therefore exposes no protected speech).
+	return !clearOnly || tracker.value.CipherState != "encrypted"
+}
+
+func (tracker *telemetryTracker) setCipherState(state string) {
+	if state != "clear" && state != "encrypted" {
+		return
+	}
+	tracker.mu.Lock()
+	tracker.value.CipherState = state
+	tracker.mu.Unlock()
 }
 
 func (tracker *telemetryTracker) snapshot(now time.Time) Telemetry {

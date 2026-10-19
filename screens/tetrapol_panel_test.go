@@ -9,6 +9,18 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+func TestTETRAPOLAudioCipherPresentation(t *testing.T) {
+	for state, want := range map[string]string{
+		"clear":     "AUDIO ABIERTO",
+		"encrypted": "AUDIO CIFRADO",
+		"":          "SIN IDENTIFICAR",
+	} {
+		if got, _ := tetrapolAudioCipherPresentation(state); got != want {
+			t.Fatalf("state %q label = %q, want %q", state, got, want)
+		}
+	}
+}
+
 func assertRectangle(t *testing.T, got, want rl.Rectangle) {
 	t.Helper()
 	if got != want {
@@ -19,16 +31,29 @@ func assertRectangle(t *testing.T, got, want rl.Rectangle) {
 func TestTETRAPOLFollowReturnsToCCHAfterAcquisitionTimeout(t *testing.T) {
 	screen := NewMainScreen(nil)
 	screen.frequencyHz = 390_000_000
+	screen.spanHz = 500_000
 	panel := NewTETRAPOLPanel(screen)
 	panel.enabled = true
 	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
-	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{ChannelAction: "follow", ChannelID: 2528, ChannelEvent: 1}, now)
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{ChannelAction: "follow", ChannelID: 2528, ChannelEvent: 1, CipherState: "clear"}, now)
 	if !panel.following || panel.channelType != "TCH" || panel.followState != "ADQUIRIENDO TCH" {
 		t.Fatalf("follow state = following %v type %s state %s", panel.following, panel.channelType, panel.followState)
+	}
+	if panel.tchCipherState != "clear" {
+		t.Fatalf("followed cipher state = %q, want clear", panel.tchCipherState)
+	}
+	if screen.spanHz != 500_000 {
+		t.Fatalf("TCH follow changed span to %d, want 500000", screen.spanHz)
 	}
 	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{}, now.Add(tetrapolTCHTimeout))
 	if panel.following || panel.channelType != "CCH" || screen.frequencyHz != 390_000_000 {
 		t.Fatalf("timeout did not return to CCH: following=%v type=%s frequency=%d", panel.following, panel.channelType, screen.frequencyHz)
+	}
+	if panel.tchCipherState != "" {
+		t.Fatalf("cipher state was not cleared on return: %q", panel.tchCipherState)
+	}
+	if screen.spanHz != 500_000 {
+		t.Fatalf("return to CCH changed span to %d, want 500000", screen.spanHz)
 	}
 }
 
@@ -47,6 +72,46 @@ func TestTETRAPOLFollowTemporarilyBlocksStaleReactivation(t *testing.T) {
 	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{ChannelAction: "follow", ChannelID: 2528, ChannelEvent: 4}, now.Add(5*time.Second))
 	if !panel.following || panel.channelType != "TCH" {
 		t.Fatal("fresh TCH activation was not accepted after rearm delay")
+	}
+}
+
+func TestTETRAPOLManualSpectrumTuneInvalidatesPreviousSession(t *testing.T) {
+	panel := NewTETRAPOLPanel(NewMainScreen(nil))
+	panel.enabled = true
+	panel.channelType = "TCH"
+	panel.following = true
+	panel.followedChannel = 2528
+	panel.controlFrequencyHz = 390_000_000
+	panel.lastChannelEvent = 9
+	panel.tchCipherState = "clear"
+	panel.tchActivitySeen = true
+	panel.blockedChannel = 2528
+	panel.latestTelemetry = tetrapolruntime.Telemetry{CipherState: "clear", ValidFrames: 12}
+	panel.networkSnapshot = panel.latestTelemetry
+
+	panel.resetAfterManualTune()
+
+	if panel.following || panel.followedChannel != -1 || panel.controlFrequencyHz != 0 || panel.lastChannelEvent != 0 {
+		t.Fatalf("manual tune retained follow state: %+v", panel)
+	}
+	if panel.tchCipherState != "" || panel.latestTelemetry.CipherState != "" || panel.latestTelemetry.ValidFrames != 0 {
+		t.Fatalf("manual tune retained telemetry or cipher state: cipher=%q telemetry=%+v", panel.tchCipherState, panel.latestTelemetry)
+	}
+	if panel.tchActivitySeen || panel.blockedChannel != -1 || panel.followState != "TCH MANUAL" {
+		t.Fatalf("manual tune did not return to fresh acquisition state: activity=%v blocked=%d state=%q", panel.tchActivitySeen, panel.blockedChannel, panel.followState)
+	}
+}
+
+func TestTETRAPOLAcquisitionFeedbackClearsWhenSynchronized(t *testing.T) {
+	panel := NewTETRAPOLPanel(NewMainScreen(nil))
+	panel.feedback = "Buscando sincronismo en la nueva frecuencia…"
+	panel.reconcileAcquisitionFeedback(tetrapolruntime.Telemetry{})
+	if panel.feedback == "" {
+		t.Fatal("search feedback cleared before synchronization")
+	}
+	panel.reconcileAcquisitionFeedback(tetrapolruntime.Telemetry{Synchronized: true})
+	if panel.feedback != "" {
+		t.Fatalf("search feedback remained after synchronization: %q", panel.feedback)
 	}
 }
 

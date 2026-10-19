@@ -44,8 +44,8 @@ func TestTelemetryQualityUsesRecentFrameWindow(t *testing.T) {
 
 func TestTelemetryClearOnlyVoicePolicy(t *testing.T) {
 	var tracker telemetryTracker
-	if tracker.voiceAllowed(true) {
-		t.Fatal("unknown cipher state was accepted by clear-only policy")
+	if !tracker.voiceAllowed(true) {
+		t.Fatal("unknown cipher state was rejected even though direct TCH reception has no call metadata")
 	}
 	tracker.update([]byte(`{"event":"tsdu","tsdu":{"cipher":{"state":"clear","key_type":0,"key_index":0}}}`), time.Now())
 	if !tracker.voiceAllowed(true) {
@@ -57,6 +57,17 @@ func TestTelemetryClearOnlyVoicePolicy(t *testing.T) {
 	}
 	if !tracker.voiceAllowed(false) {
 		t.Fatal("disabled clear-only policy rejected voice")
+	}
+}
+
+func TestTelemetryCanCarryCipherStateIntoFollowedTCH(t *testing.T) {
+	var tracker telemetryTracker
+	tracker.setCipherState("encrypted")
+	if tracker.voiceAllowed(true) {
+		t.Fatal("carried encrypted state was accepted")
+	}
+	if got := tracker.snapshot(time.Now()); got.CipherState != "encrypted" {
+		t.Fatalf("cipher state = %q, want encrypted", got.CipherState)
 	}
 }
 

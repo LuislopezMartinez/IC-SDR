@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.17.1](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.17.1)**
+**Versión actual: [v0.17.2](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.17.2)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -49,6 +49,11 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.17.2
+
+- Corregido el seguimiento de llamadas **TETRAPOL**: conserva el span de espectro al pasar entre CCH y TCH, descarta la telemetría anterior tras una sintonía manual y limpia el aviso de adquisición al recuperar sincronismo.
+- La recepción directa de un TCH ya no bloquea audio por falta de metadatos de cifrado; las llamadas identificadas explícitamente como cifradas continúan protegidas. El panel muestra claramente si el audio está abierto, cifrado o aún sin identificar.
 
 ## Novedades de v0.17.1
 

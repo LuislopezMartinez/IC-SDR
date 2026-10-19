@@ -39,6 +39,10 @@ func (r *Receiver) StartTETRAPOLRuntimeFor(channelType string) error {
 }
 
 func (r *Receiver) StartTETRAPOLRuntimeConfigured(channelType, band, direction string) error {
+	return r.StartTETRAPOLRuntimeConfiguredWithCipher(channelType, band, direction, "")
+}
+
+func (r *Receiver) StartTETRAPOLRuntimeConfiguredWithCipher(channelType, band, direction, cipherState string) error {
 	r.tetrapolRuntimeMu.Lock()
 	defer r.tetrapolRuntimeMu.Unlock()
 	if r.tetrapolRuntime == nil {
@@ -50,10 +54,11 @@ func (r *Receiver) StartTETRAPOLRuntimeConfigured(channelType, band, direction s
 	_, _, _, kitArgs := tetrapolRuntimeArguments(channelType, band, direction)
 	r.tetrapolPrevious, r.tetrapolHavePrevious = 0, false
 	err := r.tetrapolRuntime.Start(tetrapolruntime.Config{
-		KitExecutable:    r.config.TETRAPOLKitExecutable,
-		KitArgs:          kitArgs,
-		RPCELPExecutable: r.config.TETRAPOLRPCELPExecutable,
-		ClearOnly:        true,
+		KitExecutable:      r.config.TETRAPOLKitExecutable,
+		KitArgs:            kitArgs,
+		RPCELPExecutable:   r.config.TETRAPOLRPCELPExecutable,
+		ClearOnly:          true,
+		InitialCipherState: cipherState,
 	}, r.enqueueTETRAPOLAudio)
 	if err != nil {
 		r.tetrapolRuntimeError = err.Error()

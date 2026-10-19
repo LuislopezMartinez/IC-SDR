@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.17.1'
+    [string]$Version = '0.17.2'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -311,8 +311,13 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($packagePath)
 try {
     $requiredEntries = @('IC-SDR-Go/IC-SDR-Go.exe', 'IC-SDR-Go/IC-SDR-Updater.exe')
+    # ZipArchive preserves the directory separator supplied by
+    # CreateFromDirectory.  On Windows that can be a backslash even though ZIP
+    # tools conventionally display forward slashes, so compare normalized
+    # entry names rather than rejecting a valid package.
+    $archiveEntries = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
     foreach ($required in $requiredEntries) {
-        if (-not ($archive.Entries.FullName -contains $required)) {
+        if (-not ($archiveEntries -contains $required)) {
             throw "El paquete no contiene el archivo requerido: $required"
         }
     }

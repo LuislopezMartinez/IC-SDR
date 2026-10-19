@@ -57,6 +57,7 @@ type TETRAPOLPanel struct {
 	networkTab, networkOffset, networkPressed int
 	latestTelemetry, networkSnapshot          tetrapolruntime.Telemetry
 	channelType, bandType, planType, linkType string
+	tchCipherState                            string
 	feedback                                  string
 	iqWriter                                  *iqcapture.Writer
 }
@@ -97,6 +98,7 @@ func NewTETRAPOLPanel(screen *MainScreen) *TETRAPOLPanel {
 	panel.channel.OnChange(func(_ int, value string) {
 		panel.channelType = value
 		panel.following = false
+		panel.tchCipherState = ""
 		if value == "CCH" {
 			panel.controlFrequencyHz = panel.screen.frequencyHz
 		}
@@ -224,9 +226,20 @@ func (panel *TETRAPOLPanel) Enter() {
 }
 
 func (panel *TETRAPOLPanel) tune(hz int64) {
+	panel.tuneWithSpan(hz, true)
+}
+
+func (panel *TETRAPOLPanel) tunePreservingSpan(hz int64) {
+	panel.tuneWithSpan(hz, false)
+}
+
+func (panel *TETRAPOLPanel) tuneWithSpan(hz int64, resetSpan bool) {
 	step := tetrapolPlan(panel.planType).stepHz
 	panel.screen.frequencyHz, panel.screen.centerFrequencyHz = hz, hz
-	panel.screen.spanHz, panel.screen.tuningStepHz = 250_000, step
+	if resetSpan {
+		panel.screen.spanHz = 250_000
+	}
+	panel.screen.tuningStepHz = step
 	panel.screen.updateBandForFrequency(hz)
 	if panel.screen.stepSelector != nil {
 		panel.screen.stepSelector.SetSelected(panel.screen.tuningStepHz)
@@ -250,7 +263,7 @@ func (panel *TETRAPOLPanel) restart() {
 	}
 	_ = panel.screen.receiver.StopTETRAPOLRuntime()
 	panel.lastChannelEvent = 0
-	if err := panel.screen.receiver.StartTETRAPOLRuntimeConfigured(panel.channelType, panel.bandType, panel.linkType); err != nil {
+	if err := panel.screen.receiver.StartTETRAPOLRuntimeConfiguredWithCipher(panel.channelType, panel.bandType, panel.linkType, panel.tchCipherState); err != nil {
 		panel.enabled = false
 		panel.feedback = err.Error()
 	}
@@ -261,7 +274,11 @@ func (panel *TETRAPOLPanel) restart() {
 // old-frame telemetry and channelizer history from being carried into the new
 // channel while avoiding one process restart for every wheel tick.
 func (panel *TETRAPOLPanel) resetAfterManualTune() {
-	if !panel.enabled || panel.screen.receiver == nil {
+	if !panel.enabled {
+		return
+	}
+	panel.resetSessionForManualTune()
+	if panel.screen.receiver == nil {
 		return
 	}
 	if !panel.pendingManualTune {
@@ -272,6 +289,25 @@ func (panel *TETRAPOLPanel) resetAfterManualTune() {
 	panel.restartAfter = time.Now().Add(350 * time.Millisecond)
 }
 
+func (panel *TETRAPOLPanel) resetSessionForManualTune() {
+	panel.following = false
+	panel.followedChannel = -1
+	panel.controlFrequencyHz = 0
+	panel.lastChannelEvent = 0
+	panel.followStarted, panel.lastTCHActivity, panel.lastTCHRecord = time.Time{}, time.Time{}, time.Time{}
+	panel.tchActivitySeen = false
+	panel.blockedChannel = -1
+	panel.blockedUntil = time.Time{}
+	panel.tchCipherState = ""
+	panel.latestTelemetry = tetrapolruntime.Telemetry{}
+	panel.networkSnapshot = tetrapolruntime.Telemetry{}
+	if panel.channelType == "TCH" {
+		panel.followState = "TCH MANUAL"
+	} else {
+		panel.followState = "CCH"
+	}
+}
+
 func (panel *TETRAPOLPanel) completeManualTuneReset(now time.Time) {
 	if !panel.pendingManualTune || now.Before(panel.restartAfter) {
 		return
@@ -280,6 +316,15 @@ func (panel *TETRAPOLPanel) completeManualTuneReset(now time.Time) {
 	panel.restart()
 	if panel.enabled {
 		panel.feedback = "Buscando sincronismo en la nueva frecuencia…"
+	}
+}
+
+func (panel *TETRAPOLPanel) reconcileAcquisitionFeedback(telemetry tetrapolruntime.Telemetry) {
+	if !telemetry.Synchronized {
+		return
+	}
+	if panel.feedback == "Buscando sincronismo en la nueva frecuencia…" || panel.feedback == "Reajustando TETRAPOL…" {
+		panel.feedback = ""
 	}
 }
 
@@ -342,6 +387,7 @@ func (panel *TETRAPOLPanel) handleChannelFollowAt(telemetry tetrapolruntime.Tele
 		}
 		panel.controlFrequencyHz = controlHz
 		panel.following = true
+		panel.tchCipherState = telemetry.CipherState
 		panel.followedChannel = telemetry.ChannelID
 		panel.followStarted = now
 		panel.lastTCHActivity = time.Time{}
@@ -350,7 +396,7 @@ func (panel *TETRAPOLPanel) handleChannelFollowAt(telemetry tetrapolruntime.Tele
 		panel.followState = "ADQUIRIENDO TCH"
 		panel.channelType = "TCH"
 		panel.channel.SetSelected(1)
-		panel.tune(targetHz)
+		panel.tunePreservingSpan(targetHz)
 		panel.feedback = fmt.Sprintf("Siguiendo TCH %d en %.4f MHz", telemetry.ChannelID, float64(targetHz)/1e6)
 		panel.restart()
 	}
@@ -364,13 +410,14 @@ func (panel *TETRAPOLPanel) returnToControl(reason string, now time.Time) {
 	panel.blockedChannel = panel.followedChannel
 	panel.blockedUntil = now.Add(tetrapolRearmDelay)
 	panel.following = false
+	panel.tchCipherState = ""
 	panel.followedChannel = -1
 	panel.followStarted, panel.lastTCHActivity, panel.lastTCHRecord = time.Time{}, time.Time{}, time.Time{}
 	panel.tchActivitySeen = false
 	panel.followState = "CCH"
 	panel.channelType = "CCH"
 	panel.channel.SetSelected(0)
-	panel.tune(controlHz)
+	panel.tunePreservingSpan(controlHz)
 	panel.feedback = reason
 	panel.restart()
 }
@@ -455,6 +502,17 @@ func drawTETRAPOLGroup(bounds rl.Rectangle, title string) {
 	simpleui.DrawTextStyled(title, bounds.X+12, bounds.Y+8, 12, simpleui.FontSemiBold, colors.cyan)
 }
 
+func tetrapolAudioCipherPresentation(state string) (string, rl.Color) {
+	switch state {
+	case "clear":
+		return "AUDIO ABIERTO", colors.green
+	case "encrypted":
+		return "AUDIO CIFRADO", colors.red
+	default:
+		return "SIN IDENTIFICAR", colors.orange
+	}
+}
+
 func (panel *TETRAPOLPanel) DrawPanel() {
 	if panel.screen.activeTool != tetrapolToolID {
 		return
@@ -473,7 +531,16 @@ func (panel *TETRAPOLPanel) DrawPanel() {
 			panel.feedback = runtime.Error
 		}
 	}
-	panel.handleChannelFollow(telemetry)
+	if panel.pendingManualTune {
+		// Stop() leaves the last snapshot readable until the replacement runtime
+		// starts.  Do not display or act on that old frequency's frames during
+		// the debounce interval.
+		telemetry = tetrapolruntime.Telemetry{}
+		runtimeState = "REINICIANDO"
+	} else {
+		panel.handleChannelFollow(telemetry)
+	}
+	panel.reconcileAcquisitionFeedback(telemetry)
 	panel.latestTelemetry = telemetry
 
 	drawTETRAPOLGroup(rl.Rectangle{X: 360, Y: toolY + 5, Width: 315, Height: 202}, "CONTROL TETRAPOL")
@@ -509,9 +576,13 @@ func (panel *TETRAPOLPanel) DrawPanel() {
 	if panel.showEvents {
 		panel.drawEvents(telemetry)
 	} else {
-		syncBounds := rl.Rectangle{X: 1110, Y: toolY + 35, Width: 469, Height: 35}
+		syncBounds := rl.Rectangle{X: 1110, Y: toolY + 35, Width: 293, Height: 35}
 		rl.DrawRectangleRounded(syncBounds, .25, 8, syncColor)
 		drawCentered(syncText, syncBounds, 13, simpleui.EnsureTextContrast(colors.text, syncColor))
+		audioLabel, audioColor := tetrapolAudioCipherPresentation(telemetry.CipherState)
+		audioBounds := rl.Rectangle{X: 1411, Y: toolY + 35, Width: 168, Height: 35}
+		rl.DrawRectangleRounded(audioBounds, .25, 8, audioColor)
+		drawCentered(audioLabel, audioBounds, 11, simpleui.EnsureTextContrast(colors.text, audioColor))
 		items := []string{"TRAMA  " + frame, "TIPO  " + valueOrDash(telemetry.FrameType), "CANAL  " + valueOrDash(telemetry.LogicalChannel), "VOZ  " + voice}
 		for index, value := range items {
 			bounds := rl.Rectangle{X: 1110 + float32(index)*117, Y: toolY + 79, Width: 109, Height: 35}
@@ -536,7 +607,7 @@ func (panel *TETRAPOLPanel) DrawPanel() {
 		if telemetry.ASBKnown {
 			asb = fmt.Sprintf("%d%d", telemetry.ASB[0], telemetry.ASB[1])
 		}
-		cipher, cipherColor := "DESCONOCIDO · AUDIO BLOQUEADO", colors.orange
+		cipher, cipherColor := "DESCONOCIDO · AUDIO ACTIVO", colors.orange
 		if telemetry.CipherState == "clear" {
 			cipher, cipherColor = "CLARO · AUDIO PERMITIDO", colors.green
 		} else if telemetry.CipherState == "encrypted" {
@@ -562,7 +633,9 @@ func (panel *TETRAPOLPanel) DrawPanel() {
 	summary := fmt.Sprintf("%s · trama %s (%s) · voz %s · %d válidas · audio %d / PLC %d · %s", syncText, frame, valueOrDash(telemetry.FrameType), voice, telemetry.ValidFrames, telemetry.AudioDecoded, telemetry.AudioConcealed, network)
 	simpleui.DrawText(summary, 600, toolY+228, 11, colors.muted)
 	if panel.feedback != "" {
-		simpleui.DrawText(panel.feedback, 1240, toolY+228, 10, colors.red)
+		feedbackWidth := simpleui.MeasureText(panel.feedback, 10).X
+		feedbackX := activity.X + activity.Width - 14 - feedbackWidth
+		simpleui.DrawText(panel.feedback, feedbackX, toolY+228, 10, colors.red)
 	}
 }
 

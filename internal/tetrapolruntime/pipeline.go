@@ -12,15 +12,17 @@ type Pipeline struct {
 }
 
 type Config struct {
-	KitExecutable    string
-	KitArgs          []string
-	RPCELPExecutable string
-	RPCELPArgs       []string
-	ClearOnly        bool
+	KitExecutable      string
+	KitArgs            []string
+	RPCELPExecutable   string
+	RPCELPArgs         []string
+	ClearOnly          bool
+	InitialCipherState string
 }
 
 func (pipeline *Pipeline) Start(config Config, emit func([]float32)) error {
 	pipeline.telemetry.reset()
+	pipeline.telemetry.setCipherState(config.InitialCipherState)
 	pipeline.audio.reset()
 	if err := pipeline.rpcelp.Start(config.RPCELPExecutable, config.RPCELPArgs, func(samples []float32) {
 		if emit != nil {
