@@ -21,8 +21,9 @@ type webViewSession struct {
 }
 
 var (
-	user32Window = windows.NewLazySystemDLL("user32.dll")
-	showWindow   = user32Window.NewProc("ShowWindow")
+	user32Window        = windows.NewLazySystemDLL("user32.dll")
+	showWindow          = user32Window.NewProc("ShowWindow")
+	setForegroundWindow = user32Window.NewProc("SetForegroundWindow")
 )
 
 func startBrowser(profileDir string, snapshots chan pageSnapshot) (browserSession, error) {
@@ -144,7 +145,13 @@ func (s *webViewSession) setWindowVisible(visible bool) {
 		if visible {
 			command = swShow
 		}
-		_, _, _ = showWindow.Call(uintptr(unsafe.Pointer(view.Window())), command)
+		window := uintptr(unsafe.Pointer(view.Window()))
+		_, _, _ = showWindow.Call(window, command)
+		if visible {
+			// Showing a hidden window does not activate it. Explicitly request the
+			// foreground so clicking "VER PERFIL QRZ" produces visible feedback.
+			_, _, _ = setForegroundWindow.Call(window)
+		}
 	})
 }
 

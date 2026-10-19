@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.17.2'
+    [string]$Version = '0.18.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -250,6 +250,7 @@ $copies = @(
     @{ Source = 'DATA\tools\tetra\runtime'; Destination = 'DATA\tools\tetra\runtime' },
     @{ Source = 'DATA\tools\tetrapol\runtime'; Destination = 'DATA\tools\tetrapol\runtime' },
     @{ Source = 'DATA\tools\voacap\runtime'; Destination = 'DATA\tools\voacap\runtime' },
+    @{ Source = 'DATA\config\feedback.json'; Destination = 'DATA\config\feedback.json' },
     @{ Source = 'DATA\data\ic-sdr-settings.json'; Destination = 'DATA\data\ic-sdr-settings.json' }
 )
 

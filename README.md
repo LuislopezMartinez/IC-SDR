@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.17.2](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.17.2)**
+**Versión actual: [v0.18.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.18.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -49,6 +49,12 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.18.0
+
+- Nueva ventana de **Reportes y sugerencias** desde el menú principal, con categorías de mensaje, datos técnicos de la aplicación y opción explícita de añadir el contexto actual del receptor.
+- Los datos de contacto que el usuario decida recordar para futuros reportes se conservan exclusivamente en su perfil local de Windows y no forman parte de la distribución portable.
+- Mejoras de QRZ Callbook: muestra y activa correctamente la ventana de inicio de sesión cuando hace falta, impide interpretar páginas sin autenticar como perfiles y reconoce más variantes del locator.
 
 ## Novedades de v0.17.2
 
@@ -115,6 +121,7 @@ IC-SDR integra herramientas para recibir y visualizar:
 - Nueva herramienta **QRZ Callbook**: consulta de indicativos desde una ventana integrada, con ficha de estación, foto, bandera y datos de ubicación.
 - Nuevo mapa de distancia para los resultados de QRZ, con rutas corta y larga entre la estación local y la consultada.
 - La sesión de QRZ se guarda fuera de la carpeta portable, en el perfil local de Windows: las cookies y credenciales no se incluyen al compartir ni al publicar una distribución.
+- El nombre o indicativo y el correo recordados por la ventana de reportes se guardan en el perfil local de Windows, fuera de la carpeta portable, y no se incluyen al compartir la aplicación.
 - El receptor SDR detecta flujos de muestras detenidos y recupera automáticamente la captura, con reintentos controlados.
 - El runtime DAB se asocia al proceso principal de Windows para que se cierre también si IC-SDR termina de forma inesperada.
 - La utilidad de comprobación IQ admite duración, resintonía y frecuencia desde línea de comandos para diagnósticos más completos.

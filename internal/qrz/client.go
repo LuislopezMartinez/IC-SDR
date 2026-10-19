@@ -26,6 +26,7 @@ type Result struct {
 	Latitude, Longitude                               float64
 	Coordinates                                       bool
 	Authenticated                                     bool
+	AuthenticationRequired                            bool
 	Err                                               error
 }
 
@@ -113,6 +114,7 @@ func (c *Client) startLookup(callsign string) {
 		defer timer.Stop()
 		var readySince time.Time
 		var pending Result
+		loginRequested := false
 		for {
 			select {
 			case <-cancel:
@@ -121,13 +123,18 @@ func (c *Client) startLookup(callsign string) {
 				if !c.current(generation) {
 					return
 				}
-				if callsign == "" {
-					if snapshot.Authenticated {
-						c.hideBrowser()
-						c.publish(Result{Authenticated: true})
-						return
+				if !snapshot.Authenticated {
+					if !loginRequested {
+						loginRequested = true
+						c.showBrowser()
+						c.publish(Result{Callsign: callsign, AuthenticationRequired: true})
 					}
 					continue
+				}
+				if callsign == "" {
+					c.hideBrowser()
+					c.publish(Result{Authenticated: true})
+					return
 				}
 				result, ready := extractSnapshot(callsign, snapshot)
 				if !ready {
@@ -178,6 +185,15 @@ func (c *Client) hideBrowser() {
 	c.mu.Unlock()
 	if browser != nil {
 		browser.Hide()
+	}
+}
+
+func (c *Client) showBrowser() {
+	c.mu.Lock()
+	browser := c.browser
+	c.mu.Unlock()
+	if browser != nil {
+		browser.Show()
 	}
 }
 
@@ -261,7 +277,7 @@ type pageSnapshot struct {
 }
 
 func extractSnapshot(callsign string, snapshot pageSnapshot) (Result, bool) {
-	if !strings.Contains(strings.ToUpper(snapshot.Text), callsign) || strings.Contains(strings.ToLower(snapshot.Title), "just a moment") {
+	if !snapshot.Authenticated || !strings.Contains(strings.ToUpper(snapshot.Text), callsign) || strings.Contains(strings.ToLower(snapshot.Title), "just a moment") {
 		return Result{}, false
 	}
 	result := parseSnapshot(callsign, snapshot)
@@ -343,7 +359,7 @@ func parseSnapshot(callsign string, snapshot pageSnapshot) Result {
 			result.Lookups = match[1]
 		}
 	}
-	if match := regexp.MustCompile(`(?i)Grid Square\s+([A-R]{2}[0-9]{2}[A-X]{0,2})`).FindStringSubmatch(snapshot.Text); len(match) > 1 {
+	if match := regexp.MustCompile(`(?i)(?:Grid Square|Grid|Locator)\s*[:#-]?\s*([A-R]{2}[0-9]{2}[A-X]{0,2})`).FindStringSubmatch(snapshot.Text); len(match) > 1 {
 		result.Locator = match[1]
 	}
 	latMatch := regexp.MustCompile(`(?i)Latitude\s+(-?[0-9]+(?:[.,][0-9]+)?)`).FindStringSubmatch(snapshot.Text)
@@ -398,7 +414,13 @@ func countryFromNameParts(name string) countries.CountryCode {
 	words := strings.Fields(name)
 	for length := len(words) - 1; length > 0; length-- {
 		for start := 0; start+length <= len(words); start++ {
-			if country := countries.ByName(strings.Join(words[start:start+length], " ")); country != countries.Unknown {
+			candidate := strings.Join(words[start:start+length], " ")
+			// Do not interpret incidental two-letter words such as "is" in a
+			// login warning as ISO country codes (IS is Iceland).
+			if length == 1 && len([]rune(candidate)) < 4 {
+				continue
+			}
+			if country := countries.ByName(candidate); country != countries.Unknown {
 				return country
 			}
 		}

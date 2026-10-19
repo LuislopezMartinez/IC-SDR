@@ -95,11 +95,18 @@ func (p *QRZPanel) poll() {
 	for {
 		select {
 		case result := <-p.client.Results():
-			p.search.SetEnabled(true)
 			if result.Err != nil {
+				p.search.SetEnabled(true)
 				p.status, p.statusColor = strings.ToUpper(result.Err.Error()), colors.orange
 				continue
 			}
+			if result.AuthenticationRequired {
+				p.authenticated = false
+				p.updateSessionButton()
+				p.status, p.statusColor = "INICIE SESIÓN EN LA VENTANA QRZ", colors.orange
+				continue
+			}
+			p.search.SetEnabled(true)
 			if result.Authenticated {
 				p.authenticated = true
 				p.updateSessionButton()

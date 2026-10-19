@@ -74,6 +74,26 @@ func TestCountryFromSnapshotPrefersISOHintAndHandlesDecoratedNames(t *testing.T)
 	}
 }
 
+func TestCountryFromSnapshotDoesNotTreatLoginWarningAsIceland(t *testing.T) {
+	if got := countryFromSnapshot("Login is required for additional details", ""); got != 0 {
+		t.Fatalf("login warning resolved as country %q", got.Alpha2())
+	}
+}
+
+func TestExtractSnapshotRequiresAuthenticatedSession(t *testing.T) {
+	snapshot := pageSnapshot{
+		Text: "EA3IWW Spain\nLuis\nGava\nSpain\nEmail: login required\nGrid: JN11ah",
+	}
+	if _, ready := extractSnapshot("EA3IWW", snapshot); ready {
+		t.Fatal("unauthenticated QRZ page was accepted as a station profile")
+	}
+	snapshot.Authenticated = true
+	result, ready := extractSnapshot("EA3IWW", snapshot)
+	if !ready || result.CountryCode != "ES" || result.Locator != "JN11ah" {
+		t.Fatalf("authenticated profile was not parsed: ready=%v result=%+v", ready, result)
+	}
+}
+
 func TestValidPNGRejectsHTMLAndTruncatedData(t *testing.T) {
 	valid := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 16)...)
 	if !validPNG(valid) {

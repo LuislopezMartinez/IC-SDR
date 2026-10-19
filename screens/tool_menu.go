@@ -11,6 +11,8 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+const feedbackToolID = "FEEDBACK"
+
 //go:embed assets/icons/*.png
 var toolIconFiles embed.FS
 
@@ -46,6 +48,7 @@ var toolMenuItems = []toolMenuItem{
 	{id: "ABOUT", label: "ACERCA DE", row: 2},
 	{id: i18n.Source("text.03c820ee5c6c"), label: i18n.Source("text.ace1d287d60c"), row: 2},
 	{id: "CHECK_UPDATES", label: "ACTUALIZACIONES", row: 2},
+	{id: feedbackToolID, label: "REPORTES Y SUGERENCIAS", row: 2},
 }
 
 func toolMenuModalBounds() rl.Rectangle {
@@ -90,6 +93,7 @@ type ToolMenu struct {
 	onSelect        func(string)
 	onSelectSound   func()
 	onCheckUpdates  func()
+	onFeedback      func()
 }
 
 func NewToolMenu(selected string, onSelect func(string)) *ToolMenu {
@@ -205,6 +209,13 @@ func (menu *ToolMenu) UpdateOverlay(input simpleui.Input) bool {
 				}
 				return true
 			}
+			if toolMenuItems[item].id == feedbackToolID {
+				menu.Close()
+				if menu.onFeedback != nil {
+					menu.onFeedback()
+				}
+				return true
+			}
 			menu.selected = toolMenuItems[item].id
 			menu.Close()
 			if menu.onSelectSound != nil {
@@ -222,6 +233,7 @@ func (menu *ToolMenu) UpdateOverlay(input simpleui.Input) bool {
 
 func (menu *ToolMenu) SetSelectSound(play func())   { menu.onSelectSound = play }
 func (menu *ToolMenu) SetCheckUpdates(check func()) { menu.onCheckUpdates = check }
+func (menu *ToolMenu) SetFeedback(open func())      { menu.onFeedback = open }
 
 func (menu *ToolMenu) DrawOverlay() {
 	if !menu.open {
@@ -475,6 +487,13 @@ func (menu *ToolMenu) drawCustomIcon(id string, center rl.Vector2, active bool, 
 	case "ABOUT":
 		rl.DrawCircleLines(int32(center.X), int32(center.Y), 32, accent)
 		drawCenteredStyled("i", rl.Rectangle{X: center.X - 25, Y: center.Y - 29, Width: 50, Height: 58}, 32, simpleui.FontSemiBold, accent)
+	case feedbackToolID:
+		back := rl.Rectangle{X: center.X - 35, Y: center.Y - 21, Width: 59, Height: 43}
+		rl.DrawRectangleRounded(back, .32, 8, rl.Color{R: 232, G: 14, B: 205, A: 255})
+		front := rl.Rectangle{X: center.X - 19, Y: center.Y - 31, Width: 58, Height: 45}
+		rl.DrawRectangleRounded(front, .32, 8, rl.Color{R: 255, G: 112, B: 33, A: 255})
+		rl.DrawRectangleRoundedLinesEx(front, .32, 8, 4, rl.Color{R: 255, G: 211, B: 71, A: 255})
+		drawCenteredStyled("!", front, 27, simpleui.FontSemiBold, rl.White)
 	default:
 		drawCentered("?", rl.Rectangle{X: center.X - 30, Y: center.Y - 25, Width: 60, Height: 50}, 24, accent)
 	}
@@ -536,8 +555,14 @@ func (menu *ToolMenu) itemBounds(index int) rl.Rectangle {
 		return rl.Rectangle{X: rowX + float32(lineColumn)*step, Y: y, Width: width, Height: 108}
 	}
 	if item.row == 2 {
-		y = 551
 		step, width = 150, 140
+		lineCount, lineColumn := min(5, count), column
+		y = 551
+		if column >= 5 {
+			lineCount, lineColumn, y = count-5, column-5, 668
+		}
+		rowX := designWidth/2 - float32(lineCount)*step/2
+		return rl.Rectangle{X: rowX + float32(lineColumn)*step, Y: y, Width: width, Height: 108}
 	}
 	rowX := designWidth/2 - float32(count)*step/2
 	return rl.Rectangle{X: rowX + float32(column)*step, Y: y, Width: width, Height: 108}

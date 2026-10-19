@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"go-zero/internal/feedback"
 	"go-zero/internal/ft8"
 	"go-zero/internal/i18n"
 	"go-zero/internal/omnirig"
@@ -199,6 +200,7 @@ type MainScreen struct {
 	wfRangeSlider          *simpleui.RangeSlider
 	wfSpeedSlider          *simpleui.Slider
 	toolMenu               *ToolMenu
+	feedbackWindow         *feedback.Window
 	sdrSettings            *SDRSettings
 	sdrHeader              *SDRHeaderPanel
 	updateDialog           *UpdateDialog
@@ -481,6 +483,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.toolMenu = NewToolMenu(screen.activeTool, screen.selectTool)
 	screen.updateDialog = NewUpdateDialog()
 	screen.toolMenu.SetCheckUpdates(func() { screen.updateDialog.Check(true) })
+	screen.toolMenu.SetFeedback(screen.openFeedbackWindow)
 	screen.updateDialog.Check(false)
 	screen.toolMenu.SetSelectSound(screen.uiSounds.PlayToolSelect)
 	simpleui.SetActivationFeedback(screen.uiSounds.PlayButton)
@@ -831,6 +834,9 @@ func (screen *MainScreen) shouldDrawWaterfall() bool {
 }
 
 func (screen *MainScreen) Close() {
+	if screen.feedbackWindow != nil {
+		screen.feedbackWindow.Close()
+	}
 	if screen.datvPanel != nil {
 		screen.datvPanel.Close()
 	}
