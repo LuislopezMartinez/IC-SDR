@@ -107,3 +107,23 @@ func TestMonitorCanDisableAFC(t *testing.T) {
 		t.Fatalf("disabled AFC status = %+v", got)
 	}
 }
+
+func TestIQSinkUsesNativeChannelRateWithoutIntermediateResampling(t *testing.T) {
+	const (
+		inputRate    = 2_048_000.0
+		inputSamples = 8_192
+	)
+	d := New(inputRate)
+	var received []float32
+	d.SetIQSink(func(iq []float32) { received = append(received, iq...) })
+	d.Configure(true)
+	d.ProcessIQ(make([]float32, inputSamples*2))
+
+	if got, want := d.ChannelSampleRate(), 32_000.0; got != want {
+		t.Fatalf("native channel rate = %.0f, want %.0f", got, want)
+	}
+	wantComplexSamples := inputSamples / 64
+	if got := len(received) / 2; got != wantComplexSamples {
+		t.Fatalf("native IQ samples = %d, want %d (direct decimated stream)", got, wantComplexSamples)
+	}
+}

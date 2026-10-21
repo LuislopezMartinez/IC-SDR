@@ -34,45 +34,60 @@ type GroupObservation struct {
 	Observations                   uint64
 }
 
-// Telemetry is the protocol information reported by tetrapol-kit. Sync and
-// voice activity are derived from recent valid records because the upstream
-// JSON format does not publish explicit acquisition/loss events.
+// Telemetry is the normalized protocol and DSP information reported by either
+// the native liliPOL runtime or a line-oriented decoder source.
 type Telemetry struct {
-	Synchronized   bool
-	VoiceActive    bool
-	FrameNumber    int
-	FrameKnown     bool
-	FrameType      string
-	LogicalChannel string
-	ValidFrames    uint64
-	CRCFailures    uint64
-	BitsFixed      uint64
-	AudioDecoded   uint64
-	AudioConcealed uint64
-	AudioLongGaps  uint64
-	QualityPercent float64
-	QualityKnown   bool
-	CRCPerSecond   float64
-	SCR            int
-	SCRKnown       bool
-	RXOffset       uint64
-	ASB            [2]int
-	ASBKnown       bool
-	LastRXTime     string
-	CipherState    string
-	CipherKeyType  int
-	CipherKeyIndex int
-	ChannelAction  string
-	ChannelKind    string
-	ChannelID      int
-	ChannelEvent   uint64
-	LastRecord     time.Time
-	RecentEvents   []Event
-	Channels       []ChannelObservation
-	Groups         []GroupObservation
-	TSDUCount      uint64
-	LastCODOP      int
-	CODOPKnown     bool
+	CellID                 string
+	Network                string
+	Synchronized           bool
+	VoiceActive            bool
+	FrameNumber            int
+	FrameKnown             bool
+	FrameType              string
+	LogicalChannel         string
+	ValidFrames            uint64
+	CRCFailures            uint64
+	BitsFixed              uint64
+	AudioDecoded           uint64
+	AudioConcealed         uint64
+	AudioLongGaps          uint64
+	CorrelationDropPercent int
+	TCHSessionState        int
+	IQSamples              uint64
+	BitsOut                uint64
+	IQDropped              uint64
+	IQQueued               int
+	PhysicalSync           bool
+	AFCLocked              bool
+	AFCMode                string
+	AFCFrequencyHz         float64
+	AFCErrorHz             float64
+	NativeRate             float64
+	NativeSPS              float64
+	QualityPercent         float64
+	QualityKnown           bool
+	QualitySamples         uint64
+	CRCPerSecond           float64
+	SCR                    int
+	SCRKnown               bool
+	RXOffset               uint64
+	ASB                    [2]int
+	ASBKnown               bool
+	LastRXTime             string
+	CipherState            string
+	CipherKeyType          int
+	CipherKeyIndex         int
+	ChannelAction          string
+	ChannelKind            string
+	ChannelID              int
+	ChannelEvent           uint64
+	LastRecord             time.Time
+	RecentEvents           []Event
+	Channels               []ChannelObservation
+	Groups                 []GroupObservation
+	TSDUCount              uint64
+	LastCODOP              int
+	CODOPKnown             bool
 }
 
 type telemetryTracker struct {

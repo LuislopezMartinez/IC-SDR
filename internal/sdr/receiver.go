@@ -59,7 +59,7 @@ type Config struct {
 	DABExecutable                                    string
 	DATVExecutable, VLCExecutable                    string
 	TETRACodec                                       string
-	TETRAPOLKitExecutable, TETRAPOLRPCELPExecutable  string
+	TETRAPOLNativeDLL                                string
 	StartupLog                                       func(string, ...any)
 }
 
@@ -112,11 +112,12 @@ type Receiver struct {
 	ft8                  *ft8.Decoder
 	tetra                *tetra.Decoder
 	tetrapol             *tetrapol.Decoder
-	tetrapolRuntime      *tetrapolruntime.Pipeline
+	tetrapolNative       *tetrapolruntime.Native
 	tetrapolRuntimeMu    sync.Mutex
 	tetrapolRuntimeError string
-	tetrapolPrevious     float32
-	tetrapolHavePrevious bool
+	tetrapolCellID       string
+	tetrapolChannelID    int
+	tetrapolAudioRate    tetrapolAudioUpsampler
 	tetrapolAudioEnabled atomic.Bool
 	subtone              *dsp.SubtoneDetector
 
@@ -260,7 +261,8 @@ func NewReceiver(config Config) *Receiver {
 	receiver.ft8 = ft8.New(config.FT8Executable)
 	receiver.tetra = tetra.New(config.SampleRate, config.TETRACodec, receiver.enqueueDigitalAudio)
 	receiver.tetrapol = tetrapol.New(config.SampleRate)
-	receiver.tetrapolRuntime = &tetrapolruntime.Pipeline{}
+	receiver.tetrapolNative = &tetrapolruntime.Native{}
+	receiver.tetrapolChannelID = -1
 	receiver.tetrapolAudioEnabled.Store(true)
 	receiver.subtone = dsp.NewSubtoneDetector()
 	receiver.averagingMs.Store(120)
@@ -901,6 +903,7 @@ func (receiver *Receiver) AudioPlaybackState() (mode string, digitalSignalActive
 	receiver.mu.RLock()
 	mode = receiver.demodMode
 	dabPlayback := receiver.dabPlaybackEnabled
+	audioBuffered := receiver.audioCount
 	receiver.mu.RUnlock()
 	if dabPlayback && receiver.dab != nil {
 		status := receiver.dab.Snapshot()
@@ -923,6 +926,11 @@ func (receiver *Receiver) AudioPlaybackState() (mode string, digitalSignalActive
 		}
 		status := receiver.digital.Snapshot()
 		digitalSignalActive = status.VoiceActive && !status.LastVoice.IsZero() && time.Since(status.LastVoice) < time.Second
+	} else if mode == "TETRAPOL" {
+		// TETRAPOL is a continuous 20 ms vocoder stream, not analog audio.
+		// Keep playback active while the last queued PCM is draining, too.
+		status := receiver.TETRAPOLRuntimeStatus()
+		digitalSignalActive = audioBuffered > 0 || (status.Running && status.Telemetry.VoiceActive)
 	}
 	return
 }

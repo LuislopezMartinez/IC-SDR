@@ -26,6 +26,7 @@ func (r *Receiver) SetTETRAPOLAFCEnabled(enabled bool) {
 
 type TETRAPOLRuntimeStatus struct {
 	Running   bool
+	Backend   string
 	Error     string
 	Telemetry tetrapolruntime.Telemetry
 }
@@ -45,28 +46,27 @@ func (r *Receiver) StartTETRAPOLRuntimeConfigured(channelType, band, direction s
 func (r *Receiver) StartTETRAPOLRuntimeConfiguredWithCipher(channelType, band, direction, cipherState string) error {
 	r.tetrapolRuntimeMu.Lock()
 	defer r.tetrapolRuntimeMu.Unlock()
-	if r.tetrapolRuntime == nil {
-		r.tetrapolRuntime = &tetrapolruntime.Pipeline{}
-	}
-	if r.tetrapolRuntime.Running() {
+	if r.tetrapolNative != nil && r.tetrapolNative.Running() {
 		return nil
 	}
-	_, _, _, kitArgs := tetrapolRuntimeArguments(channelType, band, direction)
-	r.tetrapolPrevious, r.tetrapolHavePrevious = 0, false
-	err := r.tetrapolRuntime.Start(tetrapolruntime.Config{
-		KitExecutable:      r.config.TETRAPOLKitExecutable,
-		KitArgs:            kitArgs,
-		RPCELPExecutable:   r.config.TETRAPOLRPCELPExecutable,
-		ClearOnly:          true,
-		InitialCipherState: cipherState,
-	}, r.enqueueTETRAPOLAudio)
+	channelType, _, _, _ = tetrapolRuntimeArguments(channelType, band, direction)
+	r.tetrapolAudioRate.reset()
+	if r.tetrapolNative == nil {
+		r.tetrapolNative = &tetrapolruntime.Native{}
+	}
+	cellID, channelID := "", -1
+	if channelType == "TCH" {
+		cellID, channelID = r.tetrapolCellID, r.tetrapolChannelID
+	}
+	err := r.tetrapolNative.StartConfigured(r.config.TETRAPOLNativeDLL, channelType, band, direction, cellID, channelID, r.tetrapol.ChannelSampleRate(), r.enqueueTETRAPOLAudio)
 	if err != nil {
 		r.tetrapolRuntimeError = err.Error()
 		return err
 	}
 	r.tetrapolRuntimeError = ""
-	r.tetrapol.SetBitSink(func(bits []byte) {
-		if err := r.tetrapolRuntime.SubmitBits(bits); err != nil {
+	r.tetrapol.SetBitSink(nil)
+	r.tetrapol.SetIQSink(func(iq []float32) {
+		if err := r.tetrapolNative.SubmitIQ(iq); err != nil {
 			r.tetrapolRuntimeMu.Lock()
 			r.tetrapolRuntimeError = err.Error()
 			r.tetrapolRuntimeMu.Unlock()
@@ -74,6 +74,12 @@ func (r *Receiver) StartTETRAPOLRuntimeConfiguredWithCipher(channelType, band, d
 	})
 	r.tetrapol.Configure(true)
 	return nil
+}
+
+func (r *Receiver) SetTETRAPOLFollowContext(cellID string, channelID int) {
+	r.tetrapolRuntimeMu.Lock()
+	r.tetrapolCellID, r.tetrapolChannelID = cellID, channelID
+	r.tetrapolRuntimeMu.Unlock()
 }
 
 func tetrapolRuntimeArguments(channelType, band, direction string) (string, string, string, []string) {
@@ -94,14 +100,15 @@ func (r *Receiver) StopTETRAPOLRuntime() error {
 	defer r.tetrapolRuntimeMu.Unlock()
 	if r.tetrapol != nil {
 		r.tetrapol.SetBitSink(nil)
+		r.tetrapol.SetIQSink(nil)
 		r.tetrapol.Configure(false)
 	}
-	if r.tetrapolRuntime == nil || !r.tetrapolRuntime.Running() {
+	if r.tetrapolNative != nil && r.tetrapolNative.Running() {
+		if err := r.tetrapolNative.Stop(); err != nil {
+			r.tetrapolRuntimeError = err.Error()
+			return fmt.Errorf("stop liliPOL x64 runtime: %w", err)
+		}
 		return nil
-	}
-	if err := r.tetrapolRuntime.Stop(); err != nil {
-		r.tetrapolRuntimeError = err.Error()
-		return fmt.Errorf("stop TETRAPOL runtime: %w", err)
 	}
 	return nil
 }
@@ -109,9 +116,13 @@ func (r *Receiver) StopTETRAPOLRuntime() error {
 func (r *Receiver) TETRAPOLRuntimeStatus() TETRAPOLRuntimeStatus {
 	r.tetrapolRuntimeMu.Lock()
 	defer r.tetrapolRuntimeMu.Unlock()
-	status := TETRAPOLRuntimeStatus{Running: r.tetrapolRuntime != nil && r.tetrapolRuntime.Running(), Error: r.tetrapolRuntimeError}
-	if r.tetrapolRuntime != nil {
-		status.Telemetry = r.tetrapolRuntime.Telemetry()
+	status := TETRAPOLRuntimeStatus{Backend: "LILIPOL NATIVO X64", Error: r.tetrapolRuntimeError}
+	if r.tetrapolNative != nil && r.tetrapolNative.Running() {
+		status.Running, status.Telemetry = true, r.tetrapolNative.Telemetry()
+		return status
+	}
+	if r.tetrapolNative != nil && status.Error == "" {
+		status.Error = r.tetrapolNative.Error()
 	}
 	return status
 }
@@ -120,20 +131,10 @@ func (r *Receiver) enqueueTETRAPOLAudio(input []float32) {
 	if len(input) == 0 || !r.tetrapolAudioEnabled.Load() {
 		return
 	}
-	// RP-CELP produces 8 kHz mono; the shared receiver ring is 48 kHz.
-	output := make([]float32, 0, len(input)*6)
-	for _, current := range input {
-		if !r.tetrapolHavePrevious {
-			r.tetrapolPrevious, r.tetrapolHavePrevious = current, true
-			continue
-		}
-		for phase := 0; phase < 6; phase++ {
-			fraction := float32(phase) / 6
-			output = append(output, r.tetrapolPrevious+(current-r.tetrapolPrevious)*fraction)
-		}
-		r.tetrapolPrevious = current
-	}
-	r.enqueueDigitalAudio(output)
+	// RP-CELP produces 8 kHz mono; reconstruct its speech band before placing
+	// it in the shared 48 kHz ring. Linear interpolation noticeably attenuates
+	// the upper voice band and leaves audible spectral images.
+	r.enqueueDigitalAudio(r.tetrapolAudioRate.process(input))
 }
 
 func (r *Receiver) SetTETRAPOLAudioEnabled(enabled bool) {

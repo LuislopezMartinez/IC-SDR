@@ -171,7 +171,7 @@ func (panel *TETRAPOLPanel) drawTETRAPOLNetworkSummary(t tetrapolruntime.Telemet
 	if t.Synchronized {
 		sync, syncColor = "BLOQUEADO", colors.green
 	}
-	quality := "SIN MUESTRA"
+	quality := "MIDIENDO"
 	if t.QualityKnown {
 		quality = fmt.Sprintf("%.0f %%", t.QualityPercent)
 	}
@@ -187,7 +187,7 @@ func (panel *TETRAPOLPanel) drawTETRAPOLNetworkSummary(t tetrapolruntime.Telemet
 		color                rl.Color
 	}{
 		{"SINCRONISMO", sync, fmt.Sprintf("%d tramas válidas · %.1f CRC/s", t.ValidFrames, t.CRCPerSecond), syncColor},
-		{"INTEGRIDAD CRC", quality, fmt.Sprintf("%d errores · %d bits corregidos", t.CRCFailures, t.BitsFixed), colors.cyan},
+		{"INTEGRIDAD CRC", quality, fmt.Sprintf("%d tramas medidas · %d errores", t.QualitySamples, t.CRCFailures), colors.cyan},
 		{"AUDIO", fmt.Sprintf("%d / PLC %d", t.AudioDecoded, t.AudioConcealed), fmt.Sprintf("%d huecos largos · voz %s", t.AudioLongGaps, map[bool]string{true: "activa", false: "inactiva"}[t.VoiceActive]), colors.green},
 		{"PROTECCIÓN", cipher, fmt.Sprintf("tipo %d · índice %d", t.CipherKeyType, t.CipherKeyIndex), cipherColor},
 		{"RECURSOS", fmt.Sprintf("%d CH · %d GR", len(t.Channels), len(t.Groups)), "canales y grupos descubiertos", colors.cyan},

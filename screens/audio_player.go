@@ -27,8 +27,11 @@ const (
 	analogPrebufferSamples = audioSampleRate * 100 / 1000
 	// DSDcc emits decoded DMR voice in bursts of roughly 360 ms. Keeping almost
 	// one burst queued prevents ordinary scheduler jitter from becoming audible.
-	digitalPrebufferSamples = audioSampleRate * 340 / 1000
-	digitalGraceSamples     = audioSampleRate * 100 / 1000
+	digitalBurstPrebufferSamples = audioSampleRate * 340 / 1000
+	// Native TETRAPOL emits a steady 20 ms RP-CELP frame cadence. A smaller
+	// reservoir absorbs scheduler jitter without hiding the beginning of calls.
+	digitalStreamPrebufferSamples = audioSampleRate * 120 / 1000
+	digitalGraceSamples           = audioSampleRate * 100 / 1000
 	// raylib uses two sub-buffers. Two 25 ms halves reproduce the original
 	// JavaSound device buffer of 50 ms.
 	audioSubBufferSamples = audioSampleRate * 25 / 1000
@@ -54,6 +57,7 @@ type AudioPlayer struct {
 	meterPeakBits  atomic.Uint32
 	playbackDelay  atomic.Int64
 	digitalMode    atomic.Bool
+	digitalStream  atomic.Bool
 	wideFMMode     atomic.Bool
 	noiseMode      atomic.Bool
 	digitalActive  atomic.Bool
@@ -72,7 +76,9 @@ func (player *AudioPlayer) Pump() {
 	if player.receiver != nil {
 		mode, active := player.receiver.AudioPlaybackState()
 		player.transitionPlaybackMode(mode)
-		player.digitalMode.Store(mode == "DAB" || mode == i18n.Source("text.2604864ce4d3") || mode == i18n.Source("text.f69d86a86926") || mode == i18n.Source("text.3ae4feb8250d"))
+		digital, stream := playbackModeClass(mode)
+		player.digitalMode.Store(digital)
+		player.digitalStream.Store(stream)
 		player.wideFMMode.Store(mode == i18n.Source("text.6b742bac3eb4"))
 		player.noiseMode.Store(noiseReductionMode(mode))
 		player.digitalActive.Store(active)
@@ -98,7 +104,7 @@ func (player *AudioPlayer) Pump() {
 		player.sourceCount = 0
 		player.sourcePosition = 0
 	}
-	target := playbackPrebufferSamples(player.digitalMode.Load())
+	target := playbackPrebufferSamples(player.digitalMode.Load(), player.digitalStream.Load())
 	if !player.started && player.bufferedSamples() >= target && (!player.digitalMode.Load() || player.digitalActive.Load()) {
 		if player.paused {
 			rl.ResumeAudioStream(player.stream)
@@ -149,7 +155,7 @@ func (player *AudioPlayer) fillAudio(destination []float32) {
 		return
 	}
 	digital := player.digitalMode.Load()
-	target := playbackPrebufferSamples(digital)
+	target := playbackPrebufferSamples(digital, player.digitalStream.Load())
 	buffered := player.receiver.AudioBufferedSamples() + player.sourceCount
 	// The newest demodulated sample is heard only after the receiver/source
 	// backlog and raylib's two output sub-buffers. Publish this measurement so
@@ -252,9 +258,20 @@ func (player *AudioPlayer) SetWebAudioSink(sink func([]float32)) {
 	player.webAudioSink.Store(&webAudioSink{publish: sink})
 }
 
-func playbackPrebufferSamples(digital bool) int {
+func playbackModeClass(mode string) (digital, continuousStream bool) {
+	if mode == "TETRAPOL" {
+		return true, true
+	}
+	digital = mode == "DAB" || mode == i18n.Source("text.2604864ce4d3") || mode == i18n.Source("text.f69d86a86926") || mode == i18n.Source("text.3ae4feb8250d")
+	return digital, false
+}
+
+func playbackPrebufferSamples(digital, continuousStream bool) int {
+	if continuousStream {
+		return digitalStreamPrebufferSamples
+	}
 	if digital {
-		return digitalPrebufferSamples
+		return digitalBurstPrebufferSamples
 	}
 	return analogPrebufferSamples
 }

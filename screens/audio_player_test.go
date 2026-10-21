@@ -7,11 +7,21 @@ import (
 )
 
 func TestDMRUsesBurstSizedPrebuffer(t *testing.T) {
-	if got := playbackPrebufferSamples(true); got != audioSampleRate*340/1000 {
+	if got := playbackPrebufferSamples(true, false); got != audioSampleRate*340/1000 {
 		t.Fatalf("digital prebuffer=%d", got)
 	}
-	if playbackPrebufferSamples(false) != analogPrebufferSamples {
+	if playbackPrebufferSamples(false, false) != analogPrebufferSamples {
 		t.Fatal("analog prebuffer changed")
+	}
+}
+
+func TestTETRAPOLUsesContinuousDigitalPlayback(t *testing.T) {
+	digital, continuous := playbackModeClass("TETRAPOL")
+	if !digital || !continuous {
+		t.Fatalf("TETRAPOL playback class = digital %v continuous %v", digital, continuous)
+	}
+	if got := playbackPrebufferSamples(digital, continuous); got != audioSampleRate*120/1000 {
+		t.Fatalf("TETRAPOL prebuffer = %d", got)
 	}
 }
 

@@ -1380,7 +1380,13 @@ func (screen *MainScreen) drawLowerWorkspaceContent(outerScale float32) {
 		screen.ft8Panel.DrawPanel()
 		return
 	}
-	drawPanel(toolContentX, toolY, toolContentRight-toolContentX, toolH)
+	if screen.activeTool == tetrapolToolID {
+		// TETRAPOL uses a shallow waterfall and dedicates the recovered space
+		// to a large, readable protocol-status header.
+		drawPanel(toolContentX, 540, toolContentRight-toolContentX, designHeight-548)
+	} else {
+		drawPanel(toolContentX, toolY, toolContentRight-toolContentX, toolH)
+	}
 	if screen.activeTool == i18n.Source("text.f69d86a86926") {
 		screen.tetraPanel.DrawPanel()
 		return
@@ -1960,6 +1966,9 @@ func (screen *MainScreen) waterfallGeometry() (x, y, width, height float32) {
 		x = collapsedToolContentX
 	}
 	y, width, height = 450, toolContentRight-x, 170
+	if screen.activeTool == tetrapolToolID && screen.viewMode == 1 {
+		height = 80
+	}
 	if screen.activeTool == i18n.Source("text.a8cbb160caa6") && screen.viewMode == 1 {
 		y, height = 365, 111
 	}

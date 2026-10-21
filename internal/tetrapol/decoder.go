@@ -17,6 +17,7 @@ type Status struct {
 	Samples, Symbols                                                uint64
 }
 type bitSink struct{ write func([]byte) }
+type iqSink struct{ write func([]float32) }
 
 type Decoder struct {
 	mu                                               sync.RWMutex
@@ -38,6 +39,7 @@ type Decoder struct {
 	haveDiscriminator                                bool
 	afcStableSymbols                                 int
 	bits                                             atomic.Pointer[bitSink]
+	iq                                               atomic.Pointer[iqSink]
 	channel                                          *channelizer
 }
 
@@ -82,6 +84,19 @@ func (d *Decoder) SetBitSink(write func([]byte)) {
 	}
 	d.bits.Store(&bitSink{write: write})
 }
+
+// SetIQSink receives the selected, filtered channel as interleaved IQ at
+// ChannelSampleRate. It lets an external decoder consume the exact same VFO
+// selection without receiving the complete wideband SDR capture.
+func (d *Decoder) SetIQSink(write func([]float32)) {
+	if write == nil {
+		d.iq.Store(nil)
+		return
+	}
+	d.iq.Store(&iqSink{write: write})
+}
+
+func (d *Decoder) ChannelSampleRate() float64 { return d.channel.outputRate }
 
 func (d *Decoder) ProcessIQ(iq []float32) {
 	d.mu.Lock()
@@ -170,9 +185,24 @@ func (d *Decoder) ProcessIQ(iq []float32) {
 	d.level = 20 * math.Log10(math.Sqrt(power/float64(count))+1e-12)
 	d.deviation = dev / math.Max(1, float64(count-1))
 	sink := d.bits.Load()
+	iqOutput := d.iq.Load()
+	var selectedIQ []float32
+	if iqOutput != nil {
+		// The native liliPOL frontend consumes this channel rate directly.
+		// Keeping the samples at 32 kS/s avoids the former 32 -> 48 -> 32 kS/s
+		// conversion, its extra filtering and a large amount of CPU work.
+		selectedIQ = make([]float32, len(baseband)*2)
+		for index, sample := range baseband {
+			selectedIQ[index*2] = float32(real(sample))
+			selectedIQ[index*2+1] = float32(imag(sample))
+		}
+	}
 	d.mu.Unlock()
 	if sink != nil && len(output) > 0 {
 		sink.write(output)
+	}
+	if iqOutput != nil && len(selectedIQ) > 0 {
+		iqOutput.write(selectedIQ)
 	}
 }
 

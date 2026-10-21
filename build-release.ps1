@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.18.0'
+    [string]$Version = '0.19.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,8 +12,7 @@ $digitalVoiceRuntime = Join-Path $projectRoot 'DATA\tools\digital_voice\runtime'
 $digitalVoiceManifestPath = Join-Path $digitalVoiceRuntime 'runtime-version.json'
 $audioRuntime = Join-Path $projectRoot 'DATA\tools\audio\runtime'
 $audioManifestPath = Join-Path $audioRuntime 'runtime-version.json'
-$tetrapolRuntime = Join-Path $projectRoot 'DATA\tools\tetrapol\runtime'
-$tetrapolManifestPath = Join-Path $tetrapolRuntime 'runtime-version.json'
+$tetrapolNativeDLL = Join-Path $projectRoot 'DATA\tools\tetrapol\native\bin\lilipol_native_x64.dll'
 $omniRigRuntime = Join-Path $projectRoot 'DATA\runtime\windows-x64\omnirig'
 $omniRigManifestPath = Join-Path $omniRigRuntime 'runtime-version.json'
 $voacapRuntime = Join-Path $projectRoot 'DATA\tools\voacap\runtime'
@@ -58,26 +57,8 @@ if ($lameExeHash -ne $audioManifest.executableSha256.ToLowerInvariant()) {
     throw "El ejecutable LAME no coincide con el manifiesto: $lameExeHash"
 }
 
-if (-not (Test-Path -LiteralPath $tetrapolManifestPath)) {
-    throw "Falta el manifiesto de TETRAPOL: $tetrapolManifestPath"
-}
-$tetrapolManifest = Get-Content -LiteralPath $tetrapolManifestPath -Raw | ConvertFrom-Json
-$tetrapolDumpExe = Join-Path $tetrapolRuntime $tetrapolManifest.tetrapolKit.executable
-$tetrapolRPCELPExe = Join-Path $tetrapolRuntime $tetrapolManifest.rpcelp.executable
-foreach ($required in @($tetrapolDumpExe, $tetrapolRPCELPExe)) {
-    if (-not (Test-Path -LiteralPath $required)) { throw "Falta un componente requerido de TETRAPOL: $required" }
-}
-foreach ($dll in $tetrapolManifest.tetrapolKit.dlls) {
-    $required = Join-Path (Split-Path $tetrapolDumpExe -Parent) $dll
-    if (-not (Test-Path -LiteralPath $required)) { throw "Falta una DLL requerida de TETRAPOL: $required" }
-}
-$tetrapolDumpHash = (Get-FileHash -LiteralPath $tetrapolDumpExe -Algorithm SHA256).Hash.ToLowerInvariant()
-$tetrapolRPCELPHash = (Get-FileHash -LiteralPath $tetrapolRPCELPExe -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($tetrapolDumpHash -ne $tetrapolManifest.tetrapolKit.executableSha256.ToLowerInvariant()) {
-    throw "tetrapol_dump no coincide con el manifiesto: $tetrapolDumpHash"
-}
-if ($tetrapolRPCELPHash -ne $tetrapolManifest.rpcelp.executableSha256.ToLowerInvariant()) {
-    throw "RP-CELP no coincide con el manifiesto: $tetrapolRPCELPHash"
+if (-not (Test-Path -LiteralPath $tetrapolNativeDLL)) {
+    throw "Falta el motor nativo TETRAPOL x64: $tetrapolNativeDLL. Ejecute runtime\tetrapol-native\build.ps1."
 }
 
 if (-not (Test-Path -LiteralPath $omniRigManifestPath)) {
@@ -248,7 +229,7 @@ $copies = @(
     @{ Source = 'DATA\tools\dab\runtime-version.json'; Destination = 'DATA\tools\dab\runtime-version.json' },
     @{ Source = 'DATA\tools\datv\runtime'; Destination = 'DATA\tools\datv\runtime' },
     @{ Source = 'DATA\tools\tetra\runtime'; Destination = 'DATA\tools\tetra\runtime' },
-    @{ Source = 'DATA\tools\tetrapol\runtime'; Destination = 'DATA\tools\tetrapol\runtime' },
+    @{ Source = 'DATA\tools\tetrapol\native'; Destination = 'DATA\tools\tetrapol\native' },
     @{ Source = 'DATA\tools\voacap\runtime'; Destination = 'DATA\tools\voacap\runtime' },
     @{ Source = 'DATA\config\feedback.json'; Destination = 'DATA\config\feedback.json' },
     @{ Source = 'DATA\data\ic-sdr-settings.json'; Destination = 'DATA\data\ic-sdr-settings.json' }

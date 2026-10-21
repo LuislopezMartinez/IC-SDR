@@ -165,8 +165,7 @@ func main() {
 		DATVExecutable:            resources.Path("tools", "datv", "runtime", "bin", "leandvb.exe"),
 		VLCExecutable:             resources.Path("tools", "datv", "runtime", "vlc", "vlc.exe"),
 		TETRACodec:                resources.Path("tools", "tetra", "runtime", "bin", "libtetradec.dll"),
-		TETRAPOLKitExecutable:     resources.Path("tools", "tetrapol", "runtime", "bin", "tetrapol_dump.exe"),
-		TETRAPOLRPCELPExecutable:  resources.Path("tools", "tetrapol", "runtime", "bin", "rpcelp.exe"),
+		TETRAPOLNativeDLL:         resources.Path("tools", "tetrapol", "native", "bin", "lilipol_native_x64.dll"),
 		SSTVOutputDirectory:       resources.WritablePath("captures", "sstv"),
 		StartupLog:                startupStep,
 	})

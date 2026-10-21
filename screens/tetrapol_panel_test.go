@@ -75,6 +75,59 @@ func TestTETRAPOLFollowTemporarilyBlocksStaleReactivation(t *testing.T) {
 	}
 }
 
+func TestTETRAPOLFollowAcceptsExplicitEndWithReusedEventNumber(t *testing.T) {
+	screen := NewMainScreen(nil)
+	screen.frequencyHz = 390_000_000
+	panel := NewTETRAPOLPanel(screen)
+	panel.enabled = true
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{ChannelAction: "follow", ChannelID: 2528, ChannelEvent: 2}, now)
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{ChannelAction: "return", ChannelEvent: 2, TCHSessionState: 2}, now.Add(time.Second))
+	if panel.following || panel.channelType != "CCH" {
+		t.Fatal("explicit TCH end was ignored because its event number matched the CCH activation")
+	}
+}
+
+func TestTETRAPOLFollowIgnoresUnrelatedFrameTelemetryForTimeout(t *testing.T) {
+	screen := NewMainScreen(nil)
+	screen.frequencyHz = 390_000_000
+	panel := NewTETRAPOLPanel(screen)
+	panel.enabled = true
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{ChannelAction: "follow", ChannelID: 2528, ChannelEvent: 1}, now)
+	// Physical frames and CRC changes may continue on an idle TCH. They must
+	// not be mistaken for voice and keep the follower away from the CCH.
+	for second := 1; second <= 7 && panel.following; second++ {
+		panel.handleChannelFollowAt(tetrapolruntime.Telemetry{
+			Synchronized: true,
+			ValidFrames:  uint64(second),
+			CRCFailures:  uint64(second),
+			LastRecord:   now.Add(time.Duration(second) * time.Second),
+		}, now.Add(time.Duration(second)*time.Second))
+	}
+	if panel.following || panel.channelType != "CCH" {
+		t.Fatal("unrelated TCH frame telemetry indefinitely postponed return to CCH")
+	}
+}
+
+func TestTETRAPOLFollowExtendsTimeoutOnlyForAudioProgress(t *testing.T) {
+	screen := NewMainScreen(nil)
+	screen.frequencyHz = 390_000_000
+	panel := NewTETRAPOLPanel(screen)
+	panel.enabled = true
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{ChannelAction: "follow", ChannelID: 2528, ChannelEvent: 1}, now)
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{AudioDecoded: 1, VoiceActive: true}, now.Add(5*time.Second))
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{AudioDecoded: 1}, now.Add(10*time.Second))
+	if !panel.following {
+		t.Fatal("active RP-CELP audio did not extend the TCH timeout")
+	}
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{AudioDecoded: 1}, now.Add(11*time.Second))
+	if panel.following || panel.channelType != "CCH" {
+		t.Fatal("TCH did not return after six seconds without new audio")
+	}
+}
+
 func TestTETRAPOLManualSpectrumTuneInvalidatesPreviousSession(t *testing.T) {
 	panel := NewTETRAPOLPanel(NewMainScreen(nil))
 	panel.enabled = true
@@ -128,7 +181,7 @@ func TestTETRAPOLPanelUsesNarrowbandChannelStep(t *testing.T) {
 	if screen.waterfallVisible {
 		t.Fatal("TETRAPOL panel left waterfall controls active")
 	}
-	if got, want := len(panel.controls), 12; got != want {
+	if got, want := len(panel.controls), 16; got != want {
 		t.Fatalf("TETRAPOL controls = %d, want %d", got, want)
 	}
 	if panel.start.Bounds().X < toolContentX {
