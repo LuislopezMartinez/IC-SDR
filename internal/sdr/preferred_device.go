@@ -15,7 +15,7 @@ func LoadPreferredDevice(path string) DeviceOption {
 	if json.Unmarshal(data, &option) != nil {
 		return DeviceOption{}
 	}
-	if option.Driver != "sdrplay" && option.Driver != "rtlsdr" && option.Driver != "hackrf" {
+	if !supportedDriver(option.Driver) {
 		return DeviceOption{}
 	}
 	return option

@@ -24,6 +24,7 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 		MemoryViewEnabled: boolSetting(false),
 		AudioNotchEnabled: boolSetting(true), AudioNotchFrequencyHz: 1250, AudioNotchWidthHz: 180, AudioNotchDepthDB: -40,
 		AudioNREnabled: boolSetting(true), AudioNRStrength: float32Setting(65), AudioNRSpeed: "fast",
+		TETRAPOLGSSIFilter: boolSetting(true), TETRAPOLAllowedGSSIs: []int{3470, 1201, 1201, -1},
 	}
 	if err := writeAppSettings(path, want); err != nil {
 		t.Fatal(err)
@@ -69,6 +70,9 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 	}
 	if !screen.audioNREnabled || screen.audioNRStrength != 65 || screen.audioNRSpeed != "fast" {
 		t.Fatalf("restored audio NR = %v/%.0f/%s", screen.audioNREnabled, screen.audioNRStrength, screen.audioNRSpeed)
+	}
+	if !screen.tetrapolGSSIFilter || len(screen.tetrapolAllowedGSSIs) != 2 || screen.tetrapolAllowedGSSIs[0] != 1201 || screen.tetrapolAllowedGSSIs[1] != 3470 {
+		t.Fatalf("restored TETRAPOL GSSI filter = %v/%v", screen.tetrapolGSSIFilter, screen.tetrapolAllowedGSSIs)
 	}
 }
 

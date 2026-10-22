@@ -87,7 +87,7 @@ type HardwareSettings struct {
 	DigitalAGC, OffsetTuning, IQSwap                                    bool
 	Device, Driver, Serial, Antenna                                     string
 	Antennas                                                            []string
-	RFGain, IFGain, PPM                                                 float32
+	RFGain, IFGain, BasebandGain, PPM                                   float32
 	AGCSetpoint, DirectSampling                                         int
 }
 
@@ -119,6 +119,7 @@ type Receiver struct {
 	tetrapolChannelID    int
 	tetrapolAudioRate    tetrapolAudioUpsampler
 	tetrapolAudioEnabled atomic.Bool
+	tetrapolAudioBlocked atomic.Bool
 	subtone              *dsp.SubtoneDetector
 
 	stop           chan struct{}
@@ -366,7 +367,7 @@ func (receiver *Receiver) SelectDevice(driver, serial string) error {
 	if receiver.closed.Load() {
 		return fmt.Errorf("%s", i18n.Source("text.7c243d044a07"))
 	}
-	if driver != "sdrplay" && driver != "rtlsdr" && driver != "hackrf" {
+	if !supportedDriver(driver) {
 		return fmt.Errorf(i18n.Source("text.a73cd0edc1ab"), driver)
 	}
 	if receiver.running.Load() && receiver.device != nil && receiver.device.driver == driver && receiver.device.serial == serial {

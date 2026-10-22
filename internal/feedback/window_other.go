@@ -9,9 +9,9 @@ import (
 
 type Window struct{}
 
-func NewWindow(string) *Window { return &Window{} }
+func NewWindow() *Window { return &Window{} }
 func (*Window) Open(TechnicalInfo) error {
-	return errors.New("la ventana de reportes requiere Windows")
+	return errors.New("no se pudo abrir la página de reportes en GitHub")
 }
 func (*Window) Close()                      {}
 func PlatformDescription() (string, string) { return runtime.GOOS, runtime.GOARCH }

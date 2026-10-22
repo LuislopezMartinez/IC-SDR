@@ -5,6 +5,17 @@ import "strings"
 // DeviceOption identifies one connected receiver by its Soapy driver and serial.
 type DeviceOption struct{ Driver, Serial, Label string }
 
+var supportedDrivers = []string{"sdrplay", "rtlsdr", "hackrf", "airspy"}
+
+func supportedDriver(driver string) bool {
+	for _, candidate := range supportedDrivers {
+		if driver == candidate {
+			return true
+		}
+	}
+	return false
+}
+
 func FormatDeviceLabel(option DeviceOption) string {
 	label := strings.TrimSpace(option.Label)
 	if label == "" {

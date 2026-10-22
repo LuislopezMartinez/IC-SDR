@@ -118,7 +118,14 @@ func NewSDRHeaderPanel(receiver *sdr.Receiver, onChanged func()) *SDRHeaderPanel
 		p.refreshLabels()
 	})
 	p.ifGain.OnRelease(func(float32) { p.submit() })
-	p.ppm.OnChange(func(v float32) { p.current.PPM = v; p.refreshLabels() })
+	p.ppm.OnChange(func(v float32) {
+		if p.current.Driver == "airspy" {
+			p.current.BasebandGain = v
+		} else {
+			p.current.PPM = v
+		}
+		p.refreshLabels()
+	})
 	p.ppm.OnRelease(func(float32) { p.submit() })
 	p.setpoint.OnChange(func(v float32) { p.current.AGCSetpoint = int(math.Round(float64(v))); p.refreshLabels() })
 	p.setpoint.OnRelease(func(float32) { p.submit() })
@@ -201,6 +208,7 @@ func (p *SDRHeaderPanel) refresh() {
 	s := p.current
 	rtl := s.Driver == "rtlsdr"
 	hackrf := s.Driver == "hackrf"
+	airspy := s.Driver == "airspy"
 	hasAntennas := s.Available && sdr.IsRSPDx(s.Device) && len(s.Antennas) > 1
 	p.agc.SetActive(s.AGC)
 	p.agc.SetLabel(i18n.Source("text.20e0541e8b46"))
@@ -226,6 +234,16 @@ func (p *SDRHeaderPanel) refresh() {
 		p.rfGain.SetStep(8)
 		p.ifGain.SetRange(0, 62)
 		p.ifGain.SetStep(2)
+	} else if airspy {
+		p.iqCorrection.SetLabel("IQ")
+		p.rfNotch.SetLabel(i18n.Source("text.5acff90d01d7"))
+		p.dabNotch.SetLabel(i18n.Source("text.3d4899209b46"))
+		p.rfGain.SetRange(0, 15)
+		p.rfGain.SetStep(1)
+		p.ifGain.SetRange(0, 15)
+		p.ifGain.SetStep(1)
+		p.ppm.SetRange(0, 15)
+		p.ppm.SetStep(1)
 	} else {
 		p.iqCorrection.SetLabel("IQ")
 		p.rfNotch.SetLabel(i18n.Source("text.5acff90d01d7"))
@@ -241,7 +259,13 @@ func (p *SDRHeaderPanel) refresh() {
 	} else {
 		p.ifGain.SetValue(s.IFGain)
 	}
-	p.ppm.SetValue(s.PPM)
+	if airspy {
+		p.ppm.SetValue(s.BasebandGain)
+	} else {
+		p.ppm.SetRange(-100, 100)
+		p.ppm.SetStep(.1)
+		p.ppm.SetValue(s.PPM)
+	}
 	p.setpoint.SetValue(float32(s.AGCSetpoint))
 	for _, c := range p.controls {
 		c.SetEnabled(s.Available)
@@ -267,7 +291,7 @@ func (p *SDRHeaderPanel) refresh() {
 		bounds := control.Bounds()
 		bounds.Y = bottomY
 		control.SetBounds(bounds)
-		control.SetVisible(!hackrf)
+		control.SetVisible(!hackrf && !airspy)
 	}
 	if hackrf {
 		for _, control := range []simpleui.Element{p.iqCorrection, p.ppm, p.setpoint, p.rfNotch, p.dabNotch} {
@@ -278,6 +302,13 @@ func (p *SDRHeaderPanel) refresh() {
 		p.agc.SetEnabled(s.Available)
 		p.biasT.SetEnabled(s.Available)
 		p.ifGain.SetEnabled(s.Available)
+	} else if airspy {
+		p.iqCorrection.SetEnabled(false)
+		p.rfNotch.SetEnabled(false)
+		p.dabNotch.SetEnabled(false)
+		p.setpoint.SetEnabled(false)
+		p.ifGain.SetEnabled(s.Available && !s.AGC)
+		p.ppm.SetEnabled(s.Available && !s.AGC)
 	} else if rtl {
 		p.ifGain.SetEnabled(s.Available)
 		p.setpoint.SetEnabled(false)
@@ -293,6 +324,13 @@ func (p *SDRHeaderPanel) refreshLabels() {
 		p.rfLabel.SetText(fmt.Sprintf("LNA  %.0f dB", p.current.RFGain))
 		p.ifLabel.SetText(fmt.Sprintf("VGA  %.0f dB", p.current.IFGain))
 		p.ppmLabel.SetText(i18n.Source("text.6f41a0c5df05"))
+		p.setpointLabel.SetText(i18n.Source("text.eb6ef01999d1"))
+		return
+	}
+	if p.current.Driver == "airspy" {
+		p.rfLabel.SetText(fmt.Sprintf("LNA  %.0f dB", p.current.RFGain))
+		p.ifLabel.SetText(fmt.Sprintf("MIX  %.0f dB", p.current.IFGain))
+		p.ppmLabel.SetText(fmt.Sprintf("VGA  %.0f dB", p.current.BasebandGain))
 		p.setpointLabel.SetText(i18n.Source("text.eb6ef01999d1"))
 		return
 	}

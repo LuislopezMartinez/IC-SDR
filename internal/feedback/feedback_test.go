@@ -1,29 +1,34 @@
 package feedback
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 )
 
-func TestConfigOnlyAcceptsGoogleForms(t *testing.T) {
-	config := Config{FormAction: "https://example.com/formResponse", Fields: FieldConfig{Type: "entry.1", Name: "entry.2", Email: "entry.3", Comment: "entry.4", Technical: "entry.5"}}
-	if config.Validate() == nil {
-		t.Fatal("accepted a non-Google submission endpoint")
+func TestIssueURLTargetsOfficialRepositoryAndPrefillsDiagnostics(t *testing.T) {
+	address := IssueURL(TechnicalInfo{
+		Version: "v1.2.3", Windows: "Windows 11", Architecture: "amd64",
+		SDR: "SDRplay RSP1B", SDRStatus: "Conectado",
+	})
+	parsed, err := url.Parse(address)
+	if err != nil {
+		t.Fatal(err)
 	}
-	config.FormAction = "https://docs.google.com/forms/d/e/test/formResponse"
-	if err := config.Validate(); err != nil {
-		t.Fatalf("valid Google Forms configuration rejected: %v", err)
+	if parsed.Scheme != "https" || parsed.Host != "github.com" || parsed.Path != "/LuislopezMartinez/IC-SDR/issues/new" {
+		t.Fatalf("unexpected issue destination: %s", address)
+	}
+	body := parsed.Query().Get("body")
+	for _, expected := range []string{"IC-SDR: v1.2.3", "Windows 11 · amd64", "SDRplay RSP1B · Conectado"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("issue body lacks %q: %s", expected, body)
+		}
 	}
 }
 
-func TestTechnicalSummaryOnlyIncludesReceiverContextWhenRequested(t *testing.T) {
-	info := TechnicalInfo{Version: "v1.2.3", SDR: "RTL-SDR", Mode: "FM", Band: "2 m", Frequency: "145.500 MHz"}
-	minimal := TechnicalSummary(info, false)
-	if strings.Contains(minimal, "145.500") || strings.Contains(minimal, "Modo:") {
-		t.Fatalf("minimal summary leaked receiver context: %s", minimal)
-	}
-	complete := TechnicalSummary(info, true)
-	if !strings.Contains(complete, "145.500 MHz") || !strings.Contains(complete, "Modo: FM") {
-		t.Fatalf("complete summary lacks receiver context: %s", complete)
+func TestTechnicalSummaryUsesFallbacks(t *testing.T) {
+	summary := TechnicalSummary(TechnicalInfo{})
+	if !strings.Contains(summary, "IC-SDR: desarrollo") || !strings.Contains(summary, "SDR: No detectado · Desconectado") {
+		t.Fatalf("summary lacks fallbacks: %s", summary)
 	}
 }

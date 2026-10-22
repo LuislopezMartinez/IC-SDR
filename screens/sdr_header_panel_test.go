@@ -52,3 +52,26 @@ func TestHackRFHeaderExposesHardwareStages(t *testing.T) {
 		t.Fatal("HackRF AMP label leaked into RTL-SDR controls")
 	}
 }
+
+func TestAirspyHeaderExposesThreeGainStages(t *testing.T) {
+	p := NewSDRHeaderPanel(nil, nil)
+	p.current = sdr.HardwareSettings{
+		Available: true, Driver: "airspy", Device: "Airspy",
+		RFGain: 8, IFGain: 7, BasebandGain: 6, BiasT: true,
+	}
+	p.refresh()
+	if p.rfGain.Value() != 8 || p.ifGain.Value() != 7 || p.ppm.Value() != 6 {
+		t.Fatalf("Airspy gains unavailable: LNA=%.0f MIX=%.0f VGA=%.0f", p.rfGain.Value(), p.ifGain.Value(), p.ppm.Value())
+	}
+	if !strings.Contains(p.rfLabel.Text(), "LNA") || !strings.Contains(p.ifLabel.Text(), "MIX") || !strings.Contains(p.ppmLabel.Text(), "VGA") {
+		t.Fatalf("Airspy labels incorrect: %q / %q / %q", p.rfLabel.Text(), p.ifLabel.Text(), p.ppmLabel.Text())
+	}
+	if !p.rfGain.Enabled() || !p.ifGain.Enabled() || !p.ppm.Enabled() || !p.biasT.Active() {
+		t.Fatalf("Airspy manual controls unavailable")
+	}
+	p.current.AGC = true
+	p.refresh()
+	if p.rfGain.Enabled() || p.ifGain.Enabled() || p.ppm.Enabled() {
+		t.Fatal("Airspy manual gains remained enabled under AGC")
+	}
+}

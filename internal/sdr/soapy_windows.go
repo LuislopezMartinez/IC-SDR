@@ -70,8 +70,10 @@ type soapyDevice struct {
 	antenna    string
 	antennas   []string
 	sampleRate float64
+	nativeRate float64
 	buffer     []float32
 	buffers    [1]uintptr
+	resampler  *complexResampler
 }
 
 func openSoapy(config Config) (*soapyDevice, error) {
@@ -107,8 +109,8 @@ func listSoapyDevices(config Config) ([]DeviceOption, error) {
 		scanner.loaded = make(map[string]bool)
 	}
 	var firstErr error
-	for _, driver := range []string{"sdrplay", "rtlsdr", "hackrf"} {
-		if driver == "hackrf" && !hasHackRFModule(config.RuntimeRoot) {
+	for _, driver := range supportedDrivers {
+		if (driver == "hackrf" || driver == "airspy") && !hasSoapyModule(config.RuntimeRoot, driver) {
 			continue
 		}
 		if scanner.loaded[driver] {
@@ -152,7 +154,7 @@ func listSoapyDevices(config Config) ([]DeviceOption, error) {
 				option.Label = cString(value)
 			}
 		}
-		if option.Driver == "sdrplay" || option.Driver == "rtlsdr" || option.Driver == "hackrf" {
+		if supportedDriver(option.Driver) {
 			result = append(result, option)
 		}
 	}
@@ -168,7 +170,7 @@ func deviceCandidates(config Config) []Config {
 		any.Serial = ""
 		candidates = append(candidates, any)
 	}
-	for _, driver := range []string{"sdrplay", "rtlsdr", "hackrf"} {
+	for _, driver := range supportedDrivers {
 		if driver == config.Driver {
 			continue
 		}
@@ -179,8 +181,9 @@ func deviceCandidates(config Config) []Config {
 	return candidates
 }
 
-func hasHackRFModule(root string) bool {
-	_, err := os.Stat(filepath.Join(root, "lib", "SoapySDR", "modules0.8", "HackRFSupport.dll"))
+func hasSoapyModule(root, driver string) bool {
+	name := map[string]string{"hackrf": "HackRFSupport.dll", "airspy": "airspySupport.dll"}[driver]
+	_, err := os.Stat(filepath.Join(root, "lib", "SoapySDR", "modules0.8", name))
 	return err == nil
 }
 
@@ -220,7 +223,15 @@ func openSoapyCandidate(config Config) (result *soapyDevice, err error) {
 		message := api.deviceError()
 		return nil, fmt.Errorf(i18n.Source("text.243b35027c16"), message)
 	}
-	result = &soapyDevice{api: api, device: device, driver: config.Driver, serial: config.Serial, buffer: make([]float32, config.FFTSize*2)}
+	nativeRate := config.SampleRate
+	if config.Driver == "airspy" {
+		nativeRate = 2_500_000
+	}
+	bufferSamples := config.FFTSize
+	if nativeRate > config.SampleRate {
+		bufferSamples = int(math.Ceil(float64(config.FFTSize)*nativeRate/config.SampleRate)) + 64
+	}
+	result = &soapyDevice{api: api, device: device, driver: config.Driver, serial: config.Serial, buffer: make([]float32, bufferSamples*2), nativeRate: nativeRate}
 	defer func() {
 		if err != nil {
 			result.close()
@@ -228,11 +239,24 @@ func openSoapyCandidate(config Config) (result *soapyDevice, err error) {
 	}()
 	result.hardware = api.consume(api.hardwareKey(device))
 	result.refreshAntennas()
-	config.trace(i18n.Source("text.62c09cdaa0ef"), config.Driver, config.SampleRate)
-	if err = api.check(api.setSampleRate(device, soapyRX, 0, config.SampleRate), i18n.Source("text.27405f9cff8f")); err != nil {
+	config.trace(i18n.Source("text.62c09cdaa0ef"), config.Driver, nativeRate)
+	if err = api.check(api.setSampleRate(device, soapyRX, 0, nativeRate), i18n.Source("text.27405f9cff8f")); err != nil {
 		return nil, err
 	}
-	result.sampleRate = api.getSampleRate(device, soapyRX, 0)
+	result.nativeRate = api.getSampleRate(device, soapyRX, 0)
+	if result.nativeRate <= 0 {
+		return nil, fmt.Errorf("invalid %s sample rate %.0f", config.Driver, result.nativeRate)
+	}
+	result.sampleRate = result.nativeRate
+	if config.Driver == "airspy" && math.Abs(result.nativeRate-config.SampleRate) > 1 {
+		result.resampler = newComplexResampler(result.nativeRate, config.SampleRate)
+		result.sampleRate = config.SampleRate
+	}
+	if config.Driver == "airspy" {
+		if err = api.check(api.setGainMode(device, soapyRX, 0, true), "Airspy AGC"); err != nil {
+			return nil, err
+		}
+	}
 	config.trace(i18n.Source("text.d028519ac0c5"), config.Driver, config.FrequencyHz)
 	if err = api.check(api.setFrequency(device, soapyRX, 0, float64(config.FrequencyHz), 0), i18n.Source("text.cf4982d2de5b")); err != nil {
 		return nil, err
@@ -304,6 +328,17 @@ func loadSoapy(config Config) (*soapyAPI, error) {
 			}
 			api.dependencies = append(api.dependencies, handle)
 		}
+	} else if config.Driver == "airspy" {
+		moduleName = "airspySupport.dll"
+		for _, name := range []string{"libusb-1.0.dll", "pthreadVSE2.dll", "airspy.dll"} {
+			dependencyPath := filepath.Join(root, "bin", name)
+			handle, loadErr := syscall.LoadLibrary(dependencyPath)
+			if loadErr != nil {
+				api.close()
+				return nil, fmt.Errorf("load Airspy dependency %s: %w", name, loadErr)
+			}
+			api.dependencies = append(api.dependencies, handle)
+		}
 	}
 	modulePath := filepath.Join(root, "lib", "SoapySDR", "modules0.8", moduleName)
 	config.trace(i18n.Source("text.e8fe4854f48e"), config.Driver)
@@ -351,7 +386,15 @@ func loadSoapy(config Config) (*soapyAPI, error) {
 }
 
 func (device *soapyDevice) read(destination []float32) (int, int32, error) {
+	if device.resampler != nil {
+		if produced := device.resampler.pull(destination); produced > 0 {
+			return produced, int32(produced), nil
+		}
+	}
 	requested := min(len(destination)/2, len(device.buffer)/2)
+	if device.resampler != nil {
+		requested = len(device.buffer) / 2
+	}
 	device.buffers[0] = uintptr(unsafe.Pointer(&device.buffer[0]))
 	var flags int32
 	var timestamp int64
@@ -361,6 +404,11 @@ func (device *soapyDevice) read(destination []float32) (int, int32, error) {
 	}
 	if read < 0 {
 		return 0, read, fmt.Errorf(i18n.Source("text.d6b1d17ba435"), device.api.errorText(read))
+	}
+	if device.resampler != nil {
+		device.resampler.push(device.buffer[:int(read)*2])
+		produced := device.resampler.pull(destination)
+		return produced, int32(produced), nil
 	}
 	copy(destination, device.buffer[:int(read)*2])
 	return int(read), read, nil
@@ -452,6 +500,16 @@ func (device *soapyDevice) hardwareSettings() HardwareSettings {
 			BiasT:       device.readBoolSetting("bias_tx"),
 		}
 	}
+	if device.driver == "airspy" {
+		return HardwareSettings{
+			Available: true, Device: device.hardware, Driver: device.driver, Serial: device.serial,
+			AGC:          device.api.getGainMode(device.device, soapyRX, 0),
+			RFGain:       float32(device.api.getGainElement(device.device, soapyRX, 0, "LNA")),
+			IFGain:       float32(device.api.getGainElement(device.device, soapyRX, 0, "MIX")),
+			BasebandGain: float32(device.api.getGainElement(device.device, soapyRX, 0, "VGA")),
+			BiasT:        device.readBoolSetting("biastee"),
+		}
+	}
 	return HardwareSettings{
 		Available: true, Device: device.hardware, Driver: device.driver, Serial: device.serial,
 		Antenna: antenna, Antennas: antennas,
@@ -518,6 +576,24 @@ func (device *soapyDevice) applyHardwareSettings(settings HardwareSettings) erro
 		}
 		if current.BiasT != settings.BiasT {
 			apply(device.api.writeSetting(device.device, "bias_tx", boolString(settings.BiasT)), "HackRF Bias-T")
+		}
+		return errors.Join(failures...)
+	}
+	if device.driver == "airspy" {
+		if current.AGC != settings.AGC {
+			apply(device.api.setGainMode(device.device, soapyRX, 0, settings.AGC), "Airspy AGC")
+		}
+		if !settings.AGC && current.RFGain != settings.RFGain {
+			apply(device.api.setGainElement(device.device, soapyRX, 0, "LNA", float64(settings.RFGain)), "Airspy LNA")
+		}
+		if !settings.AGC && current.IFGain != settings.IFGain {
+			apply(device.api.setGainElement(device.device, soapyRX, 0, "MIX", float64(settings.IFGain)), "Airspy MIX")
+		}
+		if !settings.AGC && current.BasebandGain != settings.BasebandGain {
+			apply(device.api.setGainElement(device.device, soapyRX, 0, "VGA", float64(settings.BasebandGain)), "Airspy VGA")
+		}
+		if current.BiasT != settings.BiasT {
+			apply(device.api.writeSetting(device.device, "biastee", boolString(settings.BiasT)), "Airspy Bias-T")
 		}
 		return errors.Join(failures...)
 	}

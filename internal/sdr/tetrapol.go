@@ -46,6 +46,7 @@ func (r *Receiver) StartTETRAPOLRuntimeConfigured(channelType, band, direction s
 func (r *Receiver) StartTETRAPOLRuntimeConfiguredWithCipher(channelType, band, direction, cipherState string) error {
 	r.tetrapolRuntimeMu.Lock()
 	defer r.tetrapolRuntimeMu.Unlock()
+	r.setTETRAPOLCipherState(cipherState)
 	if r.tetrapolNative != nil && r.tetrapolNative.Running() {
 		return nil
 	}
@@ -128,7 +129,7 @@ func (r *Receiver) TETRAPOLRuntimeStatus() TETRAPOLRuntimeStatus {
 }
 
 func (r *Receiver) enqueueTETRAPOLAudio(input []float32) {
-	if len(input) == 0 || !r.tetrapolAudioEnabled.Load() {
+	if len(input) == 0 || !r.tetrapolAudioEnabled.Load() || r.tetrapolAudioBlocked.Load() {
 		return
 	}
 	// RP-CELP produces 8 kHz mono; reconstruct its speech band before placing
@@ -139,4 +140,19 @@ func (r *Receiver) enqueueTETRAPOLAudio(input []float32) {
 
 func (r *Receiver) SetTETRAPOLAudioEnabled(enabled bool) {
 	r.tetrapolAudioEnabled.Store(enabled)
+}
+
+func (r *Receiver) setTETRAPOLCipherState(state string) {
+	blocked := state == "encrypted"
+	r.tetrapolAudioBlocked.Store(blocked)
+	if !blocked {
+		return
+	}
+	// Do not leave PCM from a previous clear call waiting in the shared
+	// playback rings when an explicitly encrypted session is selected.
+	r.mu.Lock()
+	r.audioRead, r.audioWrite, r.audioCount = 0, 0, 0
+	r.digitalAudioRead, r.digitalAudioWrite, r.digitalAudioCount = 0, 0, 0
+	r.stats.AudioBuffered = 0
+	r.mu.Unlock()
 }

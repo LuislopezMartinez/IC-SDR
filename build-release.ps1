@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.19.0'
+    [string]$Version = '0.20.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -231,9 +231,20 @@ $copies = @(
     @{ Source = 'DATA\tools\tetra\runtime'; Destination = 'DATA\tools\tetra\runtime' },
     @{ Source = 'DATA\tools\tetrapol\native'; Destination = 'DATA\tools\tetrapol\native' },
     @{ Source = 'DATA\tools\voacap\runtime'; Destination = 'DATA\tools\voacap\runtime' },
-    @{ Source = 'DATA\config\feedback.json'; Destination = 'DATA\config\feedback.json' },
     @{ Source = 'DATA\data\ic-sdr-settings.json'; Destination = 'DATA\data\ic-sdr-settings.json' }
 )
+
+$airspyRuntime = @(
+    'DATA\runtime\windows-x64\bin\airspy.dll',
+    'DATA\runtime\windows-x64\bin\pthreadVSE2.dll',
+    'DATA\runtime\windows-x64\lib\SoapySDR\modules0.8\airspySupport.dll',
+    'DATA\runtime\windows-x64\licenses\libairspy-LICENSE.md',
+    'DATA\runtime\windows-x64\licenses\SoapyAirspy-LICENSE.txt'
+)
+foreach ($relativePath in $airspyRuntime) {
+    $required = Join-Path $projectRoot $relativePath
+    if (-not (Test-Path -LiteralPath $required)) { throw "Falta un componente requerido de Airspy: $required" }
+}
 
 foreach ($copy in $copies) {
     $source = Join-Path $projectRoot $copy.Source
@@ -244,7 +255,7 @@ foreach ($copy in $copies) {
     Copy-Item -LiteralPath $source -Destination $destination -Recurse -Force
 }
 
-# SoapySDR and rtlsdrSupport are built with MSVC. Bundling their runtime keeps
+# SoapySDR and its receiver modules are built with MSVC. Bundling their runtime keeps
 
 $languageDestination = Join-Path $distRoot 'contenidos'
 New-Item -ItemType Directory -Path $languageDestination -Force | Out-Null

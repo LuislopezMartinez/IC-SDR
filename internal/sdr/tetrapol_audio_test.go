@@ -56,6 +56,33 @@ func TestTETRAPOLPlaybackStateIsDigitalWhilePCMIsBuffered(t *testing.T) {
 	}
 }
 
+func TestTETRAPOLExplicitlyEncryptedSessionBlocksAndClearsAudio(t *testing.T) {
+	receiver := NewReceiver(Config{SampleRate: 2_048_000, FFTSize: 4096})
+	voice := make([]float32, 320)
+	for index := range voice {
+		voice[index] = float32(math.Sin(2 * math.Pi * 1000 * float64(index) / tetrapolAudioInputRate))
+	}
+	receiver.enqueueTETRAPOLAudio(voice)
+	if receiver.audioCount == 0 {
+		t.Fatal("clear TETRAPOL audio was not queued")
+	}
+
+	receiver.setTETRAPOLCipherState("encrypted")
+	if receiver.audioCount != 0 || receiver.digitalAudioCount != 0 {
+		t.Fatalf("queued clear audio was retained for encrypted session: analog=%d digital=%d", receiver.audioCount, receiver.digitalAudioCount)
+	}
+	receiver.enqueueTETRAPOLAudio(voice)
+	if receiver.audioCount != 0 || receiver.digitalAudioCount != 0 {
+		t.Fatalf("encrypted TETRAPOL audio reached playback queue: analog=%d digital=%d", receiver.audioCount, receiver.digitalAudioCount)
+	}
+
+	receiver.setTETRAPOLCipherState("unknown")
+	receiver.enqueueTETRAPOLAudio(voice)
+	if receiver.audioCount == 0 {
+		t.Fatal("unknown direct-TCH audio was incorrectly blocked")
+	}
+}
+
 func toneMagnitude(samples []float32, frequency, sampleRate float64) float64 {
 	var real, imaginary float64
 	for index, sample := range samples {

@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.19.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.19.0)**
+**Versión actual: [v0.20.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.20.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -50,6 +50,14 @@ IC-SDR integra herramientas para recibir y visualizar:
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
 
+## Novedades de v0.20.0
+
+- Compatibilidad integrada con **Airspy R2**, incluidos los componentes necesarios en la distribución portable para Windows.
+- El flujo nativo de Airspy a 2,5 MS/s se adapta internamente a 2,048 MS/s con remuestreo complejo filtrado, manteniendo la compatibilidad con los demoduladores de IC-SDR.
+- Nuevos controles específicos de Airspy: AGC, LNA, MIX, VGA y Bias-T, tanto en la cabecera SDR como en los ajustes detallados.
+- El monitor TETRAPOL permite filtrar el seguimiento automático por **GSSI**: se pueden añadir grupos detectados o introducirlos manualmente; las llamadas cifradas no se siguen ni se decodifican.
+- **Reportes y sugerencias** abre una incidencia en GitHub con diagnóstico técnico mínimo y sin enviar datos a servicios de formularios externos.
+
 ## Novedades de v0.19.0
 
 - Nuevo motor **TETRAPOL nativo x64** integrado en IC-SDR: elimina la dependencia de procesos auxiliares para la recepción y deja el procesamiento de IQ, telemetría y audio dentro de la aplicación.
@@ -60,8 +68,7 @@ IC-SDR integra herramientas para recibir y visualizar:
 
 ## Novedades de v0.18.0
 
-- Nueva ventana de **Reportes y sugerencias** desde el menú principal, con categorías de mensaje, datos técnicos de la aplicación y opción explícita de añadir el contexto actual del receptor.
-- Los datos de contacto que el usuario decida recordar para futuros reportes se conservan exclusivamente en su perfil local de Windows y no forman parte de la distribución portable.
+- Nuevo acceso de **Reportes y sugerencias** desde el menú principal.
 - Mejoras de QRZ Callbook: muestra y activa correctamente la ventana de inicio de sesión cuando hace falta, impide interpretar páginas sin autenticar como perfiles y reconoce más variantes del locator.
 
 ## Novedades de v0.17.2
@@ -129,7 +136,6 @@ IC-SDR integra herramientas para recibir y visualizar:
 - Nueva herramienta **QRZ Callbook**: consulta de indicativos desde una ventana integrada, con ficha de estación, foto, bandera y datos de ubicación.
 - Nuevo mapa de distancia para los resultados de QRZ, con rutas corta y larga entre la estación local y la consultada.
 - La sesión de QRZ se guarda fuera de la carpeta portable, en el perfil local de Windows: las cookies y credenciales no se incluyen al compartir ni al publicar una distribución.
-- El nombre o indicativo y el correo recordados por la ventana de reportes se guardan en el perfil local de Windows, fuera de la carpeta portable, y no se incluyen al compartir la aplicación.
 - El receptor SDR detecta flujos de muestras detenidos y recupera automáticamente la captura, con reintentos controlados.
 - El runtime DAB se asocia al proceso principal de Windows para que se cierre también si IC-SDR termina de forma inesperada.
 - La utilidad de comprobación IQ admite duración, resintonía y frecuencia desde línea de comandos para diagnósticos más completos.
@@ -327,9 +333,9 @@ Los runtimes y herramientas auxiliares se conservan localmente en `DATA/runtime`
 
 - Windows.
 - Go 1.27 o posterior para compilar desde el código fuente.
-- Un receptor compatible con RTL-SDR, SDRplay (incluido RSP-Dx) o HackRF Pro.
+- Un receptor compatible con RTL-SDR, SDRplay (incluido RSP-Dx), HackRF Pro o Airspy R2.
 
-El selector SDR detecta los equipos conectados. En RSP-Dx muestra las antenas que expone el controlador y permite cambiar entre ellas durante la recepción. En Windows, HackRF Pro requiere que el dispositivo tenga instalado un controlador USB compatible con libusb/WinUSB. La distribución portable incluye `hackrf.dll`, `pthreadVC3.dll` y `HackRFSupport.dll` junto al runtime SoapySDR.
+El selector SDR detecta los equipos conectados. En RSP-Dx muestra las antenas que expone el controlador y permite cambiar entre ellas durante la recepción. En Windows, HackRF Pro requiere que el dispositivo tenga instalado un controlador USB compatible con libusb/WinUSB. Airspy R2 utiliza su flujo nativo de 2,5 MS/s, adaptado internamente a la tasa de procesamiento de IC-SDR, y ofrece controles LNA, MIX, VGA, AGC y Bias-T. La distribución portable incluye los módulos y bibliotecas de HackRF y Airspy junto al runtime SoapySDR.
 
 ## Compilación
 

@@ -254,11 +254,14 @@ func startStartupWatchdog() func() {
 func logPortableResources() {
 	paths := []string{
 		resources.Path("runtime", "windows-x64", "bin", "SoapySDR.dll"),
+		resources.Path("runtime", "windows-x64", "bin", "airspy.dll"),
+		resources.Path("runtime", "windows-x64", "bin", "pthreadVSE2.dll"),
 		resources.Path("runtime", "windows-x64", "bin", "MSVCP140.dll"),
 		resources.Path("runtime", "windows-x64", "bin", "VCRUNTIME140.dll"),
 		resources.Path("runtime", "windows-x64", "bin", "VCRUNTIME140_1.dll"),
 		resources.Path("runtime", "windows-x64", "lib", "SoapySDR", "modules0.8", "sdrPlaySupport.dll"),
 		resources.Path("runtime", "windows-x64", "lib", "SoapySDR", "modules0.8", "rtlsdrSupport.dll"),
+		resources.Path("runtime", "windows-x64", "lib", "SoapySDR", "modules0.8", "airspySupport.dll"),
 		resources.Path("tools", "digital_voice", "runtime", "bin", "dsd-neo.exe"),
 	}
 	for _, path := range paths {

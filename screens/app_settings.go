@@ -85,6 +85,8 @@ type persistedAppSettings struct {
 	TETRAPOLBand          string                        `json:"tetrapolBand,omitempty"`
 	TETRAPOLPlan          string                        `json:"tetrapolPlan,omitempty"`
 	TETRAPOLDirection     string                        `json:"tetrapolDirection,omitempty"`
+	TETRAPOLGSSIFilter    *bool                         `json:"tetrapolGssiFilter,omitempty"`
+	TETRAPOLAllowedGSSIs  []int                         `json:"tetrapolAllowedGssis,omitempty"`
 	Hardware              *sdr.HardwareSettings         `json:"hardware,omitempty"`
 	BandDisplayProfiles   map[string]bandDisplayProfile `json:"bandDisplayProfiles,omitempty"`
 }
@@ -312,6 +314,10 @@ func loadAppSettings(path string, screen *MainScreen) {
 	if settings.TETRAPOLDirection == "UP" || settings.TETRAPOLDirection == "DOWN" {
 		screen.tetrapolDirection = settings.TETRAPOLDirection
 	}
+	if settings.TETRAPOLGSSIFilter != nil {
+		screen.tetrapolGSSIFilter = *settings.TETRAPOLGSSIFilter
+	}
+	screen.tetrapolAllowedGSSIs = normalizeTETRAPOLGSSIs(settings.TETRAPOLAllowedGSSIs)
 	if settings.Hardware != nil {
 		hardware := *settings.Hardware
 		screen.savedHardware = &hardware
@@ -467,6 +473,8 @@ func (screen *MainScreen) flushSettings(force bool) {
 		TETRAPOLBand:          screen.tetrapolBand,
 		TETRAPOLPlan:          screen.tetrapolPlan,
 		TETRAPOLDirection:     screen.tetrapolDirection,
+		TETRAPOLGSSIFilter:    boolSetting(screen.tetrapolGSSIFilter),
+		TETRAPOLAllowedGSSIs:  normalizeTETRAPOLGSSIs(screen.tetrapolAllowedGSSIs),
 		BandDisplayProfiles:   screen.bandDisplayProfiles,
 	}
 	if screen.rtl433Panel != nil {

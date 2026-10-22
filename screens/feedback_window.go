@@ -1,19 +1,17 @@
 package screens
 
 import (
-	"fmt"
 	"log"
 	"strings"
 	"time"
 
 	"go-zero/internal/buildinfo"
 	"go-zero/internal/feedback"
-	"go-zero/internal/resources"
 )
 
 func (screen *MainScreen) openFeedbackWindow() {
 	if screen.feedbackWindow == nil {
-		screen.feedbackWindow = feedback.NewWindow(resources.WritablePath("config", "feedback.json"))
+		screen.feedbackWindow = feedback.NewWindow()
 	}
 	windowsName, architecture := feedback.PlatformDescription()
 	now := time.Now()
@@ -26,11 +24,6 @@ func (screen *MainScreen) openFeedbackWindow() {
 		Architecture: architecture,
 		LocalTime:    now.Format("02/01/2006 · 15:04"),
 		TimeZone:     zone,
-		Band:         screen.bandName,
-		Frequency:    fmt.Sprintf("%.6f MHz", float64(screen.frequencyHz)/1e6),
-	}
-	if screen.mode != nil {
-		info.Mode = screen.mode.SelectedText()
 	}
 	if screen.receiver != nil {
 		hardware := screen.receiver.HardwareSettings()

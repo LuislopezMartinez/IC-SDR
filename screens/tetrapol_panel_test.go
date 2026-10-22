@@ -57,6 +57,34 @@ func TestTETRAPOLFollowReturnsToCCHAfterAcquisitionTimeout(t *testing.T) {
 	}
 }
 
+func TestTETRAPOLFollowRejectsExplicitlyEncryptedCall(t *testing.T) {
+	screen := NewMainScreen(nil)
+	screen.frequencyHz = 390_000_000
+	panel := NewTETRAPOLPanel(screen)
+	panel.enabled = true
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+
+	panel.handleChannelFollowAt(tetrapolruntime.Telemetry{
+		ChannelAction: "follow",
+		ChannelID:     2528,
+		ChannelEvent:  1,
+		CipherState:   "encrypted",
+	}, now)
+
+	if panel.following || panel.channelType != "CCH" {
+		t.Fatalf("encrypted call was followed: following=%v channel=%s", panel.following, panel.channelType)
+	}
+	if screen.frequencyHz != 390_000_000 {
+		t.Fatalf("encrypted call retuned receiver to %d", screen.frequencyHz)
+	}
+	if panel.lastChannelEvent != 1 {
+		t.Fatalf("encrypted event was not consumed: got %d", panel.lastChannelEvent)
+	}
+	if panel.feedback != "TCH 2528 cifrado · llamada ignorada" {
+		t.Fatalf("encrypted rejection feedback = %q", panel.feedback)
+	}
+}
+
 func TestTETRAPOLFollowTemporarilyBlocksStaleReactivation(t *testing.T) {
 	screen := NewMainScreen(nil)
 	screen.frequencyHz = 390_000_000
@@ -181,13 +209,93 @@ func TestTETRAPOLPanelUsesNarrowbandChannelStep(t *testing.T) {
 	if screen.waterfallVisible {
 		t.Fatal("TETRAPOL panel left waterfall controls active")
 	}
-	if got, want := len(panel.controls), 16; got != want {
+	if got, want := len(panel.controls), 26; got != want {
 		t.Fatalf("TETRAPOL controls = %d, want %d", got, want)
 	}
 	if panel.start.Bounds().X < toolContentX {
 		t.Fatalf("start button is hidden outside tool content: x=%.0f", panel.start.Bounds().X)
 	}
 	panel.Leave()
+}
+
+func TestTETRAPOLGSSIFilterFollowsOnlyAllowedGroup(t *testing.T) {
+	newPanel := func(allowed []int) (*MainScreen, *TETRAPOLPanel) {
+		screen := NewMainScreen(nil)
+		screen.frequencyHz = 390_000_000
+		screen.tetrapolGSSIFilter = true
+		screen.tetrapolAllowedGSSIs = normalizeTETRAPOLGSSIs(allowed)
+		panel := NewTETRAPOLPanel(screen)
+		panel.enabled = true
+		return screen, panel
+	}
+	call := func(groupID int) tetrapolruntime.Telemetry {
+		return tetrapolruntime.Telemetry{
+			ChannelAction: "follow", ChannelID: 2528, ChannelEvent: 1, CipherState: "clear",
+			Groups: []tetrapolruntime.GroupObservation{{GroupID: groupID, ChannelID: 2528, CipherState: "clear"}},
+		}
+	}
+	now := time.Date(2026, 10, 22, 14, 0, 0, 0, time.UTC)
+
+	_, allowed := newPanel([]int{1201})
+	allowed.handleChannelFollowAt(call(1201), now)
+	if !allowed.following || allowed.channelType != "TCH" {
+		t.Fatal("allowed GSSI was not followed")
+	}
+
+	screen, rejected := newPanel([]int{1201})
+	rejected.handleChannelFollowAt(call(3470), now)
+	if rejected.following || rejected.channelType != "CCH" || screen.frequencyHz != 390_000_000 {
+		t.Fatal("unlisted GSSI changed away from the CCH")
+	}
+	if rejected.feedback != "GSSI 3470 ignorado · no autorizado" {
+		t.Fatalf("rejection feedback = %q", rejected.feedback)
+	}
+}
+
+func TestTETRAPOLGSSIFilterRejectsUnknownButAllModeAllowsIt(t *testing.T) {
+	call := tetrapolruntime.Telemetry{ChannelAction: "follow", ChannelID: 2528, ChannelEvent: 1, CipherState: "clear"}
+	now := time.Date(2026, 10, 22, 14, 0, 0, 0, time.UTC)
+
+	filteredScreen := NewMainScreen(nil)
+	filteredScreen.frequencyHz = 390_000_000
+	filteredScreen.tetrapolGSSIFilter = true
+	filtered := NewTETRAPOLPanel(filteredScreen)
+	filtered.enabled = true
+	filtered.handleChannelFollowAt(call, now)
+	if filtered.following || filtered.feedback != "TCH 2528 ignorado · GSSI sin identificar" {
+		t.Fatalf("unknown filtered call was not safely rejected: following=%v feedback=%q", filtered.following, filtered.feedback)
+	}
+
+	allScreen := NewMainScreen(nil)
+	allScreen.frequencyHz = 390_000_000
+	all := NewTETRAPOLPanel(allScreen)
+	all.enabled = true
+	all.handleChannelFollowAt(call, now)
+	if !all.following {
+		t.Fatal("TODOS mode rejected a call without GSSI")
+	}
+}
+
+func TestTETRAPOLGSSIControlsOnlyAppearInNetworkView(t *testing.T) {
+	panel := NewTETRAPOLPanel(NewMainScreen(nil))
+	panel.SetVisible(true)
+	for _, control := range panel.gssiControls {
+		if control.Visible() {
+			t.Fatalf("GSSI control %s visible in ESTADO view", control.ID())
+		}
+	}
+	panel.setActiveView(1)
+	for _, control := range panel.gssiControls {
+		if !control.Visible() {
+			t.Fatalf("GSSI control %s hidden in RED view", control.ID())
+		}
+	}
+	panel.setActiveView(2)
+	for _, control := range panel.gssiControls {
+		if control.Visible() {
+			t.Fatalf("GSSI control %s visible in LLAMADAS view", control.ID())
+		}
+	}
 }
 
 func TestTETRAPOLAFCStartsEnabledWithCarrierEstimator(t *testing.T) {

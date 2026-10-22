@@ -77,7 +77,14 @@ func (modal *SDRSettings) createControls() {
 	modal.rfGain.OnRelease(func(float32) { modal.submit() })
 	modal.ifGain.OnChange(func(value float32) { modal.current.IFGain = value; modal.refreshLabels() })
 	modal.ifGain.OnRelease(func(float32) { modal.submit() })
-	modal.ppm.OnChange(func(value float32) { modal.current.PPM = value; modal.refreshLabels() })
+	modal.ppm.OnChange(func(value float32) {
+		if modal.current.Driver == "airspy" {
+			modal.current.BasebandGain = value
+		} else {
+			modal.current.PPM = value
+		}
+		modal.refreshLabels()
+	})
 	modal.ppm.OnRelease(func(float32) { modal.submit() })
 	modal.setpoint.OnChange(func(value float32) {
 		modal.current.AGCSetpoint = int(math.Round(float64(value)))
@@ -174,17 +181,42 @@ func (modal *SDRSettings) refresh() {
 	modal.iqCorrection.SetActive(settings.IQCorrection)
 	modal.rfGain.SetValue(settings.RFGain)
 	modal.ifGain.SetValue(settings.IFGain)
-	modal.ppm.SetValue(settings.PPM)
-	modal.setpoint.SetValue(float32(settings.AGCSetpoint))
-	modal.ifGain.SetEnabled(settings.Available && !settings.AGC)
 	for _, control := range modal.controls {
 		control.SetVisible(settings.Available)
 	}
+	if settings.Driver == "airspy" {
+		modal.rfGain.SetRange(0, 15)
+		modal.ifGain.SetRange(0, 15)
+		modal.ppm.SetRange(0, 15)
+		modal.ppm.SetStep(1)
+		modal.ppm.SetValue(settings.BasebandGain)
+		modal.rfNotch.SetVisible(false)
+		modal.dabNotch.SetVisible(false)
+		modal.iqCorrection.SetVisible(false)
+		modal.setpoint.SetVisible(false)
+		modal.setpointLabel.SetVisible(false)
+	} else {
+		modal.rfGain.SetRange(0, 9)
+		modal.rfGain.SetStep(1)
+		modal.ifGain.SetRange(20, 59)
+		modal.ifGain.SetStep(1)
+		modal.ppm.SetRange(-100, 100)
+		modal.ppm.SetStep(.1)
+		modal.ppm.SetValue(settings.PPM)
+	}
+	modal.setpoint.SetValue(float32(settings.AGCSetpoint))
+	modal.ifGain.SetEnabled(settings.Available && !settings.AGC)
 	modal.cancel.SetVisible(true)
 	modal.refreshLabels()
 }
 
 func (modal *SDRSettings) refreshLabels() {
+	if modal.current.Driver == "airspy" {
+		modal.rfLabel.SetText(fmt.Sprintf("LNA  %.0f dB", modal.current.RFGain))
+		modal.ifLabel.SetText(fmt.Sprintf("MIX  %.0f dB", modal.current.IFGain))
+		modal.ppmLabel.SetText(fmt.Sprintf("VGA  %.0f dB", modal.current.BasebandGain))
+		return
+	}
 	modal.rfLabel.SetText(fmt.Sprintf(i18n.Source("text.b369a319f723"), modal.current.RFGain))
 	ifText := fmt.Sprintf(i18n.Source("text.c2bf6f633050"), modal.current.IFGain)
 	if modal.current.AGC {

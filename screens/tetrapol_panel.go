@@ -38,6 +38,11 @@ type TETRAPOLPanel struct {
 	start, events, capture                     *simpleui.Button
 	presets                                    [3]*simpleui.Button
 	views                                      [4]*simpleui.Button
+	gssiModes                                  [2]*simpleui.Button
+	gssiDetectedAdd, gssiAllowedRemove         [3]*simpleui.Button
+	gssiInput                                  *simpleui.TextField
+	gssiManualAdd                              *simpleui.Button
+	gssiControls                               []simpleui.Element
 	channel, direction, band                   *simpleui.Dropdown
 	audio, follow, autoCenter                  *simpleui.Switch
 	enabled, visible, audioEnabled             bool
@@ -62,6 +67,8 @@ type TETRAPOLPanel struct {
 	tchCipherState                             string
 	feedback                                   string
 	iqWriter                                   *iqcapture.Writer
+	detectedGSSIs                              map[int]tetrapolruntime.GroupObservation
+	detectedGSSIRows, allowedGSSIRows          []int
 }
 
 func NewTETRAPOLPanel(screen *MainScreen) *TETRAPOLPanel {
@@ -79,7 +86,7 @@ func NewTETRAPOLPanel(screen *MainScreen) *TETRAPOLPanel {
 	if direction != "UP" {
 		direction = "DOWN"
 	}
-	panel := &TETRAPOLPanel{BaseElement: simpleui.NewBaseElement("tetrapolNetworkOverlay", 0, 0, designWidth, designHeight), screen: screen, channelType: "CCH", bandType: band, planType: planType, linkType: direction, audioEnabled: true, followEnabled: true, followedChannel: -1, blockedChannel: -1, followState: "CCH", networkLive: true}
+	panel := &TETRAPOLPanel{BaseElement: simpleui.NewBaseElement("tetrapolNetworkOverlay", 0, 0, designWidth, designHeight), screen: screen, channelType: "CCH", bandType: band, planType: planType, linkType: direction, audioEnabled: true, followEnabled: true, followedChannel: -1, blockedChannel: -1, followState: "CCH", networkLive: true, detectedGSSIs: make(map[int]tetrapolruntime.GroupObservation)}
 	panel.start = simpleui.NewButton("tetrapolStart", 374, toolY+45, 132, 38, "INICIAR", 14)
 	panel.start.OnClick(func() { panel.enabled = !panel.enabled; panel.apply() })
 	panel.controls = append(panel.controls, panel.start)
@@ -149,6 +156,7 @@ func NewTETRAPOLPanel(screen *MainScreen) *TETRAPOLPanel {
 		panel.views[index] = button
 		panel.controls = append(panel.controls, button)
 	}
+	panel.createGSSIFilterControls()
 	panel.setActiveView(0)
 	panel.apply()
 	panel.SetVisible(false)
@@ -170,6 +178,7 @@ func (panel *TETRAPOLPanel) setActiveView(index int) {
 			button.SetColors(colors.panel, colors.border, colors.muted)
 		}
 	}
+	panel.setGSSIFilterControlsVisible(panel.visible && index == 1)
 }
 
 func (panel *TETRAPOLPanel) setBand(band string) {
@@ -403,6 +412,21 @@ func (panel *TETRAPOLPanel) handleChannelFollowAt(telemetry tetrapolruntime.Tele
 	}
 	panel.lastChannelEvent = telemetry.ChannelEvent
 	if telemetry.ChannelAction == "follow" && panel.channelType == "CCH" {
+		if telemetry.CipherState == "encrypted" {
+			panel.feedback = fmt.Sprintf("TCH %d cifrado · llamada ignorada", telemetry.ChannelID)
+			return
+		}
+		if panel.screen.tetrapolGSSIFilter {
+			groupID, known := tetrapolFollowGroupID(telemetry)
+			if !known {
+				panel.feedback = fmt.Sprintf("TCH %d ignorado · GSSI sin identificar", telemetry.ChannelID)
+				return
+			}
+			if !containsTETRAPOLGSSI(panel.screen.tetrapolAllowedGSSIs, groupID) {
+				panel.feedback = fmt.Sprintf("GSSI %d ignorado · no autorizado", groupID)
+				return
+			}
+		}
 		if telemetry.ChannelID == panel.blockedChannel && now.Before(panel.blockedUntil) {
 			panel.feedback = fmt.Sprintf("TCH %d esperando rearme", telemetry.ChannelID)
 			return
@@ -526,6 +550,7 @@ func (panel *TETRAPOLPanel) SetVisible(visible bool) {
 	for _, control := range panel.controls {
 		control.SetVisible(visible)
 	}
+	panel.setGSSIFilterControlsVisible(visible && panel.activeView == 1)
 	panel.refreshPresetControls()
 }
 
@@ -580,6 +605,7 @@ func (panel *TETRAPOLPanel) DrawPanel() {
 	}
 	panel.reconcileAcquisitionFeedback(telemetry)
 	panel.latestTelemetry = telemetry
+	panel.observeGSSIGroups(telemetry)
 	panel.drawReadableHeader(status, telemetry)
 
 	drawTETRAPOLGroup(rl.Rectangle{X: 360, Y: toolY + 5, Width: 315, Height: 202}, "CONTROL TETRAPOL")
@@ -612,7 +638,9 @@ func (panel *TETRAPOLPanel) DrawPanel() {
 	if telemetry.VoiceActive {
 		voice = "ACTIVA"
 	}
-	if panel.activeView == 1 || panel.showEvents {
+	if panel.activeView == 1 {
+		panel.drawGSSIFilter()
+	} else if panel.showEvents {
 		panel.drawEvents(telemetry)
 	} else if panel.activeView == 2 {
 		panel.drawConversationSummary(telemetry)

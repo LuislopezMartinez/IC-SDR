@@ -259,6 +259,8 @@ type MainScreen struct {
 	tetrapolBand           string
 	tetrapolPlan           string
 	tetrapolDirection      string
+	tetrapolGSSIFilter     bool
+	tetrapolAllowedGSSIs   []int
 	utilitiesSidebar       *UtilitiesSidebar
 	utilitiesCollapsed     bool
 	utilitiesLayoutCompact bool

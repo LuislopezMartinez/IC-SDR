@@ -3,10 +3,15 @@ IC-SDR Go - distribución portable
 
 Copie la carpeta IC-SDR-Go completa y ejecute IC-SDR-Go.exe conservando DATA
 junto al ejecutable. El paquete incluye el runtime de Visual C++ que requieren
-SoapySDR y RTL-SDR, por lo que no necesita instalarlo por separado.
-DATA contiene los runtimes de SoapySDR/SDRplay, DMR, Digital Auto (DSD-neo 2.9.0), RTL_433 y APRS, así como
+SoapySDR, RTL-SDR y Airspy, por lo que no necesita instalarlos por separado.
+DATA contiene los runtimes de SoapySDR/SDRplay/Airspy, DMR, Digital Auto (DSD-neo 2.9.0), RTL_433 y APRS, así como
 sus datos auxiliares y licencias. No es necesario iniciar el programa desde una
 carpeta concreta.
+
+El Airspy R2 funciona a 2,5 MS/s y la aplicación adapta su flujo a 2,048 MS/s
+para conservar la compatibilidad con los demoduladores. El panel SDR ofrece
+AGC, LNA, MIX, VGA y Bias-T. Windows normalmente instala automáticamente el
+controlador WinUSB del receptor.
 
 FT8 integra como proceso externo el núcleo de `ft8mon` adaptado para audio
 PCM de IC-SDR. La herramienta trabaja en USB, sincroniza automáticamente los
