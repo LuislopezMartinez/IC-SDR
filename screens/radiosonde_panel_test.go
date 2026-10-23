@@ -70,15 +70,18 @@ func TestRadiosondeMenuBounds(t *testing.T) {
 		t.Fatalf("tool menu is not centered: %+v", modal)
 	}
 	for i := range toolMenuItems {
+		menu.category = toolMenuItems[i].row
+		menu.focusIndex = i
+		menu.carousel = float32(menu.localIndex(i))
 		a := menu.itemBounds(i)
-		if a.X < modal.X || a.X+a.Width > modal.X+modal.Width {
+		if a.Width <= 0 || a.Height <= 0 || a.X < modal.X || a.X+a.Width > modal.X+modal.Width || a.Y < modal.Y || a.Y+a.Height > modal.Y+modal.Height {
 			t.Fatalf("tool %s outside menu: %+v", toolMenuItems[i].id, a)
 		}
-		for j := 0; j < i; j++ {
-			b := menu.itemBounds(j)
-			if a.X < b.X+b.Width && b.X < a.X+a.Width && a.Y < b.Y+b.Height && b.Y < a.Y+a.Height {
-				t.Fatalf("tools %d and %d overlap", i, j)
-			}
+	}
+	for row := 0; row < 3; row++ {
+		b := menu.categoryBounds(row)
+		if b.X < modal.X || b.X+b.Width > modal.X+modal.Width || b.Y < modal.Y || b.Y+b.Height > modal.Y+modal.Height {
+			t.Fatalf("category %d outside menu: %+v", row, b)
 		}
 	}
 }
@@ -155,7 +158,11 @@ func TestRadiosondeRender(t *testing.T) {
 	}
 	rl.UnloadImage(panelImage)
 	rl.BeginTextureMode(canvas)
-	menu := NewToolMenu("RADIOSONDE", nil)
+	selected := os.Getenv("TOOL_MENU_RENDER_SELECTED")
+	if selected == "" {
+		selected = "RADIOSONDE"
+	}
+	menu := NewToolMenu(selected, nil)
 	menu.Open()
 	menu.DrawOverlay()
 	rl.EndTextureMode()

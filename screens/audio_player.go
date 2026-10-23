@@ -28,9 +28,9 @@ const (
 	// DSDcc emits decoded DMR voice in bursts of roughly 360 ms. Keeping almost
 	// one burst queued prevents ordinary scheduler jitter from becoming audible.
 	digitalBurstPrebufferSamples = audioSampleRate * 340 / 1000
-	// Native TETRAPOL emits a steady 20 ms RP-CELP frame cadence. A smaller
-	// reservoir absorbs scheduler jitter without hiding the beginning of calls.
-	digitalStreamPrebufferSamples = audioSampleRate * 120 / 1000
+	// Native TETRAPOL emits a steady 20 ms RP-CELP frame cadence. Three frames
+	// absorb ordinary scheduler jitter while keeping followed calls responsive.
+	digitalStreamPrebufferSamples = audioSampleRate * 60 / 1000
 	digitalGraceSamples           = audioSampleRate * 100 / 1000
 	// raylib uses two sub-buffers. Two 25 ms halves reproduce the original
 	// JavaSound device buffer of 50 ms.
@@ -58,6 +58,7 @@ type AudioPlayer struct {
 	playbackDelay  atomic.Int64
 	digitalMode    atomic.Bool
 	digitalStream  atomic.Bool
+	tetrapolMode   atomic.Bool
 	wideFMMode     atomic.Bool
 	noiseMode      atomic.Bool
 	digitalActive  atomic.Bool
@@ -79,6 +80,7 @@ func (player *AudioPlayer) Pump() {
 		digital, stream := playbackModeClass(mode)
 		player.digitalMode.Store(digital)
 		player.digitalStream.Store(stream)
+		player.tetrapolMode.Store(mode == "TETRAPOL")
 		player.wideFMMode.Store(mode == i18n.Source("text.6b742bac3eb4"))
 		player.noiseMode.Store(noiseReductionMode(mode))
 		player.digitalActive.Store(active)
@@ -124,6 +126,7 @@ func (player *AudioPlayer) transitionPlaybackMode(mode string) {
 	}
 	player.resetPlaybackState()
 	player.processor.ResetNoiseReduction()
+	player.processor.ResetTETRAPOL()
 	player.playbackMode = mode
 }
 
@@ -214,7 +217,9 @@ func (player *AudioPlayer) fillAudio(destination []float32) {
 	} else {
 		player.digitalStarved = 0
 	}
-	if digital {
+	if player.tetrapolMode.Load() {
+		player.processor.ProcessTETRAPOL(destination[:availableOutput])
+	} else if digital {
 		player.processor.ProcessDigital(destination[:availableOutput])
 	} else if player.wideFMMode.Load() {
 		player.processor.ProcessWideFM(destination[:availableOutput])

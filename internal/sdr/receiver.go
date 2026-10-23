@@ -536,6 +536,53 @@ func (receiver *Receiver) SetCenterFrequency(frequencyHz int64) {
 
 func (receiver *Receiver) CenterFrequency() int64 { return receiver.centerHz.Load() }
 
+// CanTuneWithinCapture reports whether a narrow channel is already present in
+// the current wideband IQ capture. Keeping a guard at both Nyquist edges avoids
+// placing the channelizer transition band outside the captured spectrum.
+func (receiver *Receiver) CanTuneWithinCapture(frequencyHz int64, bandwidthHz int) bool {
+	if receiver.config.SampleRate <= 0 {
+		return false
+	}
+	guardHz := max(float64(max(bandwidthHz, 1_000))*2, 50_000.0)
+	usableHalfWidth := receiver.config.SampleRate/2 - guardHz
+	if usableHalfWidth <= 0 {
+		return false
+	}
+	delta := math.Abs(float64(frequencyHz - receiver.centerHz.Load()))
+	return delta <= usableHalfWidth
+}
+
+// SetCenterFrequencyAndWait prevents a freshly restarted narrowband decoder
+// from consuming samples that still belong to the previous hardware tuning.
+// SpectrumCenterHz is updated by runTuner only after the driver accepts the
+// request and reports its actual center frequency.
+func (receiver *Receiver) SetCenterFrequencyAndWait(frequencyHz int64, timeout time.Duration) bool {
+	receiver.SetCenterFrequency(frequencyHz)
+	if !receiver.running.Load() {
+		return false
+	}
+	deadline := time.Now().Add(timeout)
+	for {
+		receiver.mu.RLock()
+		actual := receiver.stats.SpectrumCenterHz
+		receiver.mu.RUnlock()
+		if actual > 0 && absInt64(actual-frequencyHz) <= 1_000 {
+			return true
+		}
+		if !time.Now().Before(deadline) {
+			return false
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
+func absInt64(value int64) int64 {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
 func (receiver *Receiver) SetFFTWindow(windowType string) { receiver.fft.SetWindowType(windowType) }
 func (receiver *Receiver) SetSpectrumAveraging(milliseconds int) {
 	receiver.averagingMs.Store(int64(min(max(milliseconds, 10), 300)))

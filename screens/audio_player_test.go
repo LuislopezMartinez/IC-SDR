@@ -20,7 +20,7 @@ func TestTETRAPOLUsesContinuousDigitalPlayback(t *testing.T) {
 	if !digital || !continuous {
 		t.Fatalf("TETRAPOL playback class = digital %v continuous %v", digital, continuous)
 	}
-	if got := playbackPrebufferSamples(digital, continuous); got != audioSampleRate*120/1000 {
+	if got := playbackPrebufferSamples(digital, continuous); got != audioSampleRate*60/1000 {
 		t.Fatalf("TETRAPOL prebuffer = %d", got)
 	}
 }

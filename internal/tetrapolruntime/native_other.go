@@ -18,5 +18,6 @@ func (*nativeAPI) destroy(uintptr)                           {}
 func (*nativeAPI) setSampleRate(uintptr, float64)            {}
 func (*nativeAPI) setAudioCallback(uintptr, func([]float32)) {}
 func (*nativeAPI) clearAudioCallback(uintptr)                {}
+func (*nativeAPI) clearNetworkState(uintptr)                 {}
 func (*nativeAPI) processIQ(uintptr, []float32)              {}
 func (*nativeAPI) snapshot(uintptr) (Telemetry, error)       { return Telemetry{}, fmt.Errorf("unavailable") }

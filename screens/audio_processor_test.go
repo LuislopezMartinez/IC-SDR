@@ -22,6 +22,29 @@ func TestAudioProcessorProducesFiniteBoundedOutput(t *testing.T) {
 	}
 }
 
+func TestTETRAPOLProcessingIsIndependentFromGenericAudioEQ(t *testing.T) {
+	plain := NewAudioProcessor()
+	configured := NewAudioProcessor()
+	configured.Configure(350, 1800, true, [5]float32{-12, 10, -8, 12, -10}, "FUERTE")
+
+	a := make([]float32, audioSampleRate/5)
+	b := make([]float32, len(a))
+	for index := range a {
+		a[index] = float32(.25 * math.Sin(2*math.Pi*1750*float64(index)/audioSampleRate))
+		b[index] = a[index]
+	}
+	plain.ProcessTETRAPOL(a)
+	configured.ProcessTETRAPOL(b)
+	for index := range a {
+		if math.Abs(float64(a[index]-b[index])) > 1e-6 {
+			t.Fatalf("generic EQ leaked into TETRAPOL sample %d: %v != %v", index, a[index], b[index])
+		}
+		if math.IsNaN(float64(a[index])) || math.IsInf(float64(a[index]), 0) || a[index] < -.98 || a[index] > .98 {
+			t.Fatalf("invalid TETRAPOL sample %d: %v", index, a[index])
+		}
+	}
+}
+
 func TestAudioSpectrumFindsTone(t *testing.T) {
 	processor := NewAudioProcessor()
 	samples := make([]float32, 2048)

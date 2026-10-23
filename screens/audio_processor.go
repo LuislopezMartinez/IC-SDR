@@ -73,6 +73,45 @@ func (f *audioBiquad) process(input float32) float32 {
 	return output
 }
 
+// tetrapolBiquad mirrors the gentle presence contour used by the author's
+// SDR# plugin, translated to IC-SDR's 48 kHz playback rate.
+type tetrapolBiquad struct{ b0, b1, b2, a1, a2, z1, z2 float64 }
+
+func newTETRAPOLPeak(frequency, q, gainDB float64) tetrapolBiquad {
+	a := math.Pow(10, gainDB/40)
+	w := 2 * math.Pi * frequency / audioSampleRate
+	alpha, cosine := math.Sin(w)/(2*q), math.Cos(w)
+	a0 := 1 + alpha/a
+	return tetrapolBiquad{
+		b0: (1 + alpha*a) / a0, b1: (-2 * cosine) / a0, b2: (1 - alpha*a) / a0,
+		a1: (-2 * cosine) / a0, a2: (1 - alpha/a) / a0,
+	}
+}
+
+func newTETRAPOLHighShelf(frequency, slope, gainDB float64) tetrapolBiquad {
+	a := math.Pow(10, gainDB/40)
+	w := 2 * math.Pi * frequency / audioSampleRate
+	cosine, sine := math.Cos(w), math.Sin(w)
+	alpha := sine / 2 * math.Sqrt((a+1/a)*(1/slope-1)+2)
+	beta := 2 * math.Sqrt(a) * alpha
+	a0 := (a + 1) - (a-1)*cosine + beta
+	return tetrapolBiquad{
+		b0: a * ((a + 1) + (a-1)*cosine + beta) / a0,
+		b1: -2 * a * ((a - 1) + (a+1)*cosine) / a0,
+		b2: a * ((a + 1) + (a-1)*cosine - beta) / a0,
+		a1: 2 * ((a - 1) - (a+1)*cosine) / a0,
+		a2: ((a + 1) - (a-1)*cosine - beta) / a0,
+	}
+}
+
+func (filter *tetrapolBiquad) process(input float32) float32 {
+	x := float64(input)
+	y := filter.b0*x + filter.z1
+	filter.z1 = filter.b1*x + filter.z2 - filter.a1*y
+	filter.z2 = filter.b2*x - filter.a2*y
+	return float32(y)
+}
+
 type AudioProcessor struct {
 	mu                                          sync.Mutex
 	lowCut, highCut                             int
@@ -87,6 +126,8 @@ type AudioProcessor struct {
 	profile                                     string
 	previousInput, highpass, lowpass1, lowpass2 float32
 	limiterGain                                 float32
+	tetrapolEQ                                  [4]tetrapolBiquad
+	tetrapolLimiterGain                         float32
 	ring                                        [512]float32
 	preNotchRing                                [512]float32
 	spectrumWindow                              [512]float64
@@ -100,7 +141,8 @@ type noiseReductionStatus struct {
 }
 
 func NewAudioProcessor() *AudioProcessor {
-	p := &AudioProcessor{lowCut: 100, highCut: 4000, eqEnabled: true, profile: i18n.Source("text.db2cb3fe28e2"), limiterGain: 1, noiseReducer: newAudioNoiseReducer(), noiseReductionStrength: 50, noiseReductionSpeed: "normal"}
+	p := &AudioProcessor{lowCut: 100, highCut: 4000, eqEnabled: true, profile: i18n.Source("text.db2cb3fe28e2"), limiterGain: 1, tetrapolLimiterGain: 1, noiseReducer: newAudioNoiseReducer(), noiseReductionStrength: 50, noiseReductionSpeed: "normal"}
+	p.resetTETRAPOLLocked()
 	for index := range p.spectrumWindow {
 		p.spectrumWindow[index] = .5 - .5*math.Cos(2*math.Pi*float64(index)/float64(len(p.spectrumWindow)-1))
 	}
@@ -177,6 +219,55 @@ func (p *AudioProcessor) ProcessWideFM(samples []float32) {
 
 func (p *AudioProcessor) ProcessDigital(samples []float32) {
 	p.process(samples, false, false)
+}
+
+// ProcessTETRAPOL deliberately bypasses the generic HPF/LPF/EQ chain. Native
+// RP-CELP has already applied its 80..3400 Hz speech filtering, AGC and soft
+// limiter; filtering it again made consonants markedly duller than SDR#.
+func (p *AudioProcessor) ProcessTETRAPOL(samples []float32) {
+	p.mu.Lock()
+	for index, sample := range samples {
+		value := sample
+		for band := range p.tetrapolEQ {
+			value = p.tetrapolEQ[band].process(value)
+		}
+		if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+			value = 0
+		}
+		const ceiling = float32(.98)
+		desired := float32(1)
+		if magnitude := absFloat32(value); magnitude > ceiling {
+			desired = ceiling / magnitude
+		}
+		if desired < p.tetrapolLimiterGain {
+			p.tetrapolLimiterGain = desired
+		} else {
+			p.tetrapolLimiterGain += float32(1-math.Exp(-1/(.08*audioSampleRate))) * (desired - p.tetrapolLimiterGain)
+		}
+		value = min(max(value*p.tetrapolLimiterGain, -ceiling), ceiling)
+		samples[index] = value
+		p.ring[p.ringWrite] = value
+		p.preNotchRing[p.ringWrite] = value
+		p.ringWrite = (p.ringWrite + 1) % len(p.ring)
+		p.ringCount = min(p.ringCount+1, len(p.ring))
+	}
+	p.mu.Unlock()
+}
+
+func (p *AudioProcessor) ResetTETRAPOL() {
+	p.mu.Lock()
+	p.resetTETRAPOLLocked()
+	p.mu.Unlock()
+}
+
+func (p *AudioProcessor) resetTETRAPOLLocked() {
+	p.tetrapolEQ = [4]tetrapolBiquad{
+		newTETRAPOLPeak(1000, .70, 1.0),
+		newTETRAPOLPeak(1750, .80, 2.5),
+		newTETRAPOLPeak(2500, .90, 2.5),
+		newTETRAPOLHighShelf(3200, .70, 3.0),
+	}
+	p.tetrapolLimiterGain = 1
 }
 
 func (p *AudioProcessor) ProcessAnalogBypass(samples []float32) {

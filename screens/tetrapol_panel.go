@@ -269,6 +269,32 @@ func (panel *TETRAPOLPanel) tunePreservingSpan(hz int64) {
 	panel.tuneWithSpan(hz, false)
 }
 
+// tuneFollowChannel keeps the SDR hardware centered on the CCH whenever the
+// assigned traffic channel is already inside the captured wideband IQ. Only
+// the digital channelizer moves, which avoids USB retuning and stale CCH IQ.
+// For distant channels it waits briefly for the hardware tune to complete
+// before the native decoder is restarted.
+func (panel *TETRAPOLPanel) tuneFollowChannel(hz int64) {
+	step := tetrapolPlan(panel.planType).stepHz
+	panel.screen.frequencyHz = hz
+	panel.screen.tuningStepHz = step
+	panel.screen.updateBandForFrequency(hz)
+	if panel.screen.stepSelector != nil {
+		panel.screen.stepSelector.SetSelected(step)
+	}
+	if panel.screen.receiver != nil {
+		if panel.screen.receiver.CanTuneWithinCapture(hz, int(step)) {
+			panel.screen.centerFrequencyHz = panel.screen.receiver.CenterFrequency()
+			panel.screen.receiver.SetDemodulator(tetrapolToolID, hz, int(step))
+		} else {
+			panel.screen.centerFrequencyHz = hz
+			panel.screen.receiver.SetCenterFrequencyAndWait(hz, 350*time.Millisecond)
+			panel.screen.receiver.SetDemodulator(tetrapolToolID, hz, int(step))
+		}
+	}
+	panel.screen.markSettingsDirty()
+}
+
 func (panel *TETRAPOLPanel) tuneWithSpan(hz int64, resetSpan bool) {
 	step := tetrapolPlan(panel.planType).stepHz
 	panel.screen.frequencyHz, panel.screen.centerFrequencyHz = hz, hz
@@ -310,14 +336,18 @@ func (panel *TETRAPOLPanel) restart() {
 // old-frame telemetry and channelizer history from being carried into the new
 // channel while avoiding one process restart for every wheel tick.
 func (panel *TETRAPOLPanel) resetAfterManualTune() {
+	panel.resetSessionForManualTune()
 	if !panel.enabled {
 		return
 	}
-	panel.resetSessionForManualTune()
 	if panel.screen.receiver == nil {
 		return
 	}
 	if !panel.pendingManualTune {
+		// A manual FFT tune starts a different listening session. Unlike an
+		// automatic CCH/TCH transition, no network information from the old
+		// frequency is valid on the new one.
+		panel.screen.receiver.ClearTETRAPOLNetworkState()
 		_ = panel.screen.receiver.StopTETRAPOLRuntime()
 		panel.feedback = "Reajustando TETRAPOL…"
 	}
@@ -338,6 +368,10 @@ func (panel *TETRAPOLPanel) resetSessionForManualTune() {
 	panel.tchCipherState = ""
 	panel.latestTelemetry = tetrapolruntime.Telemetry{}
 	panel.networkSnapshot = tetrapolruntime.Telemetry{}
+	clear(panel.detectedGSSIs)
+	panel.detectedGSSIRows = panel.detectedGSSIRows[:0]
+	panel.networkLive = true
+	panel.networkOffset = 0
 	if panel.channelType == "TCH" {
 		panel.followState = "TCH MANUAL"
 	} else {
@@ -451,7 +485,7 @@ func (panel *TETRAPOLPanel) handleChannelFollowAt(telemetry tetrapolruntime.Tele
 		if panel.screen.receiver != nil {
 			panel.screen.receiver.SetTETRAPOLFollowContext(telemetry.CellID, telemetry.ChannelID)
 		}
-		panel.tunePreservingSpan(targetHz)
+		panel.tuneFollowChannel(targetHz)
 		panel.feedback = fmt.Sprintf("Siguiendo TCH %d en %.4f MHz", telemetry.ChannelID, float64(targetHz)/1e6)
 		panel.restart()
 	}
@@ -476,7 +510,7 @@ func (panel *TETRAPOLPanel) returnToControl(reason string, now time.Time) {
 	if panel.screen.receiver != nil {
 		panel.screen.receiver.SetTETRAPOLFollowContext("", -1)
 	}
-	panel.tunePreservingSpan(controlHz)
+	panel.tuneFollowChannel(controlHz)
 	panel.feedback = reason
 	panel.restart()
 }

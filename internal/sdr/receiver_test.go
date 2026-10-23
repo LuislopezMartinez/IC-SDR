@@ -28,6 +28,16 @@ func TestCaptureStallDetection(t *testing.T) {
 	}
 }
 
+func TestCanTuneWithinCaptureKeepsGuardAtIQEdges(t *testing.T) {
+	receiver := NewReceiver(Config{FrequencyHz: 393_925_000, SampleRate: 2_048_000, FFTSize: 4096})
+	if !receiver.CanTuneWithinCapture(394_425_000, 12_500) {
+		t.Fatal("500 kHz TCH offset should remain inside the current IQ capture")
+	}
+	if receiver.CanTuneWithinCapture(395_000_000, 12_500) {
+		t.Fatal("channel beyond the guarded IQ edge should require hardware retuning")
+	}
+}
+
 func TestDigitalVoiceBypassSelectsDigitalThenReturnsToNFM(t *testing.T) {
 	receiver := NewReceiver(Config{FrequencyHz: 100_000_000, SampleRate: 2_048_000, FFTSize: 4096})
 	receiver.mu.Lock()

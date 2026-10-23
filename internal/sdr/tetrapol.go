@@ -83,6 +83,18 @@ func (r *Receiver) SetTETRAPOLFollowContext(cellID string, channelID int) {
 	r.tetrapolRuntimeMu.Unlock()
 }
 
+// ClearTETRAPOLNetworkState invalidates decoded network history when the user
+// manually changes frequency. It is deliberately not part of Stop: automatic
+// CCH/TCH transitions need the shared CCH registry to follow and return.
+func (r *Receiver) ClearTETRAPOLNetworkState() {
+	r.tetrapolRuntimeMu.Lock()
+	defer r.tetrapolRuntimeMu.Unlock()
+	r.tetrapolCellID, r.tetrapolChannelID = "", -1
+	if r.tetrapolNative != nil && r.tetrapolNative.Running() {
+		r.tetrapolNative.ClearNetworkState()
+	}
+}
+
 func tetrapolRuntimeArguments(channelType, band, direction string) (string, string, string, []string) {
 	if channelType != "CCH" {
 		channelType = "TCH"

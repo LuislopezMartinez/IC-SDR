@@ -11,22 +11,23 @@ import (
 )
 
 type nativeAPI struct {
-	library          syscall.Handle
-	callback         uintptr
-	create           func(int) uintptr
-	createConfigured func(int, int, int) uintptr
-	destroy          func(uintptr)
-	setSampleRate    func(uintptr, float64)
-	process          func(uintptr, []float32, int)
-	setCallback      func(uintptr, uintptr, uintptr)
-	getDiagBasic     func(uintptr, *nativeBasicDiag) int
-	getSyncState     func(uintptr) int
-	getChannelMode   func(uintptr) int
-	getTCHSession    func(uintptr) int
-	getAudioStats    func(uintptr, *int64, *int64, *int32) int
-	getCCHSnapshot   func(uintptr, *nativeCCHSnapshot) int
-	setCCHCell       func(uintptr, string)
-	setChannelID     func(uintptr, int)
+	library           syscall.Handle
+	callback          uintptr
+	create            func(int) uintptr
+	createConfigured  func(int, int, int) uintptr
+	destroy           func(uintptr)
+	setSampleRate     func(uintptr, float64)
+	process           func(uintptr, []float32, int)
+	setCallback       func(uintptr, uintptr, uintptr)
+	getDiagBasic      func(uintptr, *nativeBasicDiag) int
+	getSyncState      func(uintptr) int
+	getChannelMode    func(uintptr) int
+	getTCHSession     func(uintptr) int
+	getAudioStats     func(uintptr, *int64, *int64, *int32) int
+	getCCHSnapshot    func(uintptr, *nativeCCHSnapshot) int
+	setCCHCell        func(uintptr, string)
+	setChannelID      func(uintptr, int)
+	clearNetworkState func(uintptr)
 }
 
 type nativeBasicDiag struct {
@@ -86,6 +87,7 @@ func loadNativeAPI(path string) (nativeAPI, error) {
 		{"tp_get_audio_stats", &api.getAudioStats},
 		{"tp_get_cch_snapshot", &api.getCCHSnapshot}, {"tp_set_cch_cell_id", &api.setCCHCell},
 		{"tp_set_my_channel_id", &api.setChannelID},
+		{"tp_clear_network_state", &api.clearNetworkState},
 	} {
 		if err = register(item.target, item.name); err != nil {
 			return nativeAPI{}, err

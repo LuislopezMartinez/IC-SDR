@@ -118,7 +118,10 @@ func (decoder *Native) SubmitIQ(samples []float32) error {
 }
 
 func (decoder *Native) worker() {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	// CCH channel assignments precede the first speech frames only briefly.
+	// A 100 ms diagnostic cadence consumed too much of that guard interval
+	// before the host could start following the announced TCH.
+	ticker := time.NewTicker(25 * time.Millisecond)
 	defer ticker.Stop()
 	defer close(decoder.done)
 	for {
@@ -234,6 +237,17 @@ func (decoder *Native) Error() string {
 	decoder.mu.RLock()
 	defer decoder.mu.RUnlock()
 	return decoder.lastError
+}
+
+// ClearNetworkState drops the native cross-decoder CCH/TCH registry. This is
+// reserved for a user-initiated frequency change; ordinary decoder restarts
+// intentionally retain that registry while following a traffic channel.
+func (decoder *Native) ClearNetworkState() {
+	decoder.mu.RLock()
+	defer decoder.mu.RUnlock()
+	if decoder.running && decoder.handle != 0 {
+		decoder.api.clearNetworkState(decoder.handle)
+	}
 }
 
 func (decoder *Native) Telemetry() Telemetry {

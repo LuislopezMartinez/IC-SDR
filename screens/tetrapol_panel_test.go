@@ -169,6 +169,11 @@ func TestTETRAPOLManualSpectrumTuneInvalidatesPreviousSession(t *testing.T) {
 	panel.blockedChannel = 2528
 	panel.latestTelemetry = tetrapolruntime.Telemetry{CipherState: "clear", ValidFrames: 12}
 	panel.networkSnapshot = panel.latestTelemetry
+	panel.detectedGSSIs[321] = tetrapolruntime.GroupObservation{GroupID: 321}
+	panel.detectedGSSIRows = []int{321}
+	panel.networkLive = false
+	panel.networkOffset = 4
+	panel.screen.tetrapolAllowedGSSIs = []int{321}
 
 	panel.resetAfterManualTune()
 
@@ -180,6 +185,15 @@ func TestTETRAPOLManualSpectrumTuneInvalidatesPreviousSession(t *testing.T) {
 	}
 	if panel.tchActivitySeen || panel.blockedChannel != -1 || panel.followState != "TCH MANUAL" {
 		t.Fatalf("manual tune did not return to fresh acquisition state: activity=%v blocked=%d state=%q", panel.tchActivitySeen, panel.blockedChannel, panel.followState)
+	}
+	if len(panel.detectedGSSIs) != 0 || len(panel.detectedGSSIRows) != 0 {
+		t.Fatalf("manual tune retained detected groups: map=%v rows=%v", panel.detectedGSSIs, panel.detectedGSSIRows)
+	}
+	if !panel.networkLive || panel.networkOffset != 0 {
+		t.Fatalf("manual tune retained a paused/offset network view: live=%v offset=%d", panel.networkLive, panel.networkOffset)
+	}
+	if got := panel.screen.tetrapolAllowedGSSIs; len(got) != 1 || got[0] != 321 {
+		t.Fatalf("manual tune discarded user GSSI configuration: %v", got)
 	}
 }
 
