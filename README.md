@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.21.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.21.0)**
+**Versión actual: [v0.22.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.22.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -49,6 +49,12 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.22.0
+
+- Interfaz disponible también en alemán, con catálogo completo integrado en el ejecutable y traducción externa editable en `contenidos/de.json`.
+- Corregida la transición de AGC a ganancia manual: RTL-SDR restaura la ganancia del sintonizador y Airspy restablece LNA, MIX y VGA aunque el valor solicitado coincida con la lectura anterior.
+- Endurecida la sincronización durante la enumeración de dispositivos SDR para evitar estados de arranque inconsistentes.
 
 ## Novedades de v0.21.0
 

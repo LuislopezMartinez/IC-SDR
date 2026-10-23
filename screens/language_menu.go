@@ -95,6 +95,11 @@ func drawLanguageFlag(flag string, b rl.Rectangle) {
 		rl.DrawRectangleRec(rl.Rectangle{X: b.X + 13, Y: b.Y, Width: 8, Height: b.Height}, rl.White)
 		rl.DrawRectangleRec(rl.Rectangle{X: b.X, Y: b.Y + 10, Width: b.Width, Height: 3}, rl.Red)
 		rl.DrawRectangleRec(rl.Rectangle{X: b.X + 15, Y: b.Y, Width: 4, Height: b.Height}, rl.Red)
+	case "DE":
+		stripeHeight := b.Height / 3
+		rl.DrawRectangleRec(rl.Rectangle{X: b.X, Y: b.Y, Width: b.Width, Height: stripeHeight}, rl.Black)
+		rl.DrawRectangleRec(rl.Rectangle{X: b.X, Y: b.Y + stripeHeight, Width: b.Width, Height: stripeHeight}, rl.Color{R: 221, G: 0, B: 0, A: 255})
+		rl.DrawRectangleRec(rl.Rectangle{X: b.X, Y: b.Y + stripeHeight*2, Width: b.Width, Height: b.Height - stripeHeight*2}, rl.Color{R: 255, G: 206, B: 0, A: 255})
 	default:
 		rl.DrawRectangleLinesEx(b, 1, colors.text)
 		simpleui.DrawText(flag, b.X, b.Y, 10, colors.text)

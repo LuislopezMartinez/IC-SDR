@@ -534,10 +534,14 @@ func (device *soapyDevice) applyHardwareSettings(settings HardwareSettings) erro
 		}
 	}
 	if device.driver == "rtlsdr" {
+		leavingAGC := current.AGC && !settings.AGC
 		if current.AGC != settings.AGC {
 			apply(device.api.setGainMode(device.device, soapyRX, 0, settings.AGC), i18n.Source("text.55a69b8d806b"))
 		}
-		if !settings.AGC && current.RFGain != settings.RFGain {
+		// Some RTL-SDR drivers reset the manual tuner gain while leaving AGC.
+		// Reapply the requested value even when the pre-transition readback
+		// already matched it.
+		if !settings.AGC && (leavingAGC || current.RFGain != settings.RFGain) {
 			apply(device.api.setGainElement(device.device, soapyRX, 0, i18n.Source("text.91c1fd825c5a"), float64(settings.RFGain)), i18n.Source("text.1a4cbbb95852"))
 		}
 		if current.PPM != settings.PPM {
@@ -580,16 +584,19 @@ func (device *soapyDevice) applyHardwareSettings(settings HardwareSettings) erro
 		return errors.Join(failures...)
 	}
 	if device.driver == "airspy" {
+		leavingAGC := current.AGC && !settings.AGC
 		if current.AGC != settings.AGC {
 			apply(device.api.setGainMode(device.device, soapyRX, 0, settings.AGC), "Airspy AGC")
 		}
-		if !settings.AGC && current.RFGain != settings.RFGain {
+		// Airspy may also alter its stage gains when automatic gain is
+		// disabled, so restore all three manual stages after the transition.
+		if !settings.AGC && (leavingAGC || current.RFGain != settings.RFGain) {
 			apply(device.api.setGainElement(device.device, soapyRX, 0, "LNA", float64(settings.RFGain)), "Airspy LNA")
 		}
-		if !settings.AGC && current.IFGain != settings.IFGain {
+		if !settings.AGC && (leavingAGC || current.IFGain != settings.IFGain) {
 			apply(device.api.setGainElement(device.device, soapyRX, 0, "MIX", float64(settings.IFGain)), "Airspy MIX")
 		}
-		if !settings.AGC && current.BasebandGain != settings.BasebandGain {
+		if !settings.AGC && (leavingAGC || current.BasebandGain != settings.BasebandGain) {
 			apply(device.api.setGainElement(device.device, soapyRX, 0, "VGA", float64(settings.BasebandGain)), "Airspy VGA")
 		}
 		if current.BiasT != settings.BiasT {

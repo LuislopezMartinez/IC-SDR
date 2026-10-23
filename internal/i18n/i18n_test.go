@@ -57,6 +57,31 @@ func TestBundledEnglishFormatsAndCoverage(t *testing.T) {
 		t.Fatal("semantic source changed with language")
 	}
 }
+func TestBundledGermanFormatsCoverageAndSelection(t *testing.T) {
+	isolate(t)
+	german, ok := languages["de"]
+	if !ok || german.Name != "Deutsch" || german.Flag != "DE" {
+		t.Fatalf("German catalog metadata is invalid: %+v", german)
+	}
+	for k, source := range spanish {
+		target, ok := german.Texts[k]
+		if !ok || target == "" {
+			t.Fatalf("German is missing %s", k)
+		}
+		if !samePlaceholders(source, target) {
+			t.Fatalf("incompatible German format: %q => %q", source, target)
+		}
+	}
+	mu.Lock()
+	selected = "de"
+	rebuild()
+	mu.Unlock()
+	for input, want := range map[string]string{"ABRIR MAPA": "KARTE ÖFFNEN", "LIMPIAR": "LÖSCHEN", "INDICATIVO": "RUFZEICHEN"} {
+		if got := Display(input); got != want {
+			t.Fatalf("%q => %q, want %q", input, got, want)
+		}
+	}
+}
 func TestDiscoveryPersistenceFallbackAndInvalidFiles(t *testing.T) {
 	isolate(t)
 	dir := t.TempDir()

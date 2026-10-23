@@ -397,8 +397,8 @@ func (receiver *Receiver) SelectDevice(driver, serial string) error {
 
 func (receiver *Receiver) ListDevices() []DeviceOption {
 	receiver.startMu.Lock()
+	defer receiver.startMu.Unlock()
 	config := receiver.config
-	receiver.startMu.Unlock()
 	list, err := listSoapyDevices(config)
 	receiver.mu.Lock()
 	defer receiver.mu.Unlock()

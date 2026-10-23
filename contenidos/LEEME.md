@@ -12,4 +12,4 @@ Para crear una traducción:
 
 Los textos de presentación se traducen sin modificar los identificadores internos, las frecuencias ni los mensajes originales recibidos por radio. Los visores nuevos usan la selección guardada al abrirse.
 
-Los archivos de español e inglés también se incluyen en el ejecutable como respaldo si falta esta carpeta. Los archivos externos permiten añadir o corregir traducciones sin recompilar.
+Los archivos de español, inglés y alemán también se incluyen en el ejecutable como respaldo si falta esta carpeta. Los archivos externos permiten añadir o corregir traducciones sin recompilar.
