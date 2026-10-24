@@ -151,3 +151,48 @@ func TestRestoreMutableDataKeepsUserConfiguration(t *testing.T) {
 		t.Fatalf("restored settings = %q, want user", got)
 	}
 }
+
+func TestRestoreMutableDataKeepsContestLogAndBackups(t *testing.T) {
+	root := t.TempDir()
+	backup := filepath.Join(root, "backup")
+	target := filepath.Join(root, "target")
+	files := map[string]string{
+		"oceania-dx-ssb-2026.json":                 `{"qsos":[{"worked_call":"EA3IWW"}]}`,
+		filepath.Join("backups", "contest-1.json"): `{"qsos":[{"worked_call":"K3WU"}]}`,
+		filepath.Join("archive", "finished.json"):  `{"qsos":[{"worked_call":"A44A"}]}`,
+		filepath.Join("templates", "cq-ww.json"):   `{"contest":"CQ-WW-SSB"}`,
+	}
+
+	for name, content := range files {
+		path := filepath.Join(backup, "DATA", "logbook", name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stale := filepath.Join(target, "DATA", "logbook", "packaged-default.json")
+	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stale, []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := restoreMutableData(backup, target); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range files {
+		got, err := os.ReadFile(filepath.Join(target, "DATA", "logbook", name))
+		if err != nil {
+			t.Fatalf("read restored %s: %v", name, err)
+		}
+		if string(got) != want {
+			t.Fatalf("restored %s = %q, want %q", name, got, want)
+		}
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Fatalf("packaged logbook was not replaced: %v", err)
+	}
+}

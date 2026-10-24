@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var mutableDataDirectories = []string{"cache", "captures", "config", "exports", "logs", "recordings"}
+var mutableDataDirectories = []string{"cache", "captures", "config", "exports", "logbook", "logs", "recordings"}
 
 type InstallOptions struct {
 	Target     string
