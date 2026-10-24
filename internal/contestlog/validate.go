@@ -1,6 +1,9 @@
 package contestlog
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 type ValidationIssue struct {
 	Code     string
@@ -29,6 +32,17 @@ func (s *Session) ValidateSubmission() []ValidationIssue {
 	if strings.TrimSpace(s.Country) == "" {
 		add("country")
 	}
+	if isCQWWContest(s.Contest) {
+		if s.CategoryOperator != "SINGLE-OP" || s.CategoryTransmitter != "ONE" {
+			add("cqww_single_operator")
+		}
+		if !validCQZone(s.SentValue) {
+			add("cq_zone_sent")
+		}
+		if strings.TrimSpace(s.Location) == "" {
+			add("location")
+		}
+	}
 	if len(s.QSOs) == 0 {
 		add("no_qsos")
 	}
@@ -47,6 +61,16 @@ func (s *Session) ValidateSubmission() []ValidationIssue {
 		if BandForFrequency(q.FrequencyHz) != q.Band {
 			issues = append(issues, ValidationIssue{Code: "qso_band", QSOIndex: index})
 		}
+		if isCQWWContest(s.Contest) && !validCQZone(q.ReceivedExchangeText()) {
+			issues = append(issues, ValidationIssue{Code: "cq_zone_received", QSOIndex: index})
+		}
 	}
 	return issues
+}
+
+func isCQWWContest(contest string) bool { return contest == CQWWSSB || contest == CQWWCW }
+
+func validCQZone(value string) bool {
+	zone, err := strconv.Atoi(strings.TrimSpace(value))
+	return err == nil && zone >= 1 && zone <= 40
 }

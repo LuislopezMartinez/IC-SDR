@@ -62,6 +62,10 @@ func main() {
 		screens.RunFT8Viewer(os.Args[2])
 		return
 	}
+	if len(os.Args) == 3 && os.Args[1] == "--pocsag-viewer" {
+		screens.RunPOCSAGViewer(os.Args[2])
+		return
+	}
 	if len(os.Args) == 3 && os.Args[1] == "--sstv-compare" {
 		screens.RunSSTVComparator(os.Args[2])
 		return
@@ -161,6 +165,8 @@ func main() {
 		APRSWorkingDirectory:      resources.Path("tools", "aprs", "runtime"),
 		SSTVExecutable:            resources.Path("tools", "sstv", "runtime", "bin", "sstv_decoder_runner.exe"),
 		FT8Executable:             resources.Path("tools", "ft8", "runtime", "bin", "ic-sdr-ft8-runtime.exe"),
+		POCSAGExecutable:          resources.Path("tools", "pocsag", "runtime", "bin", "multimon-ng.exe"),
+		POCSAGHistoryPath:         resources.WritablePath("history", "pocsag.jsonl"),
 		DABExecutable:             resources.Path("tools", "dab", "runtime", "bin", "ic-sdr-dab-runtime.exe"),
 		DATVExecutable:            resources.Path("tools", "datv", "runtime", "bin", "leandvb.exe"),
 		VLCExecutable:             resources.Path("tools", "datv", "runtime", "vlc", "vlc.exe"),

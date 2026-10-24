@@ -76,7 +76,60 @@ func TestBundledGermanFormatsCoverageAndSelection(t *testing.T) {
 	selected = "de"
 	rebuild()
 	mu.Unlock()
-	for input, want := range map[string]string{"ABRIR MAPA": "KARTE ÖFFNEN", "LIMPIAR": "LÖSCHEN", "INDICATIVO": "RUFZEICHEN"} {
+	for input, want := range map[string]string{
+		"ABRIR MAPA":                 "KARTE ÖFFNEN",
+		"LIMPIAR":                    "LÖSCHEN",
+		"INDICATIVO":                 "RUFZEICHEN",
+		"VISTAS":                     "ANSICHTEN",
+		"DECODIFICADORES":            "DEKODER",
+		"BUSCANDO SINCRONISMO":       "SUCHE NACH SYNCHRONISATION",
+		"ESPERANDO DATOS DE RED":     "WARTE AUF NETZWERKDATEN",
+		"CONTROL TETRAPOL":           "TETRAPOL-STEUERUNG",
+		"SINTONÍA":                   "ABSTIMMUNG",
+		"DIRECCIÓN":                  "RICHTUNG",
+		"ACCESOS DE BANDA":           "FREQUENZBEREICHE",
+		"AJUSTE AUTOMÁTICO":          "AUTOMATISCHE EINSTELLUNG",
+		"CAPTURAR IQ":                "IQ AUFZEICHNEN",
+		"LLAMADAS":                   "ANRUFE",
+		"SIN IDENTIFICAR":            "NICHT IDENTIFIZIERT",
+		"DESCONOCIDO · AUDIO ACTIVO": "UNBEKANNT · AUDIO AKTIV",
+	} {
+		if got := Display(input); got != want {
+			t.Fatalf("%q => %q, want %q", input, got, want)
+		}
+	}
+}
+func TestBundledFrenchFormatsCoverageAndSelection(t *testing.T) {
+	isolate(t)
+	french, ok := languages["fr"]
+	if !ok || french.Name != "Français" || french.Flag != "FR" {
+		t.Fatalf("French catalog metadata is invalid: %+v", french)
+	}
+	for k, source := range spanish {
+		target, ok := french.Texts[k]
+		if !ok || target == "" {
+			t.Fatalf("French is missing %s", k)
+		}
+		if !samePlaceholders(source, target) {
+			t.Fatalf("incompatible French format: %q => %q", source, target)
+		}
+	}
+	mu.Lock()
+	selected = "fr"
+	rebuild()
+	mu.Unlock()
+	for input, want := range map[string]string{
+		"ABRIR MAPA":             "OUVRIR LA CARTE",
+		"LIMPIAR":                "EFFACER",
+		"INDICATIVO":             "INDICATIF",
+		"VISTAS":                 "VUES",
+		"DECODIFICADORES":        "DÉCODEURS",
+		"BUSCANDO SINCRONISMO":   "RECHERCHE DE SYNCHRONISATION",
+		"ESPERANDO DATOS DE RED": "EN ATTENTE DES DONNÉES RÉSEAU",
+		"CONTROL TETRAPOL":       "CONTRÔLE TETRAPOL",
+		"DIRECCIÓN":              "DIRECTION",
+		"CLARO":                  "EN CLAIR",
+	} {
 		if got := Display(input); got != want {
 			t.Fatalf("%q => %q, want %q", input, got, want)
 		}

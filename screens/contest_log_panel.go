@@ -25,7 +25,7 @@ const contestLogPanelRows = 6
 type ContestLogPanel struct {
 	screen                                                                    *MainScreen
 	controls                                                                  []simpleui.Element
-	stationCall, operator, workedCall                                         *simpleui.TextField
+	stationCall, operator, sentValue, location, workedCall                    *simpleui.TextField
 	rstSent, rstReceived, serialReceived                                      *simpleui.TextField
 	create, profile, editTemplates, power, save, export, openFolder           *simpleui.Button
 	viewLog, editLast, finish, history                                        *simpleui.Button
@@ -38,6 +38,7 @@ type ContestLogPanel struct {
 	statusColor                                                               rl.Color
 	pendingQSO                                                                string
 	profileValue                                                              string
+	autoSentValue                                                             string
 	operatorCategoryValue, assistedValue, categoryBandValue, transmitterValue string
 }
 
@@ -46,11 +47,14 @@ func NewContestLogPanel(screen *MainScreen) *ContestLogPanel {
 		archiveDir: resources.WritablePath("logbook", "archive"), exportDir: resources.WritablePath("exports", "cabrillo"),
 		backupDir: resources.WritablePath("logbook", "backups"), templateDir: resources.WritablePath("logbook", "templates"), statusColor: colors.muted}
 	p.reloadProfiles()
-	p.stationCall = simpleui.NewTextField("contestStationCall", 382, toolY+58, 190, 40, i18n.Source("text.log0001"), 16)
-	p.operator = simpleui.NewTextField("contestOperator", 584, toolY+58, 190, 40, i18n.Source("text.log0002"), 13)
-	p.power = simpleui.NewButton("contestPower", 786, toolY+58, 140, 40, i18n.Source("text.log0003"), 11)
+	p.stationCall = simpleui.NewTextField("contestStationCall", 382, toolY+58, 160, 40, i18n.Source("text.log0001"), 16)
+	p.operator = simpleui.NewTextField("contestOperator", 552, toolY+58, 145, 40, i18n.Source("text.log0002"), 13)
+	p.sentValue = simpleui.NewTextField("contestSentValue", 707, toolY+58, 90, 40, "CQ zone", 13)
+	p.location = simpleui.NewTextField("contestLocation", 807, toolY+58, 90, 40, "Location", 11)
+	p.location.SetText("DX")
+	p.power = simpleui.NewButton("contestPower", 907, toolY+58, 120, 40, i18n.Source("text.log0003"), 11)
 	p.power.OnClick(p.cyclePower)
-	p.create = simpleui.NewButton("contestCreate", 938, toolY+58, 280, 40, i18n.Source("text.log0004"), 13)
+	p.create = simpleui.NewButton("contestCreate", 1037, toolY+58, 181, 40, i18n.Source("text.log0004"), 13)
 	p.create.SetColors(actionStartFill, colors.green, colors.text)
 	p.create.OnClick(p.createSession)
 	p.profile = simpleui.NewButton("contestProfile", 382, toolY+29, 836, 24, "", 11)
@@ -79,7 +83,7 @@ func NewContestLogPanel(screen *MainScreen) *ContestLogPanel {
 	p.history = simpleui.NewButton("contestHistory", 1377, toolY+99, 180, 32, i18n.Source("text.log0141"), 11)
 	p.history.OnClick(func() { p.viewer.OpenHistory() })
 	p.operatorCategoryValue, p.assistedValue, p.categoryBandValue, p.transmitterValue = "SINGLE-OP", "NON-ASSISTED", "ALL", "ONE"
-	p.profileValue = contestlog.OceaniaDXSSB
+	p.profileValue = contestlog.CQWWSSB
 	p.refreshProfileLabel()
 	p.operatorCategory = simpleui.NewButton("contestOperatorCategory", 382, toolY+108, 165, 32, "", 10)
 	p.assisted = simpleui.NewButton("contestAssisted", 557, toolY+108, 165, 32, "", 10)
@@ -122,6 +126,16 @@ func NewContestLogPanel(screen *MainScreen) *ContestLogPanel {
 		field.SetMaxLength(16)
 		field.SetFont(simpleui.FontSemiBold)
 	}
+	p.sentValue.SetFilter(digitFilter)
+	p.sentValue.SetMaxLength(2)
+	p.stationCall.OnChange(func(string) { p.autofillCQZone() })
+	p.sentValue.OnChange(func(value string) {
+		if value != p.autoSentValue {
+			p.autoSentValue = ""
+		}
+	})
+	p.location.SetFilter(func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' })
+	p.location.SetMaxLength(8)
 	for _, field := range []*simpleui.TextField{p.rstSent, p.rstReceived} {
 		field.SetFilter(digitFilter)
 		field.SetMaxLength(4)
@@ -129,7 +143,7 @@ func NewContestLogPanel(screen *MainScreen) *ContestLogPanel {
 	}
 	p.workedCall.OnSubmit(func(string) { p.serialReceived.SetFocused(true) })
 	p.serialReceived.OnSubmit(func(string) { p.saveQSO() })
-	p.controls = []simpleui.Element{p.stationCall, p.operator, p.power, p.create, p.profile, p.editTemplates, p.workedCall, p.rstSent,
+	p.controls = []simpleui.Element{p.stationCall, p.operator, p.sentValue, p.location, p.power, p.create, p.profile, p.editTemplates, p.workedCall, p.rstSent,
 		p.rstReceived, p.serialReceived, p.save, p.viewLog, p.editLast, p.finish, p.history, p.operatorCategory,
 		p.assisted, p.categoryBand, p.transmitter, p.export, p.openFolder}
 	if loaded, err := contestlog.Load(p.path); err == nil {
@@ -155,11 +169,13 @@ func (p *ContestLogPanel) cycleProfile() {
 			p.categoryBandValue = "ALL"
 			p.refreshProfileLabel()
 			p.refreshConfigLabels()
+			p.refreshSentValueVisibility()
 			return
 		}
 	}
-	p.profileValue = contestlog.OceaniaDXSSB
+	p.profileValue = contestlog.CQWWSSB
 	p.refreshProfileLabel()
+	p.refreshSentValueVisibility()
 }
 
 func (p *ContestLogPanel) reloadProfiles() {
@@ -173,7 +189,7 @@ func (p *ContestLogPanel) reloadProfiles() {
 		found = found || profile.ID == p.profileValue
 	}
 	if !found {
-		p.profileValue = contestlog.OceaniaDXSSB
+		p.profileValue = contestlog.CQWWSSB
 	}
 }
 
@@ -189,6 +205,49 @@ func (p *ContestLogPanel) refreshProfileLabel() {
 		}
 	}
 	p.profile.SetLabel(i18n.Source("text.log0154"))
+}
+
+func (p *ContestLogPanel) selectedProfile() (contestlog.Profile, bool) {
+	for _, profile := range p.profiles {
+		if profile.ID == p.profileValue {
+			return profile, true
+		}
+	}
+	return contestlog.Profile{}, false
+}
+
+func (p *ContestLogPanel) refreshSentValueVisibility() {
+	if p.sentValue == nil {
+		return
+	}
+	profile, ok := p.selectedProfile()
+	p.sentValue.SetVisible(ok && profile.SentExchange == "FIXED")
+	if ok && (profile.ID == contestlog.CQWWSSB || profile.ID == contestlog.CQWWCW) {
+		p.operatorCategoryValue, p.transmitterValue = "SINGLE-OP", "ONE"
+		p.refreshConfigLabels()
+		p.autofillCQZone()
+	}
+}
+
+func (p *ContestLogPanel) autofillCQZone() {
+	profile, ok := p.selectedProfile()
+	if !ok || (profile.ID != contestlog.CQWWSSB && profile.ID != contestlog.CQWWCW) {
+		return
+	}
+	current := strings.TrimSpace(p.sentValue.Text())
+	if current != "" && current != p.autoSentValue {
+		return
+	}
+	zone, ok := contestlog.CQZoneForCall(p.stationCall.Text())
+	if !ok {
+		if current == p.autoSentValue {
+			p.sentValue.SetText("")
+			p.autoSentValue = ""
+		}
+		return
+	}
+	p.autoSentValue = strconv.Itoa(zone)
+	p.sentValue.SetText(p.autoSentValue)
 }
 
 func (p *ContestLogPanel) receivedExchangeLabel() string {
@@ -250,7 +309,7 @@ func (p *ContestLogPanel) createSession() {
 	}
 	session, err := contestlog.NewSessionFromProfile(selected, p.stationCall.Text(), p.operator.Text(), contestlog.Config{
 		Power: power, OperatorCategory: p.operatorCategoryValue, Assisted: p.assistedValue,
-		Band: p.categoryBandValue, Transmitter: p.transmitterValue}, time.Now())
+		Band: p.categoryBandValue, Transmitter: p.transmitterValue, SentValue: p.sentValue.Text(), Location: p.location.Text()}, time.Now())
 	if err != nil {
 		p.setStatus(err.Error(), colors.red)
 		return
@@ -469,9 +528,14 @@ func (p *ContestLogPanel) Tick()                   {}
 
 func (p *ContestLogPanel) refreshVisibility(panelVisible bool) {
 	creating := p.session == nil
-	for _, control := range []simpleui.Element{p.stationCall, p.operator, p.power, p.create, p.profile, p.editTemplates, p.operatorCategory, p.assisted, p.categoryBand, p.transmitter} {
+	for _, control := range []simpleui.Element{p.stationCall, p.operator, p.location, p.power, p.create, p.profile, p.editTemplates, p.operatorCategory, p.assisted, p.categoryBand, p.transmitter} {
 		control.SetVisible(panelVisible && creating)
 	}
+	profile, ok := p.selectedProfile()
+	p.sentValue.SetVisible(panelVisible && creating && ok && profile.SentExchange == "FIXED")
+	cqww := ok && (profile.ID == contestlog.CQWWSSB || profile.ID == contestlog.CQWWCW)
+	p.operatorCategory.SetEnabled(!cqww)
+	p.transmitter.SetEnabled(!cqww)
 	if p.history != nil {
 		p.history.SetVisible(panelVisible)
 		p.history.SetEnabled(p.session != nil || len(p.archivePaths()) > 0)

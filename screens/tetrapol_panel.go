@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"go-zero/internal/i18n"
 	"go-zero/internal/iqcapture"
 	"go-zero/internal/resources"
 	"go-zero/internal/tetrapol"
@@ -691,7 +692,12 @@ func (panel *TETRAPOLPanel) DrawPanel() {
 		audioBounds := rl.Rectangle{X: 1411, Y: toolY + 39, Width: 168, Height: 32}
 		rl.DrawRectangleRounded(audioBounds, .25, 8, audioColor)
 		drawCentered(audioLabel, audioBounds, 12, simpleui.EnsureTextContrast(colors.text, audioColor))
-		items := []string{"TRAMA  " + frame, "TIPO  " + valueOrDash(telemetry.FrameType), "CANAL  " + valueOrDash(telemetry.LogicalChannel), "VOZ  " + voice}
+		items := []string{
+			i18n.Source("text.tetrapolFrame") + "  " + frame,
+			i18n.Display("TIPO") + "  " + valueOrDash(telemetry.FrameType),
+			i18n.Display("CANAL") + "  " + valueOrDash(telemetry.LogicalChannel),
+			i18n.Display("VOZ") + "  " + i18n.Display(voice),
+		}
 		for index, value := range items {
 			bounds := rl.Rectangle{X: 1110 + float32(index)*117, Y: toolY + 79, Width: 109, Height: 35}
 			rl.DrawRectangleRounded(bounds, .14, 6, colors.panel)

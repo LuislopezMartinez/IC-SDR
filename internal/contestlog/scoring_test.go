@@ -34,3 +34,34 @@ func TestOceaniaScoreByBandAndPrefix(t *testing.T) {
 		t.Fatalf("unexpected score: %+v", score)
 	}
 }
+
+func TestCQWWScoreUsesContinentsCountriesAndZones(t *testing.T) {
+	when := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+	s, err := NewSession(CQWWSSB, "EA1ABC", "", Config{Power: "LOW", SentValue: "14"}, when)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range []Entry{
+		{Time: when, FrequencyHz: 14_200_000, Mode: "USB", WorkedCall: "K1ABC", ExchangeReceived: "05"},
+		{Time: when.Add(time.Minute), FrequencyHz: 14_210_000, Mode: "USB", WorkedCall: "DL1ABC", ExchangeReceived: "14"},
+		{Time: when.Add(2 * time.Minute), FrequencyHz: 14_220_000, Mode: "USB", WorkedCall: "EA2ABC", ExchangeReceived: "14"},
+	} {
+		if _, err := s.Add(entry); err != nil {
+			t.Fatal(err)
+		}
+	}
+	score := s.Score()
+	// 3 intercontinental + 1 same-continent + 0 same-country points.
+	// Two zones and three countries on 20m produce five multipliers.
+	if score.ValidQSOs != 3 || score.Points != 4 || score.Multipliers != 5 || score.Total != 20 {
+		t.Fatalf("unexpected CQ WW score: %+v", score)
+	}
+}
+
+func TestCQZoneForCallUsesCTYPrefixesAndPortableLocations(t *testing.T) {
+	for call, want := range map[string]int{"EA1ABC": 14, "EA8ABC": 33, "DL1ABC/EA8": 33, "K1ABC": 5} {
+		if got, ok := CQZoneForCall(call); !ok || got != want {
+			t.Errorf("CQZoneForCall(%q) = %d, %v; want %d", call, got, ok, want)
+		}
+	}
+}

@@ -28,6 +28,7 @@ type Warning string
 
 type Config struct {
 	Power, OperatorCategory, Assisted, Band, Transmitter string
+	SentValue, Location                                  string
 }
 
 type Session struct {
@@ -50,6 +51,7 @@ type Session struct {
 	CategoryAssisted    string     `json:"categoryAssisted"`
 	CategoryBand        string     `json:"categoryBand"`
 	CategoryTransmitter string     `json:"categoryTransmitter"`
+	Location            string     `json:"location,omitempty"`
 	Name                string     `json:"name,omitempty"`
 	Email               string     `json:"email,omitempty"`
 	Address             string     `json:"address,omitempty"`
@@ -141,15 +143,30 @@ func NewSessionFromProfile(profile Profile, stationCall, operator string, config
 	if power != "HIGH" && power != "LOW" && power != "QRP" {
 		power = "LOW"
 	}
+	sentValue := strings.ToUpper(strings.TrimSpace(profile.SentValue))
+	if profile.SentExchange == "FIXED" && strings.TrimSpace(config.SentValue) != "" {
+		sentValue = strings.ToUpper(strings.TrimSpace(config.SentValue))
+	}
+	location := strings.ToUpper(strings.TrimSpace(config.Location))
+	if location == "" {
+		location = "DX"
+	}
+	isCQWW := profile.CabrilloName == CQWWSSB || profile.CabrilloName == CQWWCW
+	operatorCategory := choice(config.OperatorCategory, []string{"SINGLE-OP", "MULTI-OP"}, "SINGLE-OP")
+	transmitter := choice(config.Transmitter, []string{"ONE", "TWO", "UNLIMITED"}, "ONE")
+	if isCQWW {
+		operatorCategory, transmitter = "SINGLE-OP", "ONE"
+	}
 	return &Session{Version: SchemaVersion, Contest: profile.CabrilloName, ContestName: profile.Name, ContestMode: profile.Mode,
 		ContestStart: profile.Start, ContestEnd: profile.End, DuplicateRule: profile.DuplicateRule, PointsPerQSO: profile.PointsPerQSO,
-		SentExchange: profile.SentExchange, SentValue: strings.ToUpper(strings.TrimSpace(profile.SentValue)), ReceivedExchange: profile.ReceivedExchange,
+		SentExchange: profile.SentExchange, SentValue: sentValue, ReceivedExchange: profile.ReceivedExchange,
 		AllowedBands: append([]string(nil), profile.AllowedBands...), StationCall: stationCall,
 		Operator: NormalizeCall(operator), CategoryPower: power,
-		CategoryOperator:    choice(config.OperatorCategory, []string{"SINGLE-OP", "MULTI-OP"}, "SINGLE-OP"),
+		CategoryOperator:    operatorCategory,
 		CategoryAssisted:    choice(config.Assisted, []string{"NON-ASSISTED", "ASSISTED"}, "NON-ASSISTED"),
 		CategoryBand:        choice(config.Band, append([]string{"ALL"}, profile.AllowedBands...), "ALL"),
-		CategoryTransmitter: choice(config.Transmitter, []string{"ONE", "TWO", "UNLIMITED"}, "ONE"),
+		CategoryTransmitter: transmitter,
+		Location:            location,
 		CreatedAt:           now.UTC(), NextSerial: 1}, nil
 }
 
@@ -359,6 +376,9 @@ func Load(path string) (*Session, error) {
 	if session.CategoryTransmitter == "" {
 		session.CategoryTransmitter = "ONE"
 	}
+	if session.Location == "" {
+		session.Location = "DX"
+	}
 	if profile, ok := ProfileByID(session.Contest); ok {
 		if session.ContestName == "" {
 			session.ContestName = profile.Name
@@ -427,6 +447,7 @@ func ExportCabrillo(path string, session *Session) error {
 	}
 	headers := []string{
 		"START-OF-LOG: 3.0", "CREATED-BY: IC-SDR", "CALLSIGN: " + session.StationCall,
+		"LOCATION: " + defaultLocation(session.Location),
 		"CONTEST: " + session.Contest, "CATEGORY-OPERATOR: " + session.CategoryOperator, "CATEGORY-ASSISTED: " + session.CategoryAssisted,
 		"CATEGORY-BAND: " + session.CategoryBand, "CATEGORY-MODE: " + session.ContestMode, "CATEGORY-POWER: " + session.CategoryPower,
 		"CATEGORY-STATION: FIXED", "CATEGORY-TRANSMITTER: " + session.CategoryTransmitter, "OPERATORS: " + operator,
@@ -455,6 +476,14 @@ func ExportCabrillo(path string, session *Session) error {
 		return err
 	}
 	return replaceFile(tmp, path)
+}
+
+func defaultLocation(value string) string {
+	value = strings.ToUpper(strings.TrimSpace(value))
+	if value == "" {
+		return "DX"
+	}
+	return value
 }
 
 // replaceFile also works on Windows, where os.Rename cannot replace an

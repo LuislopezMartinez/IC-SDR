@@ -38,6 +38,7 @@ var toolMenuItems = []toolMenuItem{
 	{id: datvToolID, label: "DATV", art: "menu-card-datv.png", row: 1},
 	{id: i18n.Source("text.820d4685bc9d"), label: i18n.Source("text.820d4685bc9d"), icon: "menu-sstv.png", art: "menu-card-sstv.png", row: 1},
 	{id: ft8ToolID, label: "FT8", icon: "menu-ft8.png", art: "menu-card-ft8.png", row: 1},
+	{id: pocsagToolID, label: "POCSAG", art: "menu-card-pocsag.png", row: 1},
 	{id: i18n.Source("text.4c4310fd27fd"), label: i18n.Source("text.4c4310fd27fd"), icon: "menu-aprs.png", art: "menu-card-aprs.png", row: 1},
 	{id: i18n.Source("text.8be70e7cb2c4"), label: i18n.Source("text.8be70e7cb2c4"), icon: "menu-rtl433.png", art: "menu-card-rtl433.png", row: 1},
 	{id: i18n.Source("text.7dd172035702"), label: i18n.Source("text.493b20493ea1"), icon: "menu-radiosonde.png", art: "menu-card-radiosonde.png", row: 1},
@@ -313,14 +314,14 @@ func (menu *ToolMenu) DrawOverlay() {
 	header := rl.Rectangle{X: modal.X + 2, Y: modal.Y + 2, Width: modal.Width - 4, Height: 68}
 	rl.DrawRectangleGradientV(int32(header.X), int32(header.Y), int32(header.Width), int32(header.Height), rl.Color{R: 8, G: 26, B: 44, A: 250}, rl.Color{R: 3, G: 13, B: 24, A: 235})
 	simpleui.DrawTextStyled("IC-SDR", header.X+183, header.Y+19, 19, simpleui.FontSemiBold, colors.cyan)
-	drawCenteredStyled(menuText("CENTRO DE CONTROL", "CONTROL CENTER"), header, 28, simpleui.FontSemiBold, colors.text)
+	drawCenteredStyled(i18n.Source("text.menuControlCenter"), header, 28, simpleui.FontSemiBold, colors.text)
 	version := buildinfo.DisplayVersion()
 	simpleui.DrawTextStyled(version, header.X+265, header.Y+23, 13, simpleui.FontMono, colors.muted)
 	rl.DrawLine(int32(modal.X+18), int32(modal.Y+70), int32(modal.X+modal.Width-18), int32(modal.Y+70), rl.Color{R: 25, G: 112, B: 155, A: 150})
 
-	menu.drawCategory(0, menuText("VISTAS", "VIEWS"), colors.cyan)
-	menu.drawCategory(1, menuText("DECODIFICADORES", "DECODERS"), rl.Color{R: 180, G: 105, B: 255, A: 255})
-	menu.drawCategory(2, menuText("UTILIDADES", "TOOLS"), rl.Color{R: 255, G: 171, B: 35, A: 255})
+	menu.drawCategory(0, i18n.Source("text.menuViews"), colors.cyan)
+	menu.drawCategory(1, i18n.Source("text.menuDecoders"), rl.Color{R: 180, G: 105, B: 255, A: 255})
+	menu.drawCategory(2, i18n.Source("text.menuTools"), rl.Color{R: 255, G: 171, B: 35, A: 255})
 	menu.drawCarousel()
 	menu.drawThumbnailRail()
 	menu.drawLanguages()
@@ -450,7 +451,7 @@ func (menu *ToolMenu) drawCategory(row int, label string, accent rl.Color) {
 		return colors.text
 	}())
 	count := len(menu.indicesForRow(row))
-	simpleui.DrawTextStyled(menuText("MÓDULOS", "MODULES")+"  "+strconv.Itoa(count), b.X+64, b.Y+57, 11, simpleui.FontMono, colors.muted)
+	simpleui.DrawTextStyled(i18n.Source("text.menuModules")+"  "+strconv.Itoa(count), b.X+64, b.Y+57, 11, simpleui.FontMono, colors.muted)
 	if active {
 		rl.DrawRectangleRounded(rl.Rectangle{X: b.X, Y: b.Y + 18, Width: 4, Height: b.Height - 36}, 1, 3, accent)
 	}
@@ -554,9 +555,9 @@ func (menu *ToolMenu) drawItem(index int, delta float32) {
 	}())
 	if selected {
 		drawCenteredStyled(menu.toolDescription(item), rl.Rectangle{X: bounds.X + 12, Y: bounds.Y + bounds.Height - 48, Width: bounds.Width - 24, Height: 23}, 12, simpleui.FontRegular, colors.muted)
-		state := menuText("ABRIR", "OPEN")
+		state := i18n.Source("text.menuOpen")
 		if item.id == menu.selected {
-			state = menuText("ACTIVO", "ACTIVE")
+			state = i18n.Source("text.menuActive")
 		}
 		pill := rl.Rectangle{X: bounds.X + bounds.Width - 82, Y: bounds.Y + 15, Width: 66, Height: 24}
 		rl.DrawRectangleRounded(pill, .45, 8, rl.Color{R: 3, G: 18, B: 25, A: 225})
@@ -594,7 +595,7 @@ func (menu *ToolMenu) drawThumbnailRail() {
 	area := menu.thumbnailRailBounds()
 	rl.DrawRectangleRounded(area, .035, 8, rl.Color{R: 2, G: 9, B: 18, A: 238})
 	rl.DrawRectangleRoundedLinesEx(area, .035, 8, 1.4, rl.Color{R: 35, G: 98, B: 132, A: 210})
-	simpleui.DrawTextStyled(menuText("SELECCIÓN RÁPIDA", "QUICK SELECT"), area.X+18, area.Y+10, 11, simpleui.FontMono, colors.muted)
+	simpleui.DrawTextStyled(i18n.Source("text.menuQuickSelect"), area.X+18, area.Y+10, 11, simpleui.FontMono, colors.muted)
 
 	start, end := menu.thumbnailVisibleRange()
 	shown := end - start
@@ -1015,21 +1016,14 @@ func (menu *ToolMenu) updateAnimation() {
 	}
 }
 
-func menuText(spanish, english string) string {
-	if i18n.Current() == "en" {
-		return english
-	}
-	return spanish
-}
-
 func (menu *ToolMenu) toolDescription(item toolMenuItem) string {
 	if item.row == 0 {
-		return menuText("Visualización y control de señal", "Signal display and control")
+		return i18n.Source("text.menuViewDescription")
 	}
 	if item.row == 1 {
-		return menuText("Decodificación y análisis digital", "Digital decoding and analysis")
+		return i18n.Source("text.menuDecoderDescription")
 	}
-	return menuText("Herramienta y recurso técnico", "Technical tool and resource")
+	return i18n.Source("text.menuToolDescription")
 }
 
 func (menu *ToolMenu) backBounds() rl.Rectangle {

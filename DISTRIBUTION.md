@@ -4,7 +4,7 @@ IC-SDR Go - distribución portable
 Copie la carpeta IC-SDR-Go completa y ejecute IC-SDR-Go.exe conservando DATA
 junto al ejecutable. El paquete incluye el runtime de Visual C++ que requieren
 SoapySDR, RTL-SDR y Airspy, por lo que no necesita instalarlos por separado.
-DATA contiene los runtimes de SoapySDR/SDRplay/Airspy, DMR, Digital Auto (DSD-neo 2.9.0), RTL_433 y APRS, así como
+DATA contiene los runtimes de SoapySDR/SDRplay/Airspy, DMR, Digital Auto (DSD-neo 2.9.0), RTL_433, POCSAG y APRS, así como
 sus datos auxiliares y licencias. No es necesario iniciar el programa desde una
 carpeta concreta.
 
@@ -17,6 +17,12 @@ FT8 integra como proceso externo el núcleo de `ft8mon` adaptado para audio
 PCM de IC-SDR. La herramienta trabaja en USB, sincroniza automáticamente los
 ciclos UTC de 15 segundos y conserva las fuentes y avisos de licencia en
 DATA\tools\ft8\runtime. FFTW se distribuye como DLL separada junto al decoder.
+
+POCSAG utiliza `multimon-ng` 1.6.1 como proceso externo para decodificar
+simultáneamente 512, 1200 y 2400 baud. El ejecutable, la licencia GPL y el
+enlace a la fuente correspondiente se distribuyen en
+DATA\tools\pocsag\runtime. Un clon nuevo puede preparar este runtime con
+scripts\install-pocsag-runtime.ps1.
 
 El control CAT incluye OmniRig 1.20 y los perfiles de radio oficiales. Al
 activar RIG, IC-SDR utiliza una instalación existente si funciona; en caso

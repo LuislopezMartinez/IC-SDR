@@ -1,6 +1,12 @@
 package contestlog
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+	"sync"
+
+	"go-zero/internal/dxcc"
+)
 
 type BandScore struct {
 	QSOs, Points, Multipliers int
@@ -14,10 +20,25 @@ type Score struct {
 
 var bandPoints = map[string]int{"160M": 20, "80M": 10, "40M": 5, "20M": 1, "15M": 2, "10M": 3}
 
+var cqwwDXCCOnce sync.Once
+var cqwwDXCC *dxcc.Database
+
+func CQZoneForCall(call string) (int, bool) {
+	cqwwDXCCOnce.Do(func() { cqwwDXCC, _ = dxcc.LoadBundled() })
+	if cqwwDXCC == nil {
+		return 0, false
+	}
+	entity, ok := cqwwDXCC.Lookup(call)
+	return entity.CQZone, ok && entity.CQZone >= 1 && entity.CQZone <= 40
+}
+
 func (s *Session) Score() Score {
 	result := Score{Bands: make(map[string]BandScore)}
 	if s == nil {
 		return result
+	}
+	if isCQWWContest(s.Contest) {
+		return s.cqwwScore()
 	}
 	if s.Contest != OceaniaDXSSB {
 		return s.genericScore()
@@ -68,6 +89,69 @@ func (s *Session) Score() Score {
 		result.Points += points
 	}
 	result.Multipliers = len(multipliers)
+	result.Total = result.Points * result.Multipliers
+	return result
+}
+
+func (s *Session) cqwwScore() Score {
+	result := Score{Bands: make(map[string]BandScore)}
+	cqwwDXCCOnce.Do(func() { cqwwDXCC, _ = dxcc.LoadBundled() })
+	station, stationOK := cqwwDXCC.Lookup(s.StationCall)
+	zones, countries := map[string]bool{}, map[string]bool{}
+	for _, q := range s.QSOs {
+		if q.Time.IsZero() || q.FrequencyHz <= 0 || q.WorkedCall == "" || q.RSTSent == "" || q.RSTReceived == "" || !validCQZone(q.ReceivedExchangeText()) {
+			result.Incomplete++
+			continue
+		}
+		if q.Duplicate {
+			result.Duplicates++
+			continue
+		}
+		if len(q.Warnings) > 0 {
+			result.Warnings++
+			continue
+		}
+		if s.CategoryBand != "" && s.CategoryBand != "ALL" && q.Band != s.CategoryBand {
+			result.NonScoring++
+			continue
+		}
+		worked, workedOK := cqwwDXCC.Lookup(q.WorkedCall)
+		if !stationOK || !workedOK {
+			result.NonScoring++
+			continue
+		}
+		points := 0
+		switch {
+		case station.Name == worked.Name:
+			points = 0
+		case station.Continent != worked.Continent:
+			points = 3
+		case station.Continent == "NA":
+			points = 2
+		default:
+			points = 1
+		}
+		band := result.Bands[q.Band]
+		band.QSOs++
+		band.Points += points
+		zone, _ := strconv.Atoi(q.ReceivedExchangeText())
+		zoneKey := q.Band + "\x00" + strconv.Itoa(zone)
+		if !zones[zoneKey] {
+			zones[zoneKey] = true
+			band.Multipliers++
+		}
+		if !strings.HasSuffix(q.WorkedCall, "/MM") {
+			countryKey := q.Band + "\x00" + worked.Name
+			if !countries[countryKey] {
+				countries[countryKey] = true
+				band.Multipliers++
+			}
+		}
+		result.Bands[q.Band] = band
+		result.ValidQSOs++
+		result.Points += points
+	}
+	result.Multipliers = len(zones) + len(countries)
 	result.Total = result.Points * result.Multipliers
 	return result
 }

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.22.0'
+    [string]$Version = '0.23.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,6 +20,8 @@ $voacapManifestPath = Join-Path $voacapRuntime 'runtime-version.json'
 $dabManifestPath = Join-Path $projectRoot 'DATA\tools\dab\runtime-version.json'
 $datvRuntime = Join-Path $projectRoot 'DATA\tools\datv\runtime'
 $datvManifestPath = Join-Path $datvRuntime 'runtime-version.json'
+$pocsagRuntime = Join-Path $projectRoot 'DATA\tools\pocsag\runtime'
+$pocsagManifestPath = Join-Path $pocsagRuntime 'runtime-version.json'
 
 if ($distRoot -ne $expectedDist -or -not $distRoot.StartsWith($projectRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Ruta de distribución no segura: $distRoot"
@@ -137,6 +139,21 @@ if ((Get-FileHash -LiteralPath $datvLDPC -Algorithm SHA256).Hash.ToLowerInvarian
     throw 'ldpc_tool no coincide con el manifiesto DATV.'
 }
 
+if (-not (Test-Path -LiteralPath $pocsagManifestPath)) {
+    throw "Falta el manifiesto del runtime POCSAG: $pocsagManifestPath"
+}
+$pocsagManifest = Get-Content -LiteralPath $pocsagManifestPath -Raw | ConvertFrom-Json
+if ($pocsagManifest.release -ne '1.6.1') {
+    throw "Versión de multimon-ng no admitida: $($pocsagManifest.release). Se esperaba 1.6.1."
+}
+$pocsagExe = Join-Path $pocsagRuntime $pocsagManifest.executable
+foreach ($required in @($pocsagExe, (Join-Path $pocsagRuntime 'COPYING'), (Join-Path $pocsagRuntime 'source\README.md'))) {
+    if (-not (Test-Path -LiteralPath $required)) { throw "Falta un componente requerido del runtime POCSAG: $required" }
+}
+if ((Get-FileHash -LiteralPath $pocsagExe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $pocsagManifest.executableSha256.ToLowerInvariant()) {
+    throw 'multimon-ng no coincide con el manifiesto POCSAG.'
+}
+
 # Windows locks the executable, runtime DLLs and startup.log while IC-SDR is
 # running. Close only instances launched from this distribution before
 # rebuilding it so a release attempt cannot leave a half-rebuilt portable
@@ -225,6 +242,7 @@ $copies = @(
     @{ Source = 'DATA\tools\aprs\config'; Destination = 'DATA\tools\aprs\config' },
     @{ Source = 'DATA\tools\sstv\runtime'; Destination = 'DATA\tools\sstv\runtime' },
 	@{ Source = 'DATA\tools\ft8\runtime'; Destination = 'DATA\tools\ft8\runtime' },
+    @{ Source = 'DATA\tools\pocsag\runtime'; Destination = 'DATA\tools\pocsag\runtime' },
     @{ Source = 'DATA\tools\dab\runtime'; Destination = 'DATA\tools\dab\runtime' },
     @{ Source = 'DATA\tools\dab\runtime-version.json'; Destination = 'DATA\tools\dab\runtime-version.json' },
     @{ Source = 'DATA\tools\datv\runtime'; Destination = 'DATA\tools\datv\runtime' },

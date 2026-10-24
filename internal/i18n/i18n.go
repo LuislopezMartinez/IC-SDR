@@ -36,7 +36,7 @@ var cache = map[string]string{}
 var placeholder = regexp.MustCompile(`%%|%([-+#0 ']*[0-9]*(?:\.[0-9]+)?[a-zA-Z])`)
 
 func init() {
-	for _, id := range []string{"es", "en", "de"} {
+	for _, id := range []string{"es", "en", "de", "fr"} {
 		data, err := contenidos.Defaults.ReadFile(id + ".json")
 		if err == nil {
 			var l Language

@@ -184,3 +184,32 @@ func TestGenericProfileStoresLoadsAndExportsWithoutOceaniaRules(t *testing.T) {
 		t.Fatalf("generic Cabrillo uses wrong contest:\n%s", data)
 	}
 }
+
+func TestCQWWSingleOperatorExportsOfficialCabrilloFields(t *testing.T) {
+	when := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+	s, err := NewSession(CQWWSSB, "EA1ABC", "EA1ABC", Config{Power: "LOW", OperatorCategory: "MULTI-OP", Transmitter: "TWO", SentValue: "14", Location: "DX"}, when)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.CategoryOperator != "SINGLE-OP" || s.CategoryTransmitter != "ONE" {
+		t.Fatalf("CQ WW profile did not enforce single operator: %+v", s)
+	}
+	if _, err := s.Add(Entry{Time: when, FrequencyHz: 14_225_000, Mode: "USB", WorkedCall: "K1ABC", RSTSent: "59", RSTReceived: "59", ExchangeReceived: "05"}); err != nil {
+		t.Fatal(err)
+	}
+	s.Name, s.Email, s.Address, s.Country = "Luis", "luis@example.com", "Calle Radio 1", "Spain"
+	if issues := s.ValidateSubmission(); len(issues) != 0 {
+		t.Fatalf("valid CQ WW log has issues: %+v", issues)
+	}
+	path := filepath.Join(t.TempDir(), "cqww.log")
+	if err := ExportCabrillo(path, s); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	text := string(data)
+	for _, want := range []string{"CONTEST: CQ-WW-SSB", "LOCATION: DX", "CATEGORY-OPERATOR: SINGLE-OP", "CATEGORY-TRANSMITTER: ONE", " 59     14", " 59     05"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("CQ WW Cabrillo lacks %q:\n%s", want, text)
+		}
+	}
+}

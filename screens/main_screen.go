@@ -252,6 +252,7 @@ type MainScreen struct {
 	radiosondeFrequencyHz  int64
 	sstvPanel              *SSTVPanel
 	ft8Panel               *FT8Panel
+	pocsagPanel            *POCSAGPanel
 	ft8Depth               string
 	tetraPanel             *TETRAPanel
 	tetrapolPanel          *TETRAPOLPanel
@@ -521,6 +522,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.satellitePanel = NewSatellitePanel(screen)
 	screen.sstvPanel = NewSSTVPanel(screen)
 	screen.ft8Panel = NewFT8Panel(screen)
+	screen.pocsagPanel = NewPOCSAGPanel(screen)
 	screen.tetraPanel = NewTETRAPanel(screen)
 	screen.tetrapolPanel = NewTETRAPOLPanel(screen)
 	screen.omniRigPanel = NewOmniRigPanel(screen)
@@ -561,6 +563,7 @@ func (screen *MainScreen) CreateControls() {
 	compactToolControls(screen.aircraftPanel.controls)
 	compactToolControls(screen.satellitePanel.controls)
 	compactToolControls(screen.sstvPanel.controls)
+	compactToolControls(screen.pocsagPanel.controls)
 	screen.applyUtilitiesLayout(screen.utilitiesCollapsed)
 
 	for _, element := range []simpleui.Element{
@@ -633,6 +636,10 @@ func (screen *MainScreen) CreateControls() {
 		simpleui.Add(element)
 	}
 	simpleui.Add(screen.ft8Panel)
+	for _, element := range screen.pocsagPanel.controls {
+		simpleui.Add(element)
+	}
+	simpleui.Add(screen.pocsagPanel)
 	for _, element := range screen.tetraPanel.controls {
 		simpleui.Add(element)
 	}
@@ -692,6 +699,9 @@ func (screen *MainScreen) CreateControls() {
 	}
 	if screen.activeTool == ft8ToolID {
 		screen.ft8Panel.Enter()
+	}
+	if screen.activeTool == pocsagToolID {
+		screen.pocsagPanel.Enter()
 	}
 	if screen.activeTool == i18n.Source("text.f69d86a86926") {
 		screen.tetraPanel.Enter()
@@ -776,6 +786,9 @@ func (screen *MainScreen) Draw() {
 	}
 	if screen.ft8Panel != nil {
 		screen.ft8Panel.Tick()
+	}
+	if screen.pocsagPanel != nil {
+		screen.pocsagPanel.Tick()
 	}
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.Tick()
@@ -884,6 +897,9 @@ func (screen *MainScreen) Close() {
 	}
 	if screen.ft8Panel != nil {
 		screen.ft8Panel.Close()
+	}
+	if screen.pocsagPanel != nil {
+		screen.pocsagPanel.Close()
 	}
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.Close()
@@ -1424,6 +1440,8 @@ func (screen *MainScreen) drawLowerWorkspaceContent(outerScale float32) {
 			screen.fftDisplay.DrawPanel()
 		} else if screen.activeTool == i18n.Source("text.93239b223632") {
 			screen.dmrPanel.DrawPanel()
+		} else if screen.activeTool == pocsagToolID {
+			screen.pocsagPanel.DrawPanel()
 		} else if screen.activeTool == i18n.Source("text.8be70e7cb2c4") {
 			screen.rtl433Panel.DrawPanel()
 		} else if screen.activeTool == i18n.Source("text.7dd172035702") {
@@ -1463,6 +1481,7 @@ func (screen *MainScreen) toolWorkspaceElements() []simpleui.Element {
 	appendControls(screen.satellitePanel.controls)
 	appendControls(screen.sstvPanel.controls)
 	appendControls(screen.ft8Panel.controls)
+	appendControls(screen.pocsagPanel.controls)
 	appendControls(screen.tetraPanel.controls)
 	appendControls(screen.tetrapolPanel.controls)
 	appendControls(screen.omniRigPanel.controls)
@@ -1656,6 +1675,9 @@ func (screen *MainScreen) selectTool(tool string) {
 	if previous == ft8ToolID && tool != ft8ToolID && screen.ft8Panel != nil {
 		screen.ft8Panel.Leave()
 	}
+	if previous == pocsagToolID && tool != pocsagToolID && screen.pocsagPanel != nil {
+		screen.pocsagPanel.Leave()
+	}
 	if previous == i18n.Source("text.f69d86a86926") && tool != i18n.Source("text.f69d86a86926") && screen.tetraPanel != nil {
 		screen.tetraPanel.Leave()
 	}
@@ -1717,6 +1739,9 @@ func (screen *MainScreen) selectTool(tool string) {
 	}
 	if tool == ft8ToolID && screen.ft8Panel != nil && previous != ft8ToolID {
 		screen.ft8Panel.Enter()
+	}
+	if tool == pocsagToolID && screen.pocsagPanel != nil && previous != pocsagToolID {
+		screen.pocsagPanel.Enter()
 	}
 	if tool == i18n.Source("text.7a1580c49e45") && screen.scanPanel != nil {
 		screen.scanPanel.Enter()
@@ -1824,6 +1849,9 @@ func (screen *MainScreen) selectTool(tool string) {
 	if screen.ft8Panel != nil {
 		screen.ft8Panel.SetVisible(tool == ft8ToolID)
 	}
+	if screen.pocsagPanel != nil {
+		screen.pocsagPanel.SetVisible(tool == pocsagToolID)
+	}
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.SetVisible(tool == i18n.Source("text.f69d86a86926"))
 		if tool == i18n.Source("text.f69d86a86926") && previous != i18n.Source("text.f69d86a86926") {
@@ -1926,6 +1954,9 @@ func (screen *MainScreen) setViewMode(mode int) {
 	if screen.ft8Panel != nil {
 		screen.ft8Panel.SetVisible(showTool && screen.activeTool == ft8ToolID)
 	}
+	if screen.pocsagPanel != nil {
+		screen.pocsagPanel.SetVisible(showTool && screen.activeTool == pocsagToolID)
+	}
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.SetVisible(showTool && screen.activeTool == i18n.Source("text.f69d86a86926"))
 	}
@@ -2013,6 +2044,9 @@ func (screen *MainScreen) stopAllDecodersForBandChange() {
 	}
 	if screen.ft8Panel != nil {
 		screen.ft8Panel.Leave()
+	}
+	if screen.pocsagPanel != nil {
+		screen.pocsagPanel.Leave()
 	}
 	if screen.tetraPanel != nil {
 		screen.tetraPanel.Leave()
@@ -2611,6 +2645,7 @@ func (screen *MainScreen) overlayOpen() bool {
 		(screen.stepSelector != nil && screen.stepSelector.OverlayOpen()) ||
 		(screen.filterSelector != nil && screen.filterSelector.OverlayOpen()) ||
 		(screen.memoryPanel != nil && screen.memoryPanel.OverlayOpen()) ||
+		(screen.pocsagPanel != nil && screen.pocsagPanel.OverlayOpen()) ||
 		(screen.dmrPanel != nil && screen.dmrPanel.OverlayOpen()) ||
 		(screen.tetrapolPanel != nil && screen.tetrapolPanel.OverlayOpen()) ||
 		(screen.voacapPanel != nil && screen.voacapPanel.OverlayOpen()) ||

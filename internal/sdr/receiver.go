@@ -19,6 +19,7 @@ import (
 	"go-zero/internal/dmr"
 	"go-zero/internal/dsp"
 	"go-zero/internal/ft8"
+	"go-zero/internal/pocsag"
 	"go-zero/internal/radiosonde"
 	"go-zero/internal/rtl433"
 	"go-zero/internal/sstv"
@@ -56,6 +57,8 @@ type Config struct {
 	APRSExecutable, APRSConfig, APRSWorkingDirectory string
 	SSTVExecutable, SSTVOutputDirectory              string
 	FT8Executable                                    string
+	POCSAGExecutable                                 string
+	POCSAGHistoryPath                                string
 	DABExecutable                                    string
 	DATVExecutable, VLCExecutable                    string
 	TETRACodec                                       string
@@ -110,6 +113,7 @@ type Receiver struct {
 	datv                 *datv.Decoder
 	sstv                 *sstv.Decoder
 	ft8                  *ft8.Decoder
+	pocsag               *pocsag.Decoder
 	tetra                *tetra.Decoder
 	tetrapol             *tetrapol.Decoder
 	tetrapolNative       *tetrapolruntime.Native
@@ -260,6 +264,7 @@ func NewReceiver(config Config) *Receiver {
 	receiver.datv = datv.New(config.SampleRate, config.DATVExecutable, config.VLCExecutable)
 	receiver.sstv = sstv.New(config.SSTVExecutable, config.SSTVOutputDirectory)
 	receiver.ft8 = ft8.New(config.FT8Executable)
+	receiver.pocsag = pocsag.New(config.POCSAGExecutable, config.POCSAGHistoryPath)
 	receiver.tetra = tetra.New(config.SampleRate, config.TETRACodec, receiver.enqueueDigitalAudio)
 	receiver.tetrapol = tetrapol.New(config.SampleRate)
 	receiver.tetrapolNative = &tetrapolruntime.Native{}
@@ -477,6 +482,9 @@ func (receiver *Receiver) Close() {
 		if receiver.ft8 != nil {
 			receiver.ft8.Close()
 		}
+		if receiver.pocsag != nil {
+			receiver.pocsag.Close()
+		}
 		if receiver.rtl433 != nil {
 			receiver.rtl433.Stop()
 		}
@@ -685,6 +693,9 @@ func (receiver *Receiver) StopAllDecoders() {
 	if receiver.ft8 != nil {
 		receiver.ft8.Configure(false)
 	}
+	if receiver.pocsag != nil {
+		receiver.pocsag.Configure(false)
+	}
 	if receiver.rtl433 != nil {
 		receiver.rtl433.Stop()
 	}
@@ -753,6 +764,32 @@ func (receiver *Receiver) FT8Status() ft8.Status {
 func (receiver *Receiver) ClearFT8() {
 	if receiver.ft8 != nil {
 		receiver.ft8.Clear()
+	}
+}
+func (receiver *Receiver) ConfigurePOCSAG(enabled bool) {
+	if receiver.pocsag != nil {
+		receiver.pocsag.Configure(enabled)
+	}
+}
+func (receiver *Receiver) SetPOCSAGFrequency(hz int64) {
+	if receiver.pocsag != nil {
+		receiver.pocsag.SetFrequency(hz)
+	}
+}
+func (receiver *Receiver) POCSAGStatus() pocsag.Status {
+	if receiver.pocsag == nil {
+		return pocsag.Status{State: "NO DISPONIBLE"}
+	}
+	return receiver.pocsag.Snapshot()
+}
+func (receiver *Receiver) PausePOCSAG(paused bool) {
+	if receiver.pocsag != nil {
+		receiver.pocsag.SetPaused(paused)
+	}
+}
+func (receiver *Receiver) ClearPOCSAG() {
+	if receiver.pocsag != nil {
+		receiver.pocsag.Clear()
 	}
 }
 func (receiver *Receiver) SSTVStatus() sstv.Status {
@@ -1207,6 +1244,10 @@ func (receiver *Receiver) processAudio(iq []float32) {
 	// UTC-aligned 12 kHz slot conversion. Squelch must not gate weak signals.
 	if receiver.ft8 != nil {
 		receiver.ft8.ProcessAudio(samples)
+	}
+	// POCSAG consumes discriminator audio before squelch and speaker filters.
+	if receiver.pocsag != nil {
+		receiver.pocsag.ProcessAudio(samples)
 	}
 	receiver.mu.Lock()
 	if receiver.dabPlaybackEnabled {
