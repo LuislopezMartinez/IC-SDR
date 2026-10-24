@@ -12,6 +12,7 @@ import (
 
 	"go-zero/internal/contestlog"
 	"go-zero/internal/i18n"
+	"go-zero/internal/localtime"
 	"go-zero/internal/resources"
 	"go-zero/simpleui"
 
@@ -19,8 +20,6 @@ import (
 )
 
 const contestLogToolID = "CONTEST_LOG"
-
-const contestLogPanelRows = 6
 
 type ContestLogPanel struct {
 	screen                                                                    *MainScreen
@@ -39,11 +38,18 @@ type ContestLogPanel struct {
 	pendingQSO                                                                string
 	profileValue                                                              string
 	autoSentValue                                                             string
+	workedIdentity                                                            contestlog.CallIdentity
+	hasWorkedIdentity                                                         bool
+	workedLocalMinute                                                         int64
+	workedLocalLabel                                                          string
+	identityCache                                                             map[string]contestlog.CallIdentity
+	duplicatePreview, duplicateSignature                                      string
+	duplicatePreviewLevel                                                     int
 	operatorCategoryValue, assistedValue, categoryBandValue, transmitterValue string
 }
 
 func NewContestLogPanel(screen *MainScreen) *ContestLogPanel {
-	p := &ContestLogPanel{screen: screen, path: resources.WritablePath("logbook", "oceania-dx-ssb-2026.json"),
+	p := &ContestLogPanel{screen: screen, path: resources.WritablePath("logbook", "oceania-dx-ssb-2026.json"), identityCache: make(map[string]contestlog.CallIdentity),
 		archiveDir: resources.WritablePath("logbook", "archive"), exportDir: resources.WritablePath("exports", "cabrillo"),
 		backupDir: resources.WritablePath("logbook", "backups"), templateDir: resources.WritablePath("logbook", "templates"), statusColor: colors.muted}
 	p.reloadProfiles()
@@ -142,6 +148,11 @@ func NewContestLogPanel(screen *MainScreen) *ContestLogPanel {
 		field.SetFont(simpleui.FontSemiBold)
 	}
 	p.workedCall.OnSubmit(func(string) { p.serialReceived.SetFocused(true) })
+	p.workedCall.OnChange(func(value string) {
+		p.updateWorkedIdentity(value)
+		p.duplicateSignature = ""
+		p.updateDuplicatePreview()
+	})
 	p.serialReceived.OnSubmit(func(string) { p.saveQSO() })
 	p.controls = []simpleui.Element{p.stationCall, p.operator, p.sentValue, p.location, p.power, p.create, p.profile, p.editTemplates, p.workedCall, p.rstSent,
 		p.rstReceived, p.serialReceived, p.save, p.viewLog, p.editLast, p.finish, p.history, p.operatorCategory,
@@ -248,6 +259,78 @@ func (p *ContestLogPanel) autofillCQZone() {
 	}
 	p.autoSentValue = strconv.Itoa(zone)
 	p.sentValue.SetText(p.autoSentValue)
+}
+
+func (p *ContestLogPanel) updateWorkedIdentity(call string) {
+	p.workedIdentity, p.hasWorkedIdentity = contestlog.LookupCallIdentity(call)
+	p.workedLocalMinute, p.workedLocalLabel = -1, ""
+}
+
+func (p *ContestLogPanel) updateDuplicatePreview() {
+	if p.session == nil {
+		p.clearDuplicatePreview()
+		return
+	}
+	call := contestlog.NormalizeCall(p.workedCall.Text())
+	band := contestlog.BandForFrequency(p.screen.frequencyHz)
+	signature := fmt.Sprintf("%s|%s|%d", call, band, len(p.session.QSOs))
+	if signature == p.duplicateSignature {
+		return
+	}
+	p.duplicateSignature = signature
+	if call == "" {
+		p.clearDuplicatePreview()
+		return
+	}
+	type prior struct {
+		band string
+		when time.Time
+	}
+	byBand := map[string]time.Time{}
+	duplicate := false
+	for _, qso := range p.session.QSOs {
+		if contestlog.NormalizeCall(qso.WorkedCall) != call {
+			continue
+		}
+		if previous, ok := byBand[qso.Band]; !ok || qso.Time.After(previous) {
+			byBand[qso.Band] = qso.Time
+		}
+		if p.session.DuplicateRule == "CONTEST" || (band != "" && qso.Band == band) {
+			duplicate = true
+		}
+	}
+	if len(byBand) == 0 {
+		p.clearDuplicatePreview()
+		return
+	}
+	order := []string{"160M", "80M", "40M", "20M", "15M", "10M"}
+	contacts := make([]prior, 0, len(byBand))
+	for _, candidate := range order {
+		if when, ok := byBand[candidate]; ok {
+			contacts = append(contacts, prior{band: candidate, when: when})
+		}
+	}
+	details := make([]string, 0, len(contacts))
+	for _, contact := range contacts {
+		details = append(details, fmt.Sprintf("%s %s UTC", contact.band, contact.when.UTC().Format("15:04")))
+	}
+	if duplicate {
+		p.duplicatePreviewLevel = 2
+		p.duplicatePreview = i18n.Source("text.log0102") + " · " + strings.Join(details, " · ")
+		p.workedCall.SetBorderColor(colors.red)
+		p.save.SetColors(colors.panelAlt, colors.red, colors.text)
+		return
+	}
+	p.duplicatePreviewLevel = 1
+	p.duplicatePreview = "OTRA BANDA · " + strings.Join(details, " · ")
+	p.workedCall.SetBorderColor(colors.orange)
+	p.save.SetColors(actionStartFill, colors.green, colors.text)
+}
+
+func (p *ContestLogPanel) clearDuplicatePreview() {
+	p.duplicatePreview, p.duplicatePreviewLevel = "", 0
+	p.workedCall.ClearBorderColor()
+	p.save.SetColors(actionStartFill, colors.green, colors.text)
 }
 
 func (p *ContestLogPanel) receivedExchangeLabel() string {
@@ -388,6 +471,9 @@ func (p *ContestLogPanel) saveQSO() {
 	}
 	p.setStatus(message, color)
 	p.workedCall.SetText("")
+	p.updateWorkedIdentity("")
+	p.duplicateSignature = ""
+	p.updateDuplicatePreview()
 	p.serialReceived.SetText("")
 	p.pendingQSO = ""
 	p.save.SetLabel(i18n.Source("text.log0009"))
@@ -506,6 +592,8 @@ func (p *ContestLogPanel) setStatus(message string, color rl.Color) {
 }
 func (p *ContestLogPanel) Enter() {
 	if p.session != nil {
+		p.duplicateSignature = ""
+		p.updateDuplicatePreview()
 		p.workedCall.SetFocused(true)
 	}
 }
@@ -524,7 +612,7 @@ func (p *ContestLogPanel) Close() {
 	}
 }
 func (p *ContestLogPanel) SetVisible(visible bool) { p.refreshVisibility(visible) }
-func (p *ContestLogPanel) Tick()                   {}
+func (p *ContestLogPanel) Tick()                   { p.updateDuplicatePreview() }
 
 func (p *ContestLogPanel) refreshVisibility(panelVisible bool) {
 	creating := p.session == nil
@@ -560,7 +648,8 @@ func (p *ContestLogPanel) DrawPanel() {
 		band = i18n.Source("text.log0025")
 	}
 	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.log0026"), p.session.StationCall, p.session.Contest, len(p.session.QSOs), p.session.NextSerial), 382, toolY+34, 12, colors.text)
-	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.log0027"), float64(p.screen.frequencyHz)/1e6, band, time.Now().UTC().Format("15:04:05")), 1115, toolY+34, 11, colors.cyan)
+	p.drawWorkedIdentity()
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.log0027"), float64(p.screen.frequencyHz)/1e6, band, time.Now().UTC().Format("15:04:05")), 1370, toolY+34, 11, colors.cyan)
 	serialBadge := rl.Rectangle{X: 1160, Y: toolY + 51, Width: 100, Height: 40}
 	badgeFill := blendRGBA(colors.panelAlt, colors.orange, .35)
 	rl.DrawRectangleRounded(serialBadge, .16, 8, badgeFill)
@@ -575,31 +664,93 @@ func (p *ContestLogPanel) DrawPanel() {
 	for _, label := range fieldLabels {
 		simpleui.DrawTextStyled(label.text, label.x, toolY+64, 10, simpleui.FontSemiBold, colors.muted)
 	}
-	if p.status != "" {
+	if p.duplicatePreview != "" {
+		color := colors.orange
+		if p.duplicatePreviewLevel == 2 {
+			color = colors.red
+		}
+		simpleui.DrawTextStyled(p.duplicatePreview, 970, toolY+108, 12, simpleui.FontSemiBold, color)
+	} else if p.status != "" {
 		simpleui.DrawTextStyled(p.status, 970, toolY+108, 12, simpleui.FontSemiBold, p.statusColor)
 	}
 	p.drawRows()
 }
 
-func (p *ContestLogPanel) drawRows() {
-	rows := make([]contestlog.QSO, 0, contestLogPanelRows)
-	for index := len(p.session.QSOs) - 1; index >= 0 && len(rows) < contestLogPanelRows; index-- {
-		q := p.session.QSOs[index]
-		rows = append(rows, q)
+func (p *ContestLogPanel) drawWorkedIdentity() {
+	if !p.hasWorkedIdentity {
+		return
 	}
+	if local := p.workedLocalTime(time.Now()); local != "" {
+		badge := rl.Rectangle{X: 930, Y: toolY + 5, Width: 245, Height: 22}
+		background := blendRGBA(colors.panelAlt, colors.blue, .48)
+		rl.DrawRectangleRounded(badge, .24, 6, background)
+		rl.DrawRectangleRoundedLinesEx(badge, .24, 6, 1, colors.cyan)
+		text := "HORA LOCAL ≈ " + local
+		size := simpleui.MeasureTextStyled(text, 11, simpleui.FontSemiBold)
+		simpleui.DrawTextStyled(text, badge.X+(badge.Width-size.X)/2, badge.Y+(badge.Height-size.Y)/2, 11, simpleui.FontSemiBold,
+			simpleui.EnsureTextContrast(colors.text, background))
+	}
+	drawFT8RegionFlag(p.workedIdentity.Entity, 930, toolY+32)
+	label := fmt.Sprintf("%s · CQ %d · %s", p.workedIdentity.Entity, p.workedIdentity.CQZone, p.workedIdentity.Continent)
+	label = fitContestLabel(label, 395, 11)
+	simpleui.DrawTextStyled(label, 954, toolY+31, 11, simpleui.FontSemiBold, colors.cyan)
+}
+
+func (p *ContestLogPanel) workedLocalTime(now time.Time) string {
+	if !p.hasWorkedIdentity {
+		return ""
+	}
+	minute := now.UTC().Unix() / 60
+	if minute == p.workedLocalMinute {
+		return p.workedLocalLabel
+	}
+	p.workedLocalMinute = minute
+	info, ok := localtime.At(now, p.workedIdentity.Latitude, p.workedIdentity.Longitude)
+	if !ok {
+		p.workedLocalLabel = ""
+		return ""
+	}
+	p.workedLocalLabel = info.Time.Format("15:04")
+	return p.workedLocalLabel
+}
+
+func fitContestLabel(label string, width float32, fontSize int32) string {
+	if simpleui.MeasureTextStyled(label, fontSize, simpleui.FontSemiBold).X <= width {
+		return label
+	}
+	runes := []rune(label)
+	for len(runes) > 0 {
+		candidate := string(runes) + "…"
+		if simpleui.MeasureTextStyled(candidate, fontSize, simpleui.FontSemiBold).X <= width {
+			return candidate
+		}
+		runes = runes[:len(runes)-1]
+	}
+	return ""
+}
+
+func (p *ContestLogPanel) drawRows() {
 	y := toolY + 138
 	tableTop := y - 7
 	tableBottom := toolY + toolH - 7
+	visibleRows := contestLogVisibleRows(y, tableBottom)
+	rows := make([]contestlog.QSO, 0, visibleRows)
+	for index := len(p.session.QSOs) - 1; index >= 0 && len(rows) < visibleRows; index-- {
+		rows = append(rows, p.session.QSOs[index])
+	}
 	rl.DrawRectangleRounded(rl.Rectangle{X: 376, Y: tableTop, Width: 1188, Height: tableBottom - tableTop}, .025, 5, colors.background)
+	rl.BeginScissorMode(376, int32(tableTop), 1188, int32(tableBottom-tableTop))
+	defer rl.EndScissorMode()
 	headers := []struct {
 		text string
 		x    float32
-	}{{i18n.Source("text.log0029"), 382}, {i18n.Source("text.log0030"), 443}, {i18n.Source("text.log0005"), 510}, {i18n.Source("text.log0031"), 685}, {i18n.Source("text.log0032"), 835}, {i18n.Source("text.log0033"), 1422}}
+	}{{i18n.Source("text.log0029"), 382}, {i18n.Source("text.log0030"), 443}, {i18n.Source("text.log0005"), 510}, {"DXCC", 685},
+		{i18n.Source("text.log0031"), 900}, {i18n.Source("text.log0032"), 1050}, {i18n.Source("text.log0033"), 1422}}
 	for _, header := range headers {
 		simpleui.DrawTextStyled(header.text, header.x, y, 11, simpleui.FontSemiBold, colors.muted)
 	}
 	score := p.session.Score()
-	simpleui.DrawTextStyled(fmt.Sprintf(i18n.Source("text.log0115"), score.Points, score.Multipliers, score.Total), 1010, y, 11, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(fmt.Sprintf(i18n.Source("text.log0115"), score.Points, score.Multipliers, score.Total), 1200, y, 11, simpleui.FontSemiBold, colors.cyan)
 	for i, q := range rows {
 		rowY := y + 24 + float32(i)*25
 		if i%2 == 0 {
@@ -616,15 +767,46 @@ func (p *ContestLogPanel) drawRows() {
 			x    float32
 		}{
 			{q.Time.UTC().Format("15:04"), 382}, {q.Band, 443}, {q.WorkedCall, 510},
-			{fmt.Sprintf("%s/%s", q.RSTSent, q.SentExchangeText()), 685},
-			{fmt.Sprintf("%s/%s", q.RSTReceived, q.ReceivedExchangeText()), 835},
+			{fmt.Sprintf("%s/%s", q.RSTSent, q.SentExchangeText()), 900},
+			{fmt.Sprintf("%s/%s", q.RSTReceived, q.ReceivedExchangeText()), 1050},
 		}
 		for _, value := range values {
 			simpleui.DrawTextStyled(value.text, value.x, rowY, 12, simpleui.FontSemiBold, colors.text)
+		}
+		if identity, ok := p.cachedCallIdentity(q.WorkedCall); ok {
+			drawFT8RegionFlag(identity.Entity, 685, rowY+1)
+			name := fitContestLabel(identity.Entity, 180, 11)
+			simpleui.DrawTextStyled(name, 709, rowY, 11, simpleui.FontSemiBold, colors.text)
 		}
 		simpleui.DrawTextStyled(state, 1422, rowY, 11, simpleui.FontSemiBold, stateColor)
 	}
 	if len(rows) == 0 {
 		simpleui.DrawText(i18n.Source("text.log0036"), 382, y+35, 11, colors.muted)
 	}
+}
+
+func contestLogVisibleRows(headerY, tableBottom float32) int {
+	const rowStep = float32(25)
+	// The first baseline is 24 px below the header. Reserve 17 px below
+	// every baseline for the glyphs and striped-row background.
+	room := tableBottom - (headerY + 24 + 17)
+	if room < 0 {
+		return 0
+	}
+	return int(room/rowStep) + 1
+}
+
+func (p *ContestLogPanel) cachedCallIdentity(call string) (contestlog.CallIdentity, bool) {
+	call = contestlog.NormalizeCall(call)
+	if call == "" {
+		return contestlog.CallIdentity{}, false
+	}
+	if identity, ok := p.identityCache[call]; ok {
+		return identity, true
+	}
+	identity, ok := contestlog.LookupCallIdentity(call)
+	if ok {
+		p.identityCache[call] = identity
+	}
+	return identity, ok
 }

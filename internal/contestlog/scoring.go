@@ -23,13 +23,29 @@ var bandPoints = map[string]int{"160M": 20, "80M": 10, "40M": 5, "20M": 1, "15M"
 var cqwwDXCCOnce sync.Once
 var cqwwDXCC *dxcc.Database
 
-func CQZoneForCall(call string) (int, bool) {
+type CallIdentity struct {
+	Entity, Continent string
+	CQZone            int
+	Latitude          float64
+	Longitude         float64
+}
+
+func LookupCallIdentity(call string) (CallIdentity, bool) {
 	cqwwDXCCOnce.Do(func() { cqwwDXCC, _ = dxcc.LoadBundled() })
 	if cqwwDXCC == nil {
-		return 0, false
+		return CallIdentity{}, false
 	}
 	entity, ok := cqwwDXCC.Lookup(call)
-	return entity.CQZone, ok && entity.CQZone >= 1 && entity.CQZone <= 40
+	if !ok {
+		return CallIdentity{}, false
+	}
+	return CallIdentity{Entity: entity.Name, Continent: entity.Continent, CQZone: entity.CQZone,
+		Latitude: entity.Latitude, Longitude: entity.Longitude}, true
+}
+
+func CQZoneForCall(call string) (int, bool) {
+	identity, ok := LookupCallIdentity(call)
+	return identity.CQZone, ok && identity.CQZone >= 1 && identity.CQZone <= 40
 }
 
 func (s *Session) Score() Score {

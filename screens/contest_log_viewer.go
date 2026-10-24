@@ -376,12 +376,12 @@ func (v *ContestLogViewer) drawSummary() {
 }
 
 func (v *ContestLogViewer) drawTable() {
-	rl.DrawRectangleRounded(rl.Rectangle{X: 94, Y: 194, Width: 822, Height: 548}, .025, 6, colors.background)
+	rl.DrawRectangleRounded(rl.Rectangle{X: 94, Y: 194, Width: 850, Height: 548}, .025, 6, colors.background)
 	headers := []struct {
 		text string
 		x    float32
 	}{{i18n.Source("text.log0029"), 113}, {i18n.Source("text.log0030"), 235}, {i18n.Source("text.log0005"), 310},
-		{i18n.Source("text.log0049"), 490}, {i18n.Source("text.log0050"), 625}, {i18n.Source("text.log0033"), 842}}
+		{"DXCC", 440}, {i18n.Source("text.log0049"), 630}, {i18n.Source("text.log0050"), 745}, {i18n.Source("text.log0033"), 870}}
 	for _, header := range headers {
 		simpleui.DrawTextStyled(header.text, header.x, 216, 12, simpleui.FontSemiBold, colors.muted)
 	}
@@ -397,17 +397,22 @@ func (v *ContestLogViewer) drawTable() {
 		if row%2 != 0 && index != v.selected {
 			background = colors.panel
 		}
-		rl.DrawRectangleRounded(rl.Rectangle{X: 103, Y: y - 7, Width: 804, Height: 31}, .06, 4, background)
+		rl.DrawRectangleRounded(rl.Rectangle{X: 103, Y: y - 7, Width: 832, Height: 31}, .06, 4, background)
 		values := []struct {
 			text string
 			x    float32
 		}{
 			{q.Time.UTC().Format("02-01 15:04"), 113}, {q.Band, 235}, {q.WorkedCall, 310},
-			{fmt.Sprintf("%s/%s", q.RSTSent, q.SentExchangeText()), 490},
-			{fmt.Sprintf("%s/%s", q.RSTReceived, q.ReceivedExchangeText()), 625},
+			{fmt.Sprintf("%s/%s", q.RSTSent, q.SentExchangeText()), 630},
+			{fmt.Sprintf("%s/%s", q.RSTReceived, q.ReceivedExchangeText()), 745},
 		}
 		for _, value := range values {
 			simpleui.DrawTextStyled(value.text, value.x, y, 14, simpleui.FontSemiBold, colors.text)
+		}
+		if identity, ok := v.panel.cachedCallIdentity(q.WorkedCall); ok {
+			drawFT8RegionFlag(identity.Entity, 440, y+2)
+			name := fitContestLabel(identity.Entity, 158, 11)
+			simpleui.DrawTextStyled(name, 464, y+1, 11, simpleui.FontSemiBold, colors.text)
 		}
 		state, stateColor := i18n.Source("text.log0073"), colors.green
 		if q.Duplicate {
@@ -415,7 +420,7 @@ func (v *ContestLogViewer) drawTable() {
 		} else if len(q.Warnings) > 0 {
 			state, stateColor = i18n.Source("text.log0108"), colors.orange
 		}
-		simpleui.DrawTextStyled(state, 842, y, 12, simpleui.FontSemiBold, stateColor)
+		simpleui.DrawTextStyled(state, 870, y, 11, simpleui.FontSemiBold, stateColor)
 	}
 	if len(indices) == 0 {
 		simpleui.DrawText(i18n.Source("text.log0051"), 113, 265, 13, colors.muted)

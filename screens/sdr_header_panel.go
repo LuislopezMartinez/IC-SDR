@@ -209,7 +209,7 @@ func (p *SDRHeaderPanel) refresh() {
 	rtl := s.Driver == "rtlsdr"
 	hackrf := s.Driver == "hackrf"
 	airspy := s.Driver == "airspy"
-	hasAntennas := s.Available && sdr.IsRSPDx(s.Device) && len(s.Antennas) > 1
+	hasAntennas := s.Available && sdr.HasSelectableAntennas(s.Device) && len(s.Antennas) > 1
 	p.agc.SetActive(s.AGC)
 	p.agc.SetLabel(i18n.Source("text.20e0541e8b46"))
 	p.biasT.SetActive(s.BiasT)

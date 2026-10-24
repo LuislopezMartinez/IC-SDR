@@ -3,6 +3,8 @@ package simpleui
 import (
 	"testing"
 	"unicode"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 func TestTextFieldUsesRunePositions(t *testing.T) {
@@ -50,5 +52,17 @@ func TestDisabledTextFieldCannotReceiveFocus(t *testing.T) {
 	field.SetFocused(true)
 	if field.Focused() {
 		t.Fatal("disabled text field received focus")
+	}
+}
+
+func TestTextFieldCustomBorderCanBeSetAndCleared(t *testing.T) {
+	field := NewTextField("name", 0, 0, 200, 40, "", 16)
+	field.SetBorderColor(rl.Red)
+	if !field.customBorder || field.borderColor != rl.Red {
+		t.Fatalf("custom border was not stored: %+v", field.borderColor)
+	}
+	field.ClearBorderColor()
+	if field.customBorder {
+		t.Fatal("custom border was not cleared")
 	}
 }

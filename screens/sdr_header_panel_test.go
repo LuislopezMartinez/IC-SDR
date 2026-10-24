@@ -75,3 +75,18 @@ func TestAirspyHeaderExposesThreeGainStages(t *testing.T) {
 		t.Fatal("Airspy manual gains remained enabled under AGC")
 	}
 }
+
+func TestRSPDuoHeaderExposesThreeInputSelectors(t *testing.T) {
+	p := NewSDRHeaderPanel(nil, nil)
+	p.current = sdr.HardwareSettings{
+		Available: true, Driver: "sdrplay", Device: "RSPduo", Antenna: "Tuner 1 Hi-Z",
+		Antennas: []string{"Tuner 1 50 ohm", "Tuner 1 Hi-Z", "Tuner 2 50 ohm"},
+	}
+	p.refresh()
+	want := []string{"T1 50Ω", "T1 Hi-Z", "T2 50Ω"}
+	for index, button := range p.antenna {
+		if !button.Visible() || !strings.Contains(button.Label(), want[index]) {
+			t.Fatalf("RSPduo selector %d incorrect: visible=%v label=%q", index, button.Visible(), button.Label())
+		}
+	}
+}

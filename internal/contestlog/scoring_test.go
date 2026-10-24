@@ -65,3 +65,10 @@ func TestCQZoneForCallUsesCTYPrefixesAndPortableLocations(t *testing.T) {
 		}
 	}
 }
+
+func TestLookupCallIdentityReturnsEntityMetadata(t *testing.T) {
+	identity, ok := LookupCallIdentity("EA8ABC")
+	if !ok || identity.Entity != "Canary Islands" || identity.Continent != "AF" || identity.CQZone != 33 || identity.Latitude == 0 || identity.Longitude == 0 {
+		t.Fatalf("unexpected identity: %+v, %v", identity, ok)
+	}
+}

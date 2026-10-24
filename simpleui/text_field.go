@@ -28,6 +28,8 @@ type TextField struct {
 	onChange      func(string)
 	onSubmit      func(string)
 	onFocusLost   func(string)
+	borderColor   rl.Color
+	customBorder  bool
 }
 
 func NewTextField(id string, x, y, width, height float32, placeholder string, fontSize int32) *TextField {
@@ -50,6 +52,10 @@ func (field *TextField) OnSubmit(handler func(string))    { field.onSubmit = han
 func (field *TextField) OnFocusLost(handler func(string)) { field.onFocusLost = handler }
 func (field *TextField) Focused() bool                    { return field.focused }
 func (field *TextField) CapturingPointer() bool           { return field.dragging }
+func (field *TextField) SetBorderColor(color rl.Color) {
+	field.borderColor, field.customBorder = color, true
+}
+func (field *TextField) ClearBorderColor() { field.customBorder = false }
 
 func (field *TextField) SetText(value string) {
 	field.text = field.acceptedRunes(value)
@@ -122,6 +128,9 @@ func (field *TextField) Draw() {
 		border = theme.Accent
 	} else if field.hovered {
 		border = brighten(border, 20)
+	}
+	if field.customBorder {
+		border = field.borderColor
 	}
 	rl.DrawRectangleRounded(bounds, theme.CornerRadius, 8, background)
 	rl.DrawRectangleRoundedLinesEx(bounds, theme.CornerRadius, 8, max(theme.BorderWidth, float32(1)), border)

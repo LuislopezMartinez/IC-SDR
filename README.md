@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.23.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.23.0)**
+**Versión actual: [v0.24.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.24.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -48,7 +48,15 @@ IC-SDR integra herramientas para recibir y visualizar:
 
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
-| <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio de IC-SDR en el móvil" width="320"> |
+| <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio en directo de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.24.0
+
+- Log de concursos enriquecido con identificación DXCC, bandera, zona CQ y hora local aproximada del corresponsal.
+- Aviso preventivo de duplicados por banda o por concurso antes de guardar el QSO, con historial horario de los contactos previos.
+- Tablas del log y visor reorganizados para mostrar DXCC y más contactos visibles sin recortes.
+- Soporte de selección de antena para SDRplay **RSPduo**, incluidas las etiquetas Tuner 1 50 Ω, Tuner 1 Hi-Z y Tuner 2 50 Ω.
+- Correcciones de estabilidad en la enumeración SoapySDR y en los campos de texto de la interfaz.
 
 ## Novedades de v0.23.0
 

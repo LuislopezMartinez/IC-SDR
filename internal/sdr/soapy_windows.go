@@ -432,7 +432,7 @@ func (device *soapyDevice) centerFrequency() int64 {
 }
 
 func (device *soapyDevice) refreshAntennas() {
-	if !IsRSPDx(device.hardware) {
+	if !HasSelectableAntennas(device.hardware) {
 		return
 	}
 	var count uintptr
