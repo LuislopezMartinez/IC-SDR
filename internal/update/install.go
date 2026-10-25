@@ -26,9 +26,17 @@ func Apply(options InstallOptions) error {
 	if err != nil {
 		return err
 	}
+	// Prepare deliberately leaves the validated payload for this external
+	// process. Once validation succeeds, the updater owns it and must remove it
+	// on both success and failure.
+	defer os.RemoveAll(work)
 	backup := filepath.Join(filepath.Dir(target), fmt.Sprintf(".ic-sdr-backup-%d", time.Now().UnixNano()))
 	if err := renameWithRetry(target, backup, 60*time.Second); err != nil {
-		return fmt.Errorf("IC-SDR sigue utilizando archivos de la instalación: %w", err)
+		detail := processesRunningFrom(target)
+		if detail != "" {
+			return fmt.Errorf("IC-SDR sigue utilizando archivos de la instalación (%s): %w", detail, err)
+		}
+		return fmt.Errorf("IC-SDR sigue utilizando archivos de la instalación; no se detectó ningún ejecutable de IC-SDR aún activo: %w", err)
 	}
 	installed := false
 	defer func() {
@@ -65,7 +73,6 @@ func Apply(options InstallOptions) error {
 	}
 	installed = true
 	_ = os.RemoveAll(backup)
-	_ = os.RemoveAll(work)
 	return nil
 }
 

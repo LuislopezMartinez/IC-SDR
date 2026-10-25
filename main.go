@@ -3,6 +3,7 @@ package main
 import (
 	"go-zero/internal/buildinfo"
 	"go-zero/internal/i18n"
+	"go-zero/internal/processgroup"
 
 	"fmt"
 	"log"
@@ -115,6 +116,11 @@ func main() {
 		startupStep("%s", i18n.Source("text.682bc14da825"))
 		screens.RunTETRAViewer(os.Args[2], os.Args[3])
 		return
+	}
+	if err := processgroup.Initialize(); err != nil {
+		startupStep("ADVERTENCIA · No se pudo activar el supervisor de procesos auxiliares: %v", err)
+	} else {
+		startupStep("Supervisor de procesos auxiliares activado")
 	}
 	startupStep("%s", i18n.Source("text.4228c897f8e8"))
 	simpleui.SetLifecycleLogger(startupStep)

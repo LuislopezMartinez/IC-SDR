@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-zero/internal/buildinfo"
+	"go-zero/internal/processgroup"
 	"io"
 	"net/http"
 	"os"
@@ -197,6 +198,7 @@ func Prepare(ctx context.Context, release Release, progress ProgressFunc) error 
 		"--pid", strconv.Itoa(os.Getpid()),
 	)
 	command.Dir = filepath.Dir(installDir)
+	processgroup.ConfigureIndependent(command)
 	if err := command.Start(); err != nil {
 		_ = os.Remove(temporaryUpdater)
 		return fmt.Errorf("no se pudo iniciar el asistente de actualización: %w", err)
