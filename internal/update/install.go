@@ -117,10 +117,40 @@ func moveChildren(source, destination string) error {
 	for _, entry := range entries {
 		from := filepath.Join(source, entry.Name())
 		to := filepath.Join(destination, entry.Name())
-		if err := os.Rename(from, to); err != nil {
+		if err := moveEntry(from, to, entry.IsDir()); err != nil {
 			return fmt.Errorf("mover %s: %w", entry.Name(), err)
 		}
 	}
+	return nil
+}
+
+func moveEntry(source, destination string, directory bool) error {
+	if err := os.Rename(source, destination); err == nil {
+		return nil
+	} else if !directory {
+		return err
+	}
+
+	// Windows rejects renaming a directory while another process has that
+	// directory as its working directory, even when none of its contents are
+	// open. Merge its children recursively so only the empty directory handle
+	// remains in place.
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		return err
+	}
+	if err := moveChildren(source, destination); err != nil {
+		return err
+	}
+	remaining, err := os.ReadDir(source)
+	if err != nil {
+		return err
+	}
+	if len(remaining) != 0 {
+		return fmt.Errorf("el directorio sigue recibiendo archivos")
+	}
+	// Removal can still fail while a process holds the empty directory. That
+	// does not prevent installation because subsequent moves merge into it.
+	_ = os.Remove(source)
 	return nil
 }
 

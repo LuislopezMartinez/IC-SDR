@@ -46,15 +46,16 @@ func TestProcessesRunningFromFindsPortableHelper(t *testing.T) {
 func TestMoveChildrenWorksWhileRootDirectoryIsInUse(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, "IC-SDR-Go")
+	lockedDirectory := filepath.Join(target, "DATA")
 	backup := filepath.Join(root, "backup")
-	if err := os.Mkdir(target, 0o755); err != nil {
+	if err := os.MkdirAll(lockedDirectory, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(target, "IC-SDR-Go.exe"), []byte("application"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(lockedDirectory, "settings.json"), []byte("settings"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	command := exec.Command("ping.exe", "127.0.0.1", "-n", "30")
-	command.Dir = target
+	command.Dir = lockedDirectory
 	if err := command.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +74,7 @@ func TestMoveChildrenWorksWhileRootDirectoryIsInUse(t *testing.T) {
 	if err := moveChildren(target, backup); err != nil {
 		t.Fatalf("content fallback failed while root was in use: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(backup, "IC-SDR-Go.exe")); err != nil {
+	if _, err := os.Stat(filepath.Join(backup, "DATA", "settings.json")); err != nil {
 		t.Fatal(err)
 	}
 	if err := moveChildren(backup, target); err != nil {
