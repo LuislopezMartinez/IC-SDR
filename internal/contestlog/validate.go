@@ -46,23 +46,69 @@ func (s *Session) ValidateSubmission() []ValidationIssue {
 	if len(s.QSOs) == 0 {
 		add("no_qsos")
 	}
+	issues = append(issues, s.validateQSOs(true)...)
+	return issues
+}
+
+// ValidateADIF checks only fields required to create useful ADIF records. It
+// intentionally does not require Cabrillo participant/address information.
+func (s *Session) ValidateADIF() []ValidationIssue {
+	var issues []ValidationIssue
+	add := func(code string) { issues = append(issues, ValidationIssue{Code: code, QSOIndex: -1}) }
+	if s == nil {
+		add("no_session")
+		return issues
+	}
+	if NormalizeCall(s.StationCall) == "" {
+		add("station_call")
+	}
+	if len(s.QSOs) == 0 {
+		add("no_qsos")
+	}
+	issues = append(issues, s.validateQSOs(false)...)
+	return issues
+}
+
+func (s *Session) validateQSOs(requireContestExchange bool) []ValidationIssue {
+	var issues []ValidationIssue
 	var previous int64
 	for index, q := range s.QSOs {
-		invalid := q.Time.IsZero() || q.FrequencyHz <= 0 || NormalizeCall(q.WorkedCall) == "" ||
-			strings.TrimSpace(q.RSTSent) == "" || strings.TrimSpace(q.RSTReceived) == "" || q.SerialSent < 1 ||
-			strings.TrimSpace(q.SentExchangeText()) == "" || strings.TrimSpace(q.ReceivedExchangeText()) == ""
-		if invalid {
-			issues = append(issues, ValidationIssue{Code: "qso_incomplete", QSOIndex: index})
+		add := func(code string) { issues = append(issues, ValidationIssue{Code: code, QSOIndex: index}) }
+		if q.Time.IsZero() {
+			add("qso_time")
 		}
-		if q.Time.UnixNano() < previous {
-			issues = append(issues, ValidationIssue{Code: "qso_order", QSOIndex: index})
+		if q.FrequencyHz <= 0 {
+			add("qso_frequency")
+		}
+		if NormalizeCall(q.WorkedCall) == "" {
+			add("qso_call")
+		}
+		if strings.TrimSpace(q.RSTSent) == "" {
+			add("qso_rst_sent")
+		}
+		if strings.TrimSpace(q.RSTReceived) == "" {
+			add("qso_rst_received")
+		}
+		if requireContestExchange {
+			if q.SerialSent < 1 {
+				add("qso_serial_sent")
+			}
+			if strings.TrimSpace(q.SentExchangeText()) == "" {
+				add("qso_exchange_sent")
+			}
+			if strings.TrimSpace(q.ReceivedExchangeText()) == "" {
+				add("qso_exchange_received")
+			}
+		}
+		if requireContestExchange && q.Time.UnixNano() < previous {
+			add("qso_order")
 		}
 		previous = q.Time.UnixNano()
 		if BandForFrequency(q.FrequencyHz) != q.Band {
-			issues = append(issues, ValidationIssue{Code: "qso_band", QSOIndex: index})
+			add("qso_band")
 		}
-		if isCQWWContest(s.Contest) && !validCQZone(q.ReceivedExchangeText()) {
-			issues = append(issues, ValidationIssue{Code: "cq_zone_received", QSOIndex: index})
+		if requireContestExchange && isCQWWContest(s.Contest) && strings.TrimSpace(q.ReceivedExchangeText()) != "" && !validCQZone(q.ReceivedExchangeText()) {
+			add("cq_zone_received")
 		}
 	}
 	return issues

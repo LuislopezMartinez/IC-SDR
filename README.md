@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.24.3](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.24.3)**
+**Versión actual: [v0.25.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.25.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -46,9 +46,20 @@ IC-SDR integra herramientas para recibir y visualizar:
 
 ![Servidor web de IC-SDR en Windows](docs/images/ic-sdr-servidor-web.png)
 
+![Registro de concurso CQ-WW-SSB de IC-SDR con proyección de puntuación](docs/images/ic-sdr-contest-log.png)
+
+![Visor completo del registro de concurso, con edición y exportación](docs/images/ic-sdr-contest-log-viewer.png)
+
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio en directo de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.25.0
+
+- Exportación de concursos en **ADIF**, además de Cabrillo, con registros compatibles que incluyen banda, frecuencia, modo e intercambios del concurso.
+- Visor del registro ampliado: permite exportar Cabrillo o ADIF desde el concurso activo o archivado y editar los QSOs desde una tabla más clara.
+- Validación orientada a cada formato: identifica el campo concreto que impide exportar o finalizar y lo resalta para corregirlo rápidamente.
+- Proyección en directo de puntos, multiplicadores y puntuación total antes de guardar un QSO CQ WW.
 
 ## Novedades de v0.24.3
 

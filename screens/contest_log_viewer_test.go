@@ -3,6 +3,7 @@ package screens
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,5 +122,88 @@ func TestContestIndexIncludesActiveAndArchivedSessions(t *testing.T) {
 	}
 	if !panel.viewer.historyEntries[0].active || panel.viewer.historyEntries[1].path != archivePath {
 		t.Fatalf("active/archive ordering is wrong: %+v", panel.viewer.historyEntries)
+	}
+}
+
+func TestSelectedContestAlwaysShowsBothExportFormats(t *testing.T) {
+	panel := NewContestLogPanel(&MainScreen{})
+	panel.session, _ = contestlog.NewOceaniaDXSSB("EA1ABC", "", "LOW", time.Now())
+	viewer := panel.viewer
+	viewer.Open(-1)
+	if !viewer.archiveExport.Visible() || !viewer.archiveADIF.Visible() {
+		t.Fatal("active contest does not show both export buttons")
+	}
+	viewer.historyMode = true
+	viewer.refreshArchiveControls()
+	if viewer.archiveExport.Visible() || viewer.archiveADIF.Visible() {
+		t.Fatal("contest index should not show export buttons before a contest is selected")
+	}
+}
+
+func TestContestExportNamesIncludeCallContestAndDate(t *testing.T) {
+	session := &contestlog.Session{StationCall: "EA3IWW/P", Contest: contestlog.CQWWSSB,
+		CreatedAt: time.Date(2026, 10, 25, 8, 0, 0, 0, time.UTC)}
+	if got, want := contestExportBaseName(session), "ea3iww-p-cq-ww-ssb-20261025"; got != want {
+		t.Fatalf("export basename = %q, want %q", got, want)
+	}
+}
+
+func TestSelectedContestReportsTheExportedFormat(t *testing.T) {
+	panel := NewContestLogPanel(&MainScreen{})
+	panel.exportDir = t.TempDir()
+	panel.session, _ = contestlog.NewSession(contestlog.CQWWSSB, "EA3IWW", "EA3IWW",
+		contestlog.Config{Power: "LOW", SentValue: "14", Location: "DX"}, time.Date(2026, 10, 25, 8, 0, 0, 0, time.UTC))
+	panel.session.Name, panel.session.Email = "Luis", "luis@example.com"
+	panel.session.Address, panel.session.Country = "Calle Radio 1", "Spain"
+	_, _ = panel.session.Add(contestlog.Entry{Time: time.Date(2026, 10, 25, 8, 5, 0, 0, time.UTC), FrequencyHz: 28_435_000,
+		Mode: "USB", WorkedCall: "7Z7A", RSTSent: "59", RSTReceived: "59", ExchangeReceived: "21"})
+	viewer := panel.viewer
+	viewer.Open(0)
+	viewer.exportArchived()
+	if !strings.Contains(viewer.status, "Cabrillo") || !strings.Contains(viewer.status, ".log") {
+		t.Fatalf("Cabrillo export status = %q", viewer.status)
+	}
+	viewer.exportArchivedADIF()
+	if !strings.Contains(viewer.status, "ADIF") || !strings.Contains(viewer.status, ".adi") {
+		t.Fatalf("ADIF export status = %q", viewer.status)
+	}
+}
+
+func TestExportValidationNavigatesToExactMissingData(t *testing.T) {
+	panel := NewContestLogPanel(&MainScreen{})
+	panel.exportDir = t.TempDir()
+	panel.session, _ = contestlog.NewOceaniaDXSSB("EA1ABC", "", "LOW", time.Now())
+	panel.session.QSOs = []contestlog.QSO{{Time: time.Now().UTC(), FrequencyHz: 14_200_000, Band: "20M", Mode: "PH",
+		StationCall: "EA1ABC", WorkedCall: "VK2AAA", RSTSent: "59", RSTReceived: "59", SerialSent: 1,
+		ExchangeSent: "001", SerialReceived: 1, ExchangeReceived: "001"}}
+	viewer := panel.viewer
+	viewer.Open(0)
+	viewer.exportArchived()
+	if !viewer.participantMode || !viewer.participantName.Focused() || !strings.Contains(viewer.status, "falta el nombre") {
+		t.Fatalf("Cabrillo validation did not navigate to participant name: mode=%v status=%q", viewer.participantMode, viewer.status)
+	}
+
+	panel.session.QSOs[0].FrequencyHz = 0
+	viewer.setParticipantMode(false)
+	viewer.exportArchivedADIF()
+	if viewer.selected != 0 || !viewer.frequency.Focused() || !strings.Contains(viewer.status, "falta la frecuencia") {
+		t.Fatalf("ADIF validation did not navigate to QSO frequency: selected=%d status=%q", viewer.selected, viewer.status)
+	}
+}
+
+func TestFinishValidationExplainsExactBlockerAndKeepsContestOpen(t *testing.T) {
+	panel := NewContestLogPanel(&MainScreen{})
+	panel.session, _ = contestlog.NewOceaniaDXSSB("EA1ABC", "", "LOW", time.Now())
+	panel.session.QSOs = []contestlog.QSO{{Time: time.Now().UTC(), FrequencyHz: 14_200_000, Band: "20M", Mode: "PH",
+		StationCall: "EA1ABC", WorkedCall: "VK2AAA", RSTSent: "59", RSTReceived: "59", SerialSent: 1,
+		ExchangeSent: "001", SerialReceived: 1, ExchangeReceived: "001"}}
+	viewer := panel.viewer
+	viewer.OpenFinish()
+	viewer.finishSession()
+	if panel.session == nil || !viewer.participantMode || !viewer.participantName.Focused() {
+		t.Fatal("blocked finish did not preserve the contest and navigate to the missing participant field")
+	}
+	if !strings.Contains(viewer.status, "No se puede finalizar el concurso") || !strings.Contains(viewer.status, "falta el nombre") {
+		t.Fatalf("finish blocker is not explicit: %q", viewer.status)
 	}
 }

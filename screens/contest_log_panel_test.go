@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go-zero/internal/contestlog"
+	"go-zero/simpleui"
 )
 
 func TestContestLogControlsStayInsideToolWorkspace(t *testing.T) {
@@ -18,6 +19,30 @@ func TestContestLogControlsStayInsideToolWorkspace(t *testing.T) {
 		}
 		if bounds.X < toolContentX || bounds.X+bounds.Width > toolContentRight {
 			t.Fatalf("control %s at x %.0f..%.0f is outside tool workspace %.0f..%.0f", control.ID(), bounds.X, bounds.X+bounds.Width, toolContentX, toolContentRight)
+		}
+	}
+}
+
+func TestContestPanelHasOneCentralExportButton(t *testing.T) {
+	panel := NewContestLogPanel(&MainScreen{})
+	count := 0
+	for _, control := range panel.controls {
+		if strings.HasPrefix(control.ID(), "contestExport") {
+			count++
+		}
+	}
+	if count != 1 || panel.export.Label() != "EXPORTAR" {
+		t.Fatalf("main contest export controls = %d, label %q", count, panel.export.Label())
+	}
+}
+
+func TestContestExchangeFieldsClearScorePanel(t *testing.T) {
+	panel := NewContestLogPanel(&MainScreen{})
+	const scorePanelBottom = toolY + 50
+	for _, field := range []*simpleui.TextField{panel.rstSent, panel.rstReceived, panel.serialReceived} {
+		bounds := field.Bounds()
+		if bounds.Y <= scorePanelBottom || bounds.Height > 35 {
+			t.Fatalf("exchange field %s overlaps score panel: %+v", field.ID(), bounds)
 		}
 	}
 }
@@ -140,5 +165,46 @@ func TestDuplicatePreviewDistinguishesCurrentAndOtherBands(t *testing.T) {
 	panel.updateDuplicatePreview()
 	if panel.duplicatePreviewLevel != 1 || !strings.Contains(panel.duplicatePreview, "20M 13:04 UTC") {
 		t.Fatalf("other-band preview = %q, level %d", panel.duplicatePreview, panel.duplicatePreviewLevel)
+	}
+}
+
+func TestCQWWScoreProjectionUsesPendingCallAndZoneWithoutMutatingSession(t *testing.T) {
+	screen := &MainScreen{frequencyHz: 28_435_000, savedMode: "USB"}
+	panel := NewContestLogPanel(screen)
+	panel.session = &contestlog.Session{Contest: contestlog.CQWWSSB, ContestMode: "SSB", DuplicateRule: "BAND",
+		StationCall: "EA3IWW", SentExchange: "FIXED", SentValue: "14", ReceivedExchange: "CQ_ZONE", NextSerial: 1, CategoryBand: "ALL"}
+	panel.workedCall.SetText("7Z7A")
+	panel.updateWorkedIdentity("7Z7A")
+	panel.rstSent.SetText("59")
+	panel.rstReceived.SetText("59")
+	panel.serialReceived.SetText("21")
+
+	projection, ok := panel.scoreProjection(time.Date(2026, 10, 25, 8, 40, 0, 0, time.UTC))
+	if !ok {
+		t.Fatal("valid CQ WW QSO did not produce a score projection")
+	}
+	if projection.current.Total != 0 || projection.projected.Points != 3 || projection.projected.Multipliers != 2 || projection.projected.Total != 6 {
+		t.Fatalf("unexpected projection: current=%+v projected=%+v", projection.current, projection.projected)
+	}
+	if len(panel.session.QSOs) != 0 || panel.session.NextSerial != 1 {
+		t.Fatalf("score preview mutated live session: %+v", panel.session)
+	}
+
+	panel.serialReceived.SetText("41")
+	if _, ok := panel.scoreProjection(time.Now()); ok {
+		t.Fatal("invalid CQ zone produced a score projection")
+	}
+	panel.serialReceived.SetText("21")
+	panel.workedCall.SetText("")
+	panel.updateWorkedIdentity("")
+	if _, ok := panel.scoreProjection(time.Now()); ok {
+		t.Fatal("empty callsign retained a score projection")
+	}
+}
+
+func TestContestProjectionFlashAlternates(t *testing.T) {
+	base := time.UnixMilli(0)
+	if !contestProjectionFlashOn(base) || contestProjectionFlashOn(base.Add(450*time.Millisecond)) || !contestProjectionFlashOn(base.Add(900*time.Millisecond)) {
+		t.Fatal("projected total does not alternate its flash state")
 	}
 }

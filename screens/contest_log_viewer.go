@@ -25,29 +25,29 @@ type contestHistoryEntry struct {
 
 type ContestLogViewer struct {
 	simpleui.BaseElement
-	panel                                     *ContestLogPanel
-	manager                                   *simpleui.Manager
-	search, call, date, utc, frequency        *simpleui.TextField
-	rstSent, rstReceived, serialReceived      *simpleui.TextField
-	participantName, participantEmail         *simpleui.TextField
-	participantAddress, participantCity       *simpleui.TextField
-	participantCountry, participantClub       *simpleui.TextField
-	close, save, remove, confirm, cancel      *simpleui.Button
-	previous, next, reopen, archiveExport     *simpleui.Button
-	participant, saveParticipant              *simpleui.Button
-	nextIssue                                 *simpleui.Button
-	contestIndex                              *simpleui.Button
-	open, confirming, finishConfirm, archived bool
-	participantMode, historyMode              bool
-	selected, scroll                          int
-	session                                   *contestlog.Session
-	archivePath                               string
-	archives                                  []string
-	historyEntries                            []contestHistoryEntry
-	archiveIndex                              int
-	status                                    string
-	statusColor                               rl.Color
-	issueCursor                               int
+	panel                                              *ContestLogPanel
+	manager                                            *simpleui.Manager
+	search, call, date, utc, frequency                 *simpleui.TextField
+	rstSent, rstReceived, serialReceived               *simpleui.TextField
+	participantName, participantEmail                  *simpleui.TextField
+	participantAddress, participantCity                *simpleui.TextField
+	participantCountry, participantClub                *simpleui.TextField
+	close, save, remove, confirm, cancel               *simpleui.Button
+	previous, next, reopen, archiveExport, archiveADIF *simpleui.Button
+	participant, saveParticipant                       *simpleui.Button
+	nextIssue                                          *simpleui.Button
+	contestIndex                                       *simpleui.Button
+	open, confirming, finishConfirm, archived          bool
+	participantMode, historyMode                       bool
+	selected, scroll                                   int
+	session                                            *contestlog.Session
+	archivePath                                        string
+	archives                                           []string
+	historyEntries                                     []contestHistoryEntry
+	archiveIndex                                       int
+	status                                             string
+	statusColor                                        rl.Color
+	issueCursor                                        int
 }
 
 func NewContestLogViewer(panel *ContestLogPanel) *ContestLogViewer {
@@ -72,7 +72,11 @@ func NewContestLogViewer(panel *ContestLogPanel) *ContestLogViewer {
 	v.previous = simpleui.NewButton("contestViewerPreviousArchive", 450, 137, 92, 40, i18n.Source("text.log0088"), 11)
 	v.next = simpleui.NewButton("contestViewerNextArchive", 552, 137, 92, 40, i18n.Source("text.log0089"), 11)
 	v.archiveExport = simpleui.NewButton("contestViewerArchiveExport", 654, 137, 170, 40, i18n.Source("text.log0012"), 11)
-	v.reopen = simpleui.NewButton("contestViewerReopen", 834, 137, 170, 40, i18n.Source("text.log0090"), 11)
+	v.archiveADIF = simpleui.NewButton("contestViewerArchiveADIF", 834, 137, 170, 40, i18n.Source("text.log0203"), 11)
+	v.archiveExport.SetColors(colors.blue, colors.cyan, colors.text)
+	archiveViolet := rl.Color{R: 169, G: 92, B: 255, A: 255}
+	v.archiveADIF.SetColors(blendRGBA(colors.panelAlt, archiveViolet, .3), archiveViolet, colors.text)
+	v.reopen = simpleui.NewButton("contestViewerReopen", 1015, 137, 205, 40, i18n.Source("text.log0090"), 11)
 	v.participant = simpleui.NewButton("contestViewerParticipant", 1015, 137, 205, 40, i18n.Source("text.log0118"), 11)
 	v.participant.OnClick(v.showParticipant)
 	v.contestIndex = simpleui.NewButton("contestViewerContestIndex", 1230, 137, 205, 40, i18n.Source("text.log0141"), 11)
@@ -120,9 +124,10 @@ func NewContestLogViewer(panel *ContestLogPanel) *ContestLogViewer {
 	v.previous.OnClick(func() { v.openArchive(v.archiveIndex + 1) })
 	v.next.OnClick(func() { v.openArchive(v.archiveIndex - 1) })
 	v.archiveExport.OnClick(v.exportArchived)
+	v.archiveADIF.OnClick(v.exportArchivedADIF)
 	v.reopen.OnClick(v.reopenArchived)
 	for _, control := range []simpleui.Element{v.search, v.call, v.date, v.utc, v.frequency, v.rstSent, v.rstReceived,
-		v.serialReceived, v.close, v.save, v.remove, v.confirm, v.cancel, v.previous, v.next, v.archiveExport, v.reopen,
+		v.serialReceived, v.close, v.save, v.remove, v.confirm, v.cancel, v.previous, v.next, v.archiveExport, v.archiveADIF, v.reopen,
 		v.participant, v.participantName, v.participantEmail, v.participantAddress, v.participantCity, v.participantCountry,
 		v.participantClub, v.saveParticipant, v.nextIssue, v.contestIndex} {
 		v.manager.Add(control)
@@ -532,7 +537,11 @@ func validationIssueLabel(code string) string {
 		"no_session": "text.log0129", "station_call": "text.log0130", "name": "text.log0131",
 		"email": "text.log0132", "address": "text.log0133", "country": "text.log0134",
 		"no_qsos": "text.log0135", "qso_incomplete": "text.log0136", "qso_order": "text.log0138",
-		"qso_band": "text.log0139",
+		"qso_band": "text.log0139", "cqww_single_operator": "text.log0210", "cq_zone_sent": "text.log0211",
+		"location": "text.log0212", "cq_zone_received": "text.log0213", "qso_time": "text.log0214",
+		"qso_frequency": "text.log0215", "qso_call": "text.log0216", "qso_rst_sent": "text.log0217",
+		"qso_rst_received": "text.log0218", "qso_serial_sent": "text.log0219",
+		"qso_exchange_sent": "text.log0220", "qso_exchange_received": "text.log0221",
 	}
 	if key, ok := keys[code]; ok {
 		return i18n.Source(key)
@@ -556,6 +565,7 @@ func (v *ContestLogViewer) filteredIndices() []int {
 
 func (v *ContestLogViewer) selectQSO(index int) {
 	v.setParticipantMode(false)
+	v.clearValidationHighlights()
 	if v.session == nil || index < 0 || index >= len(v.session.QSOs) {
 		v.selected = -1
 		return
@@ -582,6 +592,7 @@ func (v *ContestLogViewer) showParticipant() {
 	v.participantCity.SetText(v.session.City)
 	v.participantCountry.SetText(v.session.Country)
 	v.participantClub.SetText(v.session.Club)
+	v.clearValidationHighlights()
 	v.issueCursor = 0
 	v.setParticipantMode(true)
 }
@@ -739,7 +750,9 @@ func (v *ContestLogViewer) setConfirming(confirming bool) {
 func (v *ContestLogViewer) refreshArchiveControls() {
 	v.previous.SetVisible(v.archived && !v.historyMode)
 	v.next.SetVisible(v.archived && !v.historyMode)
-	v.archiveExport.SetVisible(v.archived && !v.historyMode)
+	hasSelectedContest := v.session != nil && !v.historyMode
+	v.archiveExport.SetVisible(hasSelectedContest)
+	v.archiveADIF.SetVisible(hasSelectedContest)
 	v.reopen.SetVisible(v.archived && !v.historyMode)
 	v.reopen.SetEnabled(v.archived && v.panel.session == nil)
 	v.participant.SetVisible(!v.archived && !v.historyMode)
@@ -757,8 +770,7 @@ func (v *ContestLogViewer) finishSession() {
 	if v.session != nil {
 		if issues := v.session.ValidateSubmission(); len(issues) > 0 {
 			v.setConfirming(false)
-			v.setStatus(fmt.Sprintf(i18n.Source("text.log0117"), len(issues)), colors.orange)
-			v.showParticipant()
+			v.handleValidationIssues(issues, "text.log0208")
 			return
 		}
 	}
@@ -772,12 +784,97 @@ func (v *ContestLogViewer) finishSession() {
 }
 
 func (v *ContestLogViewer) exportArchived() {
+	if v.session != nil {
+		if issues := v.session.ValidateSubmission(); len(issues) > 0 && v.handleValidationIssues(issues, "text.log0206") {
+			return
+		}
+	}
 	path, err := v.panel.exportSession(v.session)
 	if err != nil {
 		v.setStatus(fmt.Sprintf(i18n.Source("text.log0021"), err.Error()), colors.red)
 		return
 	}
 	v.setStatus(fmt.Sprintf(i18n.Source("text.log0022"), filepath.Base(path)), colors.green)
+}
+
+func (v *ContestLogViewer) exportArchivedADIF() {
+	if v.session != nil {
+		if issues := v.session.ValidateADIF(); len(issues) > 0 && v.handleValidationIssues(issues, "text.log0207") {
+			return
+		}
+	}
+	path, err := v.panel.exportADIFSession(v.session)
+	if err != nil {
+		v.setStatus(fmt.Sprintf(i18n.Source("text.log0021"), err.Error()), colors.red)
+		return
+	}
+	v.setStatus(fmt.Sprintf(i18n.Source("text.log0204"), filepath.Base(path)), colors.green)
+}
+
+func (v *ContestLogViewer) handleValidationIssues(issues []contestlog.ValidationIssue, messageKey string) bool {
+	if len(issues) == 0 {
+		return false
+	}
+	issue := issues[0]
+	detail := validationIssueLabel(issue.Code)
+	if issue.QSOIndex >= 0 {
+		detail = fmt.Sprintf("QSO %03d: %s", issue.QSOIndex+1, detail)
+		v.selectQSO(issue.QSOIndex)
+		v.highlightQSOIssue(issue.Code)
+	} else if !v.archived && isParticipantIssue(issue.Code) {
+		v.showParticipant()
+		v.highlightParticipantIssue(issue.Code)
+	}
+	if v.archived {
+		detail += " · " + i18n.Source("text.log0209")
+	}
+	v.setStatus(fmt.Sprintf(i18n.Source(messageKey), detail), colors.red)
+	return true
+}
+
+func isParticipantIssue(code string) bool {
+	return code == "name" || code == "email" || code == "address" || code == "country"
+}
+
+func (v *ContestLogViewer) clearValidationHighlights() {
+	for _, field := range []*simpleui.TextField{v.call, v.date, v.utc, v.frequency, v.rstSent, v.rstReceived, v.serialReceived,
+		v.participantName, v.participantEmail, v.participantAddress, v.participantCity, v.participantCountry, v.participantClub} {
+		field.ClearBorderColor()
+		field.SetFocused(false)
+	}
+}
+
+func (v *ContestLogViewer) highlightParticipantIssue(code string) {
+	fields := map[string]*simpleui.TextField{"name": v.participantName, "email": v.participantEmail,
+		"address": v.participantAddress, "country": v.participantCountry}
+	if field := fields[code]; field != nil {
+		field.SetBorderColor(colors.red)
+		field.SetFocused(true)
+	}
+}
+
+func (v *ContestLogViewer) highlightQSOIssue(code string) {
+	var fields []*simpleui.TextField
+	switch code {
+	case "qso_time", "qso_order":
+		fields = []*simpleui.TextField{v.date, v.utc}
+	case "qso_frequency", "qso_band":
+		fields = []*simpleui.TextField{v.frequency}
+	case "qso_call":
+		fields = []*simpleui.TextField{v.call}
+	case "qso_rst_sent":
+		fields = []*simpleui.TextField{v.rstSent}
+	case "qso_rst_received":
+		fields = []*simpleui.TextField{v.rstReceived}
+	case "qso_exchange_received", "cq_zone_received":
+		fields = []*simpleui.TextField{v.serialReceived}
+	}
+	for index, field := range fields {
+		field.SetBorderColor(colors.red)
+		if index == 0 && !v.archived {
+			field.SetFocused(true)
+		}
+	}
 }
 
 func (v *ContestLogViewer) reopenArchived() {

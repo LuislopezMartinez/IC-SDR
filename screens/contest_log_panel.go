@@ -48,6 +48,10 @@ type ContestLogPanel struct {
 	operatorCategoryValue, assistedValue, categoryBandValue, transmitterValue string
 }
 
+type contestScoreProjection struct {
+	current, projected contestlog.Score
+}
+
 func NewContestLogPanel(screen *MainScreen) *ContestLogPanel {
 	p := &ContestLogPanel{screen: screen, path: resources.WritablePath("logbook", "oceania-dx-ssb-2026.json"), identityCache: make(map[string]contestlog.CallIdentity),
 		archiveDir: resources.WritablePath("logbook", "archive"), exportDir: resources.WritablePath("exports", "cabrillo"),
@@ -69,9 +73,9 @@ func NewContestLogPanel(screen *MainScreen) *ContestLogPanel {
 	p.editTemplates.OnClick(func() { p.templateEditor.Open() })
 
 	p.workedCall = simpleui.NewTextField("contestWorkedCall", 382, toolY+51, 190, 40, i18n.Source("text.log0005"), 17)
-	p.rstSent = simpleui.NewTextField("contestRSTSent", 632, toolY+51, 52, 40, "59", 15)
-	p.rstReceived = simpleui.NewTextField("contestRSTReceived", 744, toolY+51, 52, 40, "59", 15)
-	p.serialReceived = simpleui.NewTextField("contestSerialReceived", 856, toolY+51, 130, 40, "000", 15)
+	p.rstSent = simpleui.NewTextField("contestRSTSent", 632, toolY+56, 52, 35, "59", 15)
+	p.rstReceived = simpleui.NewTextField("contestRSTReceived", 744, toolY+56, 52, 35, "59", 15)
+	p.serialReceived = simpleui.NewTextField("contestSerialReceived", 856, toolY+56, 130, 35, "000", 15)
 	p.save = simpleui.NewButton("contestSave", 998, toolY+51, 150, 40, i18n.Source("text.log0009"), 12)
 	p.save.SetColors(actionStartFill, colors.green, colors.text)
 	p.save.OnClick(p.saveQSO)
@@ -119,9 +123,9 @@ func NewContestLogPanel(screen *MainScreen) *ContestLogPanel {
 		p.refreshConfigLabels()
 	})
 	p.refreshConfigLabels()
-	p.export = simpleui.NewButton("contestExport", 1270, toolY+51, 175, 40, i18n.Source("text.log0012"), 10)
+	p.export = simpleui.NewButton("contestExport", 1270, toolY+51, 175, 40, i18n.Source("text.log0205"), 12)
 	p.export.SetColors(colors.blue, colors.cyan, colors.text)
-	p.export.OnClick(p.exportCabrillo)
+	p.export.OnClick(func() { p.viewer.Open(-1) })
 	p.openFolder = simpleui.NewButton("contestOpenFolder", 1457, toolY+51, 110, 40, i18n.Source("text.log0013"), 9)
 	p.openFolder.OnClick(func() { openExplorerPath(p.exportDir) })
 
@@ -480,33 +484,50 @@ func (p *ContestLogPanel) saveQSO() {
 	p.workedCall.SetFocused(true)
 }
 
-func (p *ContestLogPanel) exportCabrillo() {
-	if p.session == nil {
-		return
+func (p *ContestLogPanel) exportADIFSession(session *contestlog.Session) (string, error) {
+	if session == nil {
+		return "", fmt.Errorf("%s", i18n.Source("text.log0076"))
 	}
-	if issues := p.session.ValidateSubmission(); len(issues) > 0 {
-		p.setStatus(fmt.Sprintf(i18n.Source("text.log0116"), len(issues)), colors.orange)
-		p.viewer.OpenParticipant()
-		return
+	name := contestExportBaseName(session) + ".adi"
+	path := filepath.Join(p.exportDir, name)
+	if err := contestlog.ExportADIF(path, session); err != nil {
+		return "", err
 	}
-	path, err := p.exportSession(p.session)
-	if err != nil {
-		p.setStatus(fmt.Sprintf(i18n.Source("text.log0021"), err.Error()), colors.red)
-		return
-	}
-	p.setStatus(fmt.Sprintf(i18n.Source("text.log0022"), filepath.Base(path)), colors.green)
+	return path, nil
 }
 
 func (p *ContestLogPanel) exportSession(session *contestlog.Session) (string, error) {
 	if session == nil {
 		return "", fmt.Errorf("%s", i18n.Source("text.log0076"))
 	}
-	name := strings.ToLower(strings.NewReplacer("/", "-", "\\", "-").Replace(session.StationCall)) + ".log"
+	name := contestExportBaseName(session) + ".log"
 	path := filepath.Join(p.exportDir, name)
 	if err := contestlog.ExportCabrillo(path, session); err != nil {
 		return "", err
 	}
 	return path, nil
+}
+
+func contestExportBaseName(session *contestlog.Session) string {
+	if session == nil {
+		return "contest"
+	}
+	parts := []string{session.StationCall, session.Contest}
+	if !session.CreatedAt.IsZero() {
+		parts = append(parts, session.CreatedAt.UTC().Format("20060102"))
+	}
+	var name strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(strings.Join(parts, "-")) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			name.WriteRune(r)
+			dash = false
+		} else if !dash && name.Len() > 0 {
+			name.WriteByte('-')
+			dash = true
+		}
+	}
+	return strings.Trim(name.String(), "-")
 }
 
 func (p *ContestLogPanel) archivePaths() []string {
@@ -536,6 +557,7 @@ func (p *ContestLogPanel) finishSession() error {
 		return err
 	}
 	if err := os.Remove(p.path); err != nil && !os.IsNotExist(err) {
+		_ = os.Remove(archivePath)
 		return err
 	}
 	p.stationCall.SetText(snapshot.StationCall)
@@ -647,7 +669,9 @@ func (p *ContestLogPanel) DrawPanel() {
 	if band == "" {
 		band = i18n.Source("text.log0025")
 	}
-	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.log0026"), p.session.StationCall, p.session.Contest, len(p.session.QSOs), p.session.NextSerial), 382, toolY+34, 12, colors.text)
+	summary := fmt.Sprintf(i18n.Source("text.log0026"), p.session.StationCall, p.session.Contest, len(p.session.QSOs), p.session.NextSerial)
+	simpleui.DrawText(fitContestLabel(summary, 218, 12), 382, toolY+34, 12, colors.text)
+	p.drawScorePanel(time.Now())
 	p.drawWorkedIdentity()
 	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.log0027"), float64(p.screen.frequencyHz)/1e6, band, time.Now().UTC().Format("15:04:05")), 1370, toolY+34, 11, colors.cyan)
 	serialBadge := rl.Rectangle{X: 1160, Y: toolY + 51, Width: 100, Height: 40}
@@ -674,6 +698,78 @@ func (p *ContestLogPanel) DrawPanel() {
 		simpleui.DrawTextStyled(p.status, 970, toolY+108, 12, simpleui.FontSemiBold, p.statusColor)
 	}
 	p.drawRows()
+}
+
+func (p *ContestLogPanel) scoreProjection(now time.Time) (contestScoreProjection, bool) {
+	if p.session == nil || (p.session.Contest != contestlog.CQWWSSB && p.session.Contest != contestlog.CQWWCW) || !p.hasWorkedIdentity {
+		return contestScoreProjection{}, false
+	}
+	zone, err := strconv.Atoi(strings.TrimSpace(p.serialReceived.Text()))
+	if err != nil || zone < 1 || zone > 40 || contestlog.BandForFrequency(p.screen.frequencyHz) == "" {
+		return contestScoreProjection{}, false
+	}
+	mode := p.screen.savedMode
+	if p.screen.mode != nil {
+		mode = p.screen.mode.SelectedText()
+	}
+	entry := contestlog.Entry{Time: now, FrequencyHz: p.screen.frequencyHz, Mode: mode, WorkedCall: p.workedCall.Text(),
+		RSTSent: p.rstSent.Text(), RSTReceived: p.rstReceived.Text(), SerialReceived: zone, ExchangeReceived: strconv.Itoa(zone)}
+	preview := *p.session
+	preview.QSOs = append([]contestlog.QSO(nil), p.session.QSOs...)
+	qso, err := preview.Add(entry)
+	if err != nil || qso.Duplicate || len(qso.Warnings) > 0 {
+		return contestScoreProjection{}, false
+	}
+	return contestScoreProjection{current: p.session.Score(), projected: preview.Score()}, true
+}
+
+func contestProjectionFlashOn(now time.Time) bool {
+	return (now.UnixMilli()/450)%2 == 0
+}
+
+func (p *ContestLogPanel) drawScorePanel(now time.Time) {
+	const x, width, rowHeight = float32(605), float32(315), float32(22)
+	const scoreFontSize = int32(12)
+	y := toolY + 5
+	violet := rl.Color{R: 169, G: 92, B: 255, A: 255}
+	lavender := rl.Color{R: 205, G: 174, B: 255, A: 255}
+	current := p.session.Score()
+	currentBounds := rl.Rectangle{X: x, Y: y, Width: width, Height: rowHeight}
+	currentFill := blendRGBA(colors.panelAlt, colors.blue, .42)
+	rl.DrawRectangleRounded(currentBounds, .22, 6, currentFill)
+	rl.DrawRectangleRoundedLinesEx(currentBounds, .22, 6, 1.5, colors.cyan)
+	simpleui.DrawTextStyled("ACTUAL", x+7, y+5, scoreFontSize, simpleui.FontSemiBold, colors.cyan)
+	currentText := fmt.Sprintf("PTS %d · MULT %d · TOTAL %d", current.Points, current.Multipliers, current.Total)
+	simpleui.DrawTextStyled(fitContestLabel(currentText, 250, scoreFontSize), x+60, y+5, scoreFontSize, simpleui.FontSemiBold, colors.text)
+
+	projection, ok := p.scoreProjection(now)
+	if !ok {
+		return
+	}
+	pendingY := y + rowHeight + 1
+	pendingBounds := rl.Rectangle{X: x, Y: pendingY, Width: width, Height: rowHeight}
+	pendingFill := blendRGBA(colors.panelAlt, violet, .3)
+	rl.DrawRectangleRounded(pendingBounds, .22, 6, pendingFill)
+	rl.DrawRectangleRoundedLinesEx(pendingBounds, .22, 6, 1.5, violet)
+	pointDelta := projection.projected.Points - projection.current.Points
+	multiplierDelta := projection.projected.Multipliers - projection.current.Multipliers
+	prefix := fmt.Sprintf("AL GUARDAR +%d PTS · +%d MULT ·", pointDelta, multiplierDelta)
+	total := fmt.Sprintf("TOTAL %d", projection.projected.Total)
+	totalWidth := simpleui.MeasureTextStyled(total, scoreFontSize, simpleui.FontSemiBold).X
+	totalBounds := rl.Rectangle{X: x + width - totalWidth - 12, Y: pendingY + 2, Width: totalWidth + 8, Height: rowHeight - 4}
+	prefixWidth := totalBounds.X - (x + 7) - 4
+	simpleui.DrawTextStyled(fitContestLabel(prefix, prefixWidth, scoreFontSize), x+7, pendingY+5, scoreFontSize, simpleui.FontSemiBold, lavender)
+	flash := contestProjectionFlashOn(now)
+	totalColor := lavender
+	totalBorder := violet
+	if flash {
+		totalColor = rl.Color{R: 250, G: 240, B: 255, A: 255}
+		totalBorder = rl.Color{R: 220, G: 150, B: 255, A: 255}
+		rl.DrawRectangleRounded(rl.Rectangle{X: totalBounds.X - 2, Y: totalBounds.Y - 2, Width: totalBounds.Width + 4, Height: totalBounds.Height + 4}, .3, 6,
+			blendRGBA(pendingFill, violet, .32))
+	}
+	rl.DrawRectangleRoundedLinesEx(totalBounds, .3, 6, 1.2, totalBorder)
+	simpleui.DrawTextStyled(total, totalBounds.X+4, pendingY+5, scoreFontSize, simpleui.FontSemiBold, totalColor)
 }
 
 func (p *ContestLogPanel) drawWorkedIdentity() {

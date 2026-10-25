@@ -40,3 +40,17 @@ func TestCQWWValidationRejectsInvalidZones(t *testing.T) {
 		}
 	}
 }
+
+func TestADIFValidationUsesFormatSpecificRequirements(t *testing.T) {
+	s, _ := NewOceaniaDXSSB("EA1ABC", "", "LOW", time.Now())
+	s.QSOs = []QSO{{Time: time.Now().UTC(), FrequencyHz: 14_200_000, Band: "20M", Mode: "PH",
+		StationCall: "EA1ABC", WorkedCall: "VK2AAA", RSTSent: "59", RSTReceived: "59"}}
+	if issues := s.ValidateADIF(); len(issues) != 0 {
+		t.Fatalf("ADIF incorrectly requires Cabrillo participant/exchange data: %+v", issues)
+	}
+	s.QSOs[0].FrequencyHz = 0
+	issues := s.ValidateADIF()
+	if len(issues) == 0 || issues[0].Code != "qso_frequency" || issues[0].QSOIndex != 0 {
+		t.Fatalf("ADIF did not identify the exact invalid field: %+v", issues)
+	}
+}

@@ -213,3 +213,37 @@ func TestCQWWSingleOperatorExportsOfficialCabrilloFields(t *testing.T) {
 		}
 	}
 }
+
+func TestCQWWExportsADIFWithContestExchangeAndZones(t *testing.T) {
+	when := time.Date(2026, 10, 24, 12, 34, 56, 0, time.UTC)
+	s, err := NewSession(CQWWSSB, "EA3IWW", "EA3IWW", Config{Power: "LOW", SentValue: "14", Location: "DX"}, when)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Add(Entry{Time: when, FrequencyHz: 28_435_000, Mode: "USB", WorkedCall: "7Z7A",
+		RSTSent: "59", RSTReceived: "59", ExchangeReceived: "21"}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "ea3iww.adi")
+	if err := ExportADIF(path, s); err != nil {
+		t.Fatal(err)
+	}
+	if err := ExportADIF(path, s); err != nil {
+		t.Fatalf("replacing an existing ADIF file: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"<ADIF_VER:5>3.1.7", "<PROGRAMID:6>IC-SDR", "<EOH>", "<CALL:4>7Z7A",
+		"<STATION_CALLSIGN:6>EA3IWW", "<QSO_DATE:8>20261024", "<TIME_ON:6>123456",
+		"<BAND:3>10m", "<FREQ:9>28.435000", "<MODE:3>SSB", "<CONTEST_ID:9>CQ-WW-SSB",
+		"<STX_STRING:2>14", "<SRX_STRING:2>21", "<CQZ:2>21", "<MY_CQ_ZONE:2>14", "<EOR>",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("ADIF lacks %q:\n%s", want, text)
+		}
+	}
+}
