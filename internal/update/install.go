@@ -31,22 +31,44 @@ func Apply(options InstallOptions) error {
 	// on both success and failure.
 	defer os.RemoveAll(work)
 	backup := filepath.Join(filepath.Dir(target), fmt.Sprintf(".ic-sdr-backup-%d", time.Now().UnixNano()))
-	if err := renameWithRetry(target, backup, 60*time.Second); err != nil {
-		detail := processesRunningFrom(target)
-		if detail != "" {
-			return fmt.Errorf("IC-SDR sigue utilizando archivos de la instalación (%s): %w", detail, err)
+	rootRenamed := renameWithRetry(target, backup, 3*time.Second) == nil
+	if !rootRenamed {
+		// A shell, Explorer extension or security scanner can keep a handle on
+		// the installation directory after IC-SDR has exited. Windows then
+		// refuses to rename the root even though every file below it is free.
+		// Preserve atomic rollback semantics by moving its children instead.
+		if err := os.Mkdir(backup, 0o755); err != nil {
+			return installLockError(target, err)
 		}
-		return fmt.Errorf("IC-SDR sigue utilizando archivos de la instalación; no se detectó ningún ejecutable de IC-SDR aún activo: %w", err)
+		if err := moveChildren(target, backup); err != nil {
+			rollbackErr := moveChildren(backup, target)
+			_ = os.Remove(backup)
+			if rollbackErr != nil {
+				return fmt.Errorf("no se pudo preparar ni restaurar la instalación: %v; restauración: %w", err, rollbackErr)
+			}
+			return installLockError(target, err)
+		}
 	}
 	installed := false
 	defer func() {
 		if !installed {
 			_ = restoreMutableData(target, backup)
-			_ = os.RemoveAll(target)
-			_ = os.Rename(backup, target)
+			if rootRenamed {
+				_ = os.RemoveAll(target)
+				_ = os.Rename(backup, target)
+			} else {
+				_ = removeChildren(target)
+				_ = moveChildren(backup, target)
+				_ = os.Remove(backup)
+			}
 		}
 	}()
-	if err := os.Rename(source, target); err != nil {
+	if rootRenamed {
+		err = os.Rename(source, target)
+	} else {
+		err = moveChildren(source, target)
+	}
+	if err != nil {
 		return fmt.Errorf("no se pudo colocar la nueva versión: %w", err)
 	}
 	if err := restoreMutableData(backup, target); err != nil {
@@ -73,6 +95,45 @@ func Apply(options InstallOptions) error {
 	}
 	installed = true
 	_ = os.RemoveAll(backup)
+	return nil
+}
+
+func installLockError(target string, err error) error {
+	detail := processesRunningFrom(target)
+	if detail != "" {
+		return fmt.Errorf("IC-SDR sigue utilizando archivos de la instalación (%s): %w", detail, err)
+	}
+	return fmt.Errorf("IC-SDR sigue utilizando archivos de la instalación; no se detectó ningún ejecutable de IC-SDR aún activo: %w", err)
+}
+
+func moveChildren(source, destination string) error {
+	entries, err := os.ReadDir(source)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		from := filepath.Join(source, entry.Name())
+		to := filepath.Join(destination, entry.Name())
+		if err := os.Rename(from, to); err != nil {
+			return fmt.Errorf("mover %s: %w", entry.Name(), err)
+		}
+	}
+	return nil
+}
+
+func removeChildren(directory string) error {
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(directory, entry.Name())); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

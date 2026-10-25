@@ -196,3 +196,37 @@ func TestRestoreMutableDataKeepsContestLogAndBackups(t *testing.T) {
 		t.Fatalf("packaged logbook was not replaced: %v", err)
 	}
 }
+
+func TestMoveChildrenRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	files := map[string]string{
+		"IC-SDR-Go.exe": "application",
+		filepath.Join("DATA", "config", "x.json"): "settings",
+	}
+	for name, content := range files {
+		path := filepath.Join(source, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := moveChildren(source, destination); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range files {
+		data, err := os.ReadFile(filepath.Join(destination, name))
+		if err != nil || string(data) != want {
+			t.Fatalf("moved %s = %q, %v; want %q", name, data, err, want)
+		}
+	}
+	if entries, err := os.ReadDir(source); err != nil || len(entries) != 0 {
+		t.Fatalf("source was not emptied: %v, %v", entries, err)
+	}
+	if err := moveChildren(destination, source); err != nil {
+		t.Fatal(err)
+	}
+}

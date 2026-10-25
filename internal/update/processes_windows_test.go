@@ -42,3 +42,41 @@ func TestProcessesRunningFromFindsPortableHelper(t *testing.T) {
 		time.Sleep(25 * time.Millisecond)
 	}
 }
+
+func TestMoveChildrenWorksWhileRootDirectoryIsInUse(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "IC-SDR-Go")
+	backup := filepath.Join(root, "backup")
+	if err := os.Mkdir(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "IC-SDR-Go.exe"), []byte("application"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("ping.exe", "127.0.0.1", "-n", "30")
+	command.Dir = target
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	if err := os.Rename(target, backup); err == nil {
+		if restoreErr := os.Rename(backup, target); restoreErr != nil {
+			t.Fatal(restoreErr)
+		}
+		t.Skip("Windows allowed renaming a process working directory")
+	}
+	if err := moveChildren(target, backup); err != nil {
+		t.Fatalf("content fallback failed while root was in use: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(backup, "IC-SDR-Go.exe")); err != nil {
+		t.Fatal(err)
+	}
+	if err := moveChildren(backup, target); err != nil {
+		t.Fatal(err)
+	}
+}

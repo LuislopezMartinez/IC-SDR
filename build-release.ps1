@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [string]$Version = '0.24.2'
+    [string]$Version = '0.24.3'
 )
 
 $ErrorActionPreference = 'Stop'

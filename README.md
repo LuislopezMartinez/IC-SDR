@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.24.2](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.24.2)**
+**Versión actual: [v0.24.3](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.24.3)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -49,6 +49,12 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio en directo de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.24.3
+
+- El actualizador ya no depende de poder renombrar la carpeta raíz de IC-SDR: si Windows la mantiene abierta, sustituye transaccionalmente su contenido y conserva la misma capacidad de rollback.
+- Añadida una prueba Windows que reproduce el bloqueo de la carpeta mediante un directorio de trabajo activo y verifica la instalación alternativa.
+- Las descargas temporales siguen eliminándose también cuando la actualización no puede completarse.
 
 ## Novedades de v0.24.2
 
