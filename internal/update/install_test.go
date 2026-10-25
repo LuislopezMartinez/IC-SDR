@@ -230,3 +230,31 @@ func TestMoveChildrenRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestReplaceDirectoryContents(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "backup", "DATA", "exports")
+	destination := filepath.Join(root, "target", "DATA", "exports")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "user.csv"), []byte("user"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(destination, "packaged.csv"), []byte("default"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := replaceDirectoryContents(source, destination); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(destination, "user.csv"))
+	if err != nil || string(data) != "user" {
+		t.Fatalf("restored export = %q, %v", data, err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "packaged.csv")); !os.IsNotExist(err) {
+		t.Fatalf("packaged data was not replaced: %v", err)
+	}
+}

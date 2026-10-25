@@ -81,3 +81,39 @@ func TestMoveChildrenWorksWhileRootDirectoryIsInUse(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestReplaceDirectoryContentsWhileDestinationIsInUse(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "backup", "DATA", "exports")
+	destination := filepath.Join(root, "target", "DATA", "exports")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "user.csv"), []byte("user"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(destination, "packaged.csv"), []byte("default"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("ping.exe", "127.0.0.1", "-n", "30")
+	command.Dir = destination
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	if err := replaceDirectoryContents(source, destination); err != nil {
+		t.Fatalf("mutable data restore failed while destination was in use: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(destination, "user.csv"))
+	if err != nil || string(data) != "user" {
+		t.Fatalf("restored export = %q, %v", data, err)
+	}
+}

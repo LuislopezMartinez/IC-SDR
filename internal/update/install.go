@@ -202,22 +202,45 @@ func validateInstallOptions(options InstallOptions) (target, source, work string
 func restoreMutableData(backup, target string) error {
 	for _, name := range mutableDataDirectories {
 		oldPath := filepath.Join(backup, "DATA", name)
-		if _, err := os.Stat(oldPath); os.IsNotExist(err) {
+		oldInfo, err := os.Stat(oldPath)
+		if os.IsNotExist(err) {
 			continue
 		} else if err != nil {
 			return err
 		}
+		if !oldInfo.IsDir() {
+			return fmt.Errorf("los datos conservados no son un directorio: %s", oldPath)
+		}
 		newPath := filepath.Join(target, "DATA", name)
-		if err := os.RemoveAll(newPath); err != nil {
-			return err
-		}
-		if err := os.MkdirAll(filepath.Dir(newPath), 0o755); err != nil {
-			return err
-		}
-		if err := os.Rename(oldPath, newPath); err != nil {
-			return err
+		if err := replaceDirectoryContents(oldPath, newPath); err != nil {
+			return fmt.Errorf("restaurar DATA\\%s: %w", name, err)
 		}
 	}
+	return nil
+}
+
+func replaceDirectoryContents(source, destination string) error {
+	if info, err := os.Stat(destination); err == nil {
+		if !info.IsDir() {
+			if err := os.Remove(destination); err != nil {
+				return err
+			}
+		} else if err := removeChildren(destination); err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		return err
+	}
+	if err := moveChildren(source, destination); err != nil {
+		return err
+	}
+	// Like the installation root, a mutable directory may remain open after
+	// its contents have moved. Leaving the now-empty source container inside
+	// the backup is harmless; the backup cleanup removes it when released.
+	_ = os.Remove(source)
 	return nil
 }
 
