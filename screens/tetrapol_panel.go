@@ -816,7 +816,7 @@ func (panel *TETRAPOLPanel) drawReadableHeader(status tetrapol.Status, telemetry
 	drawTETRAPOLMetric("SEÑAL", fmt.Sprintf("%6.1f dBFS", status.LevelDBFS), 1250, 1310, y+8, 15, colors.text)
 	drawTETRAPOLMetric("AFC", tetrapolNativeAFCState(telemetry), 1250, 1290, y+36, 13, colors.text)
 	drawTETRAPOLMetric("CORR.", fmt.Sprintf("%+5.0f Hz", telemetry.AFCFrequencyHz), 1390, 1440, y+36, 13, colors.text)
-	drawTETRAPOLMetric("ERR.", fmt.Sprintf("%+4.0f", telemetry.AFCErrorHz), 1530, 1570, y+36, 13, colors.text)
+	drawTETRAPOLMetric("ERR.", fmt.Sprintf("%+4.0f", telemetry.AFCErrorHz), 1515, 1550, y+36, 13, colors.text)
 }
 
 func (panel *TETRAPOLPanel) drawConversationSummary(telemetry tetrapolruntime.Telemetry) {

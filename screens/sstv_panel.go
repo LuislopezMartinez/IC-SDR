@@ -74,7 +74,7 @@ func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
 		})
 	}
 	p.auto = p.button("sstvAuto", 56, 803, 128, 38, i18n.Source("text.80e4cf374a8a"), colors.blue)
-	p.force = p.button("sstvForce", 194, 803, 150, 38, "INICIAR SIN VIS", colors.orange)
+	p.force = p.button("sstvForce", 194, 803, 150, 38, "FORZAR SIN VIS", colors.orange)
 	p.force.SetColors(colors.orange, colors.cyan, colors.background)
 	p.stop = p.button("sstvStop", 354, 803, 128, 38, "CANCELAR", colors.red)
 	p.restart = p.button("sstvRestart", 1364, 803, 176, 38, i18n.Source("text.d3eb9ea922cf"), colors.panelAlt)
@@ -273,7 +273,7 @@ func (p *SSTVPanel) DrawPanel() {
 	simpleui.DrawTextStyled(i18n.Source("text.c46d72363117"), 40, 468, 15, simpleui.FontSemiBold, colors.cyan)
 	// Leave a deliberate gap after the translated tool title. In some locales
 	// it is considerably wider than the original Spanish caption.
-	simpleui.DrawText("FFT visible · el waterfall se oculta para ampliar la imagen", 390, 470, 11, colors.muted)
+	simpleui.DrawText("FFT visible · el waterfall se oculta para ampliar la imagen", 700, 469, 12, colors.muted)
 
 	mainCard := rl.Rectangle{X: 40, Y: 490, Width: 920, Height: 270}
 	drawSSTVCard(mainCard, colors.cyan)
@@ -444,12 +444,12 @@ func (p *SSTVPanel) drawCandidate(index int) {
 	drawSSTVCard(bounds, accent)
 	simpleui.DrawTextStyled(fmt.Sprintf("RX%d", index+2), x+12, y+11, 13, simpleui.FontSemiBold, accent)
 	p.drawImagePreview(rl.Rectangle{X: x + 12, Y: y + 43, Width: 126, Height: 75}, index+1)
-	simpleui.DrawText(fmt.Sprintf("PROGRESO  %d%%", p.status.CandidateProgress[index]), x+150, y+52, 11, colors.text)
+	simpleui.DrawText(fmt.Sprintf("PROGRESO  %d%%", p.status.CandidateProgress[index]), x+150, y+51, 12, colors.text)
 	drawSSTVMeter(rl.Rectangle{X: x + 150, Y: y + 69, Width: 108, Height: 6}, p.status.CandidateProgress[index], accent)
-	simpleui.DrawText(fmt.Sprintf("SYNC  %d%%", p.status.CandidateSync[index]), x+150, y+83, 11, colors.text)
+	simpleui.DrawText(fmt.Sprintf("SYNC  %d%%", p.status.CandidateSync[index]), x+150, y+82, 12, colors.text)
 	drawSSTVMeter(rl.Rectangle{X: x + 150, Y: y + 100, Width: 108, Height: 6}, p.status.CandidateSync[index], accent)
 	lines := p.previews[index+1].lines
-	simpleui.DrawText(fmt.Sprintf("%d líneas", lines), x+150, y+111, 10, colors.muted)
+	simpleui.DrawText(fmt.Sprintf("%d líneas", lines), x+150, y+110, 11, colors.muted)
 }
 
 func drawSSTVCard(bounds rl.Rectangle, accent rl.Color) {

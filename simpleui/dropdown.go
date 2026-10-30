@@ -38,13 +38,18 @@ func NewDropdown(id string, x, y, width, height float32, placeholder string, ite
 	return dropdown
 }
 
-func (dropdown *Dropdown) Items() []string             { return append([]string(nil), dropdown.items...) }
-func (dropdown *Dropdown) SelectedIndex() int          { return dropdown.selected }
-func (dropdown *Dropdown) Open() bool                  { return dropdown.open }
-func (dropdown *Dropdown) Focused() bool               { return dropdown.focused }
-func (dropdown *Dropdown) CapturingPointer() bool      { return dropdown.pressed }
-func (dropdown *Dropdown) OverlayOpen() bool           { return dropdown.open }
-func (dropdown *Dropdown) SetFont(style FontStyle)     { dropdown.font = style }
+func (dropdown *Dropdown) Items() []string         { return append([]string(nil), dropdown.items...) }
+func (dropdown *Dropdown) SelectedIndex() int      { return dropdown.selected }
+func (dropdown *Dropdown) Open() bool              { return dropdown.open }
+func (dropdown *Dropdown) Focused() bool           { return dropdown.focused }
+func (dropdown *Dropdown) CapturingPointer() bool  { return dropdown.pressed }
+func (dropdown *Dropdown) OverlayOpen() bool       { return dropdown.open }
+func (dropdown *Dropdown) SetFont(style FontStyle) { dropdown.font = style }
+func (dropdown *Dropdown) SetFontSize(size int32) {
+	if size > 0 {
+		dropdown.fontSize = size
+	}
+}
 func (dropdown *Dropdown) SetDisabledText(text string) { dropdown.disabledText = text }
 func (dropdown *Dropdown) SetMaxVisibleItems(count int) {
 	dropdown.maxVisible = max(1, count)

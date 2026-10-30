@@ -196,6 +196,23 @@ func TestFT8CountryResolutionUsesBundledCTY(t *testing.T) {
 	}
 }
 
+func TestFT8CQZoneUsesBundledCTY(t *testing.T) {
+	for call, want := range map[string]int{
+		"EA4ABC": 14,
+		"EA8ABC": 33,
+		"DL1XYZ": 14,
+		"EX6JRO": 17,
+	} {
+		got, ok := ft8CallCQZone(call)
+		if !ok || got != want {
+			t.Errorf("ft8CallCQZone(%q) = %d, %v; want %d, true", call, got, ok, want)
+		}
+	}
+	if zone, ok := ft8CallCQZone(""); ok || zone != 0 {
+		t.Fatalf("unknown call returned CQ zone %d, %v", zone, ok)
+	}
+}
+
 func TestFT8RegionFilterKeepsStationsAndRelatedMessages(t *testing.T) {
 	panel := NewFT8Panel(NewMainScreen(nil))
 	panel.mapWindow = 0

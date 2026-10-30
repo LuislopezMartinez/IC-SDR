@@ -206,35 +206,7 @@ func (screen *MainScreen) refreshMuteState() {
 }
 
 func (screen *MainScreen) tuneFromRig(hz int64) {
-	if screen.scanPanel != nil && screen.scanPanel.running {
-		screen.scanPanel.Stop()
-	}
-	previousFrequency, previousCenter := screen.frequencyHz, screen.centerFrequencyHz
-	screen.frequencyHz = hz
-	if screen.centerMode || screen.spanHz <= 0 {
-		screen.centerFrequencyHz = hz
-	} else {
-		halfSpan := screen.spanHz / 2
-		guard := max(int64(screen.demodBandwidthHz), screen.spanHz/20)
-		guard = min(guard, screen.spanHz*2/5)
-		if hz < screen.centerFrequencyHz-halfSpan+guard {
-			screen.centerFrequencyHz = hz + halfSpan - guard
-		} else if hz > screen.centerFrequencyHz+halfSpan-guard {
-			screen.centerFrequencyHz = hz - halfSpan + guard
-		}
-		screen.centerFrequencyHz = max(screen.centerFrequencyHz, halfSpan)
-	}
-	if screen.receiver != nil {
-		if screen.centerFrequencyHz != previousCenter {
-			screen.receiver.SetCenterFrequency(screen.centerFrequencyHz)
-		}
-		screen.receiver.SetDemodulator(screen.receiverDemodMode(), hz, screen.demodBandwidthHz)
-	}
-	if screen.centerFrequencyHz != previousCenter && screen.waterfall != nil {
-		screen.waterfall.Reset()
-	}
-	screen.resetTETRAAfterManualSpectrumTune(previousFrequency)
-	screen.markSettingsDirty()
+	screen.applyTuning(tuningRequest{FrequencyHz: hz, Center: tuningKeepVisible, UpdateBand: true})
 }
 
 func (screen *MainScreen) appModeForRig() string {

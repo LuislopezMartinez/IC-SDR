@@ -35,3 +35,32 @@ func TestParseNeighbourBroadcast(t *testing.T) {
 		t.Fatalf("unexpected neighbour: %#v", cell)
 	}
 }
+
+func TestParseNeighbourFrequencyExtension(t *testing.T) {
+	var bits []byte
+	bits = appendBits(bits, 3, 5)
+	bits = appendBits(bits, 0, 2)
+	bits = appendBits(bits, 1, 1)
+	bits = appendBits(bits, 2, 2)
+	bits = appendBits(bits, 100, 12)
+	bits = appendBits(bits, 1, 1) // neighbour options
+	bits = appendBits(bits, 1, 1) // main-carrier extension present
+	bits = appendBits(bits, 4, 4) // frequency band
+	bits = appendBits(bits, 1, 2) // +6.25 kHz offset
+	bits = appendBits(bits, 5, 3) // duplex spacing
+	bits = appendBits(bits, 1, 1) // reverse operation
+	for i := 0; i < 9; i++ {
+		bits = appendBits(bits, 0, 1) // remaining optional fields absent
+	}
+
+	cell, ok := parseNeighbour(&bitReader{bits: bits}, SystemInfo{MCC: 214, MNC: 8}, NetworkInfo{})
+	if !ok {
+		t.Fatal("valid extended neighbour rejected")
+	}
+	if cell.Carrier != 100 || cell.FrequencyBand != 4 || cell.FrequencyOffset != 1 || cell.DuplexSpacing != 5 || !cell.Reverse {
+		t.Fatalf("extension decoded incorrectly: %#v", cell)
+	}
+	if cell.FrequencyHz != 402_506_250 {
+		t.Fatalf("frequency=%d, want 402506250", cell.FrequencyHz)
+	}
+}

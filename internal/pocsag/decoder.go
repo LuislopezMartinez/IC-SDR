@@ -22,6 +22,13 @@ const (
 	maxEvents  = 2_000
 )
 
+type Protocol string
+
+const (
+	ProtocolPOCSAG Protocol = "POCSAG"
+	ProtocolFLEX   Protocol = "FLEX"
+)
+
 type Event struct {
 	Received    time.Time `json:"received"`
 	Address     uint64    `json:"address"`
@@ -31,6 +38,11 @@ type Event struct {
 	Message     string    `json:"message"`
 	Raw         string    `json:"raw,omitempty"`
 	FrequencyHz int64     `json:"frequencyHz,omitempty"`
+	Protocol    Protocol  `json:"protocol,omitempty"`
+	SyncLevel   int       `json:"syncLevel,omitempty"`
+	Phase       string    `json:"phase,omitempty"`
+	Cycle       int       `json:"cycle,omitempty"`
+	Frame       int       `json:"frame,omitempty"`
 }
 
 type Status struct {
@@ -45,6 +57,11 @@ type Status struct {
 	ProcessID       int
 	Decoded         uint64
 	PersistError    string
+	Protocol        Protocol
+	LastSyncLevel   int
+	LastPhase       string
+	LastCycle       int
+	LastFrame       int
 }
 
 type Decoder struct {
@@ -68,10 +85,15 @@ type Decoder struct {
 	frequency      atomic.Int64
 	inputPeak      atomic.Uint64
 	historyPath    string
+	protocol       Protocol
+	lastSyncLevel  int
+	lastPhase      string
+	lastCycle      int
+	lastFrame      int
 }
 
 func New(executable string, historyPath ...string) *Decoder {
-	d := &Decoder{executable: executable, state: "DETENIDO"}
+	d := &Decoder{executable: executable, state: "DETENIDO", protocol: ProtocolPOCSAG}
 	d.inputPeak.Store(math.Float64bits(-140))
 	if len(historyPath) > 0 {
 		d.historyPath = historyPath[0]
@@ -109,7 +131,7 @@ func (d *Decoder) start() {
 		d.mu.Unlock()
 		return
 	}
-	cmd := exec.Command(d.executable, "-q", "-c", "-a", "POCSAG512", "-a", "POCSAG1200", "-a", "POCSAG2400", "-f", "auto", "-b", "2", "-e", "--json", "-t", "raw", "-")
+	cmd := exec.Command(d.executable, decoderArguments(d.protocol)...)
 	cmd.SysProcAttr = hiddenProcessAttributes()
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -220,18 +242,68 @@ type jsonEvent struct {
 	Numeric   string  `json:"numeric"`
 	Alpha     string  `json:"alpha"`
 	Timestamp string  `json:"timestamp"`
+	Capcode   *uint64 `json:"capcode"`
+	SyncBaud  int     `json:"sync_baud"`
+	SyncLevel int     `json:"sync_level"`
+	Phase     string  `json:"phase_number"`
+	Cycle     int     `json:"cycle_number"`
+	Frame     int     `json:"frame_number"`
+	Message   string  `json:"message"`
+	Tone      string  `json:"tone"`
+	ToneLong  string  `json:"tone_long"`
+	Baud      int     `json:"baud"`
 }
 
 func ParseEvent(line []byte) (Event, bool) {
 	var raw jsonEvent
-	if json.Unmarshal(line, &raw) != nil || !strings.HasPrefix(strings.ToUpper(raw.DemodName), "POCSAG") || raw.Address == nil {
+	if json.Unmarshal(line, &raw) != nil {
 		return Event{}, false
 	}
-	e := Event{Received: time.Now(), Address: *raw.Address, Function: -1, Raw: string(line)}
+	name := strings.ToUpper(raw.DemodName)
+	if strings.HasPrefix(name, "FLEX") {
+		baud := raw.SyncBaud
+		if baud == 0 {
+			baud = raw.Baud
+		}
+		e := Event{Received: time.Now(), Function: -1, Raw: string(line), Protocol: ProtocolFLEX,
+			Baud: baud, SyncLevel: raw.SyncLevel, Phase: raw.Phase, Cycle: raw.Cycle, Frame: raw.Frame}
+		if raw.Capcode != nil {
+			e.Address = *raw.Capcode
+		} else if raw.Address != nil {
+			e.Address = *raw.Address
+		}
+		switch {
+		case strings.Contains(name, "ALPHANUMERIC"):
+			e.Kind = "ALFA"
+		case strings.Contains(name, "NUMERIC"):
+			e.Kind = "NUM"
+		case strings.Contains(name, "TONE"):
+			e.Kind = "TONO"
+		default:
+			e.Kind = "FLEX"
+		}
+		e.Message = cleanMessage(raw.Message)
+		if e.Message == "" {
+			e.Message = cleanMessage(raw.Alpha)
+		}
+		if e.Message == "" {
+			e.Message = cleanMessage(raw.Numeric)
+		}
+		if e.Message == "" {
+			e.Message = cleanMessage(strings.TrimSpace(raw.Tone + " " + raw.ToneLong))
+		}
+		if e.Message == "" && e.Kind == "TONO" {
+			e.Message = "TONO"
+		}
+		return e, e.Address > 0 || e.Message != ""
+	}
+	if !strings.HasPrefix(name, "POCSAG") || raw.Address == nil {
+		return Event{}, false
+	}
+	e := Event{Received: time.Now(), Address: *raw.Address, Function: -1, Raw: string(line), Protocol: ProtocolPOCSAG}
 	if raw.Function != nil {
 		e.Function = *raw.Function
 	}
-	name := strings.ToUpper(raw.DemodName)
 	for _, baud := range []int{512, 1200, 2400} {
 		if strings.Contains(name, strconv.Itoa(baud)) {
 			e.Baud = baud
@@ -246,6 +318,16 @@ func ParseEvent(line []byte) (Event, bool) {
 		e.Kind, e.Message = "TONO", "TONO"
 	}
 	return e, true
+}
+
+func decoderArguments(protocol Protocol) []string {
+	base := []string{"-q", "-c"}
+	if protocol == ProtocolFLEX {
+		base = append(base, "-a", "FLEX", "-a", "FLEX_NEXT")
+	} else {
+		base = append(base, "-a", "POCSAG512", "-a", "POCSAG1200", "-a", "POCSAG2400", "-f", "auto", "-b", "2", "-e")
+	}
+	return append(base, "--json", "-t", "raw", "-")
 }
 
 func cleanMessage(value string) string {
@@ -270,11 +352,15 @@ func (d *Decoder) reader(reader io.Reader, generation uint64) {
 			// Prefer the alpha interpretation when it immediately follows the
 			// numeric candidate for the same codeword sequence.
 			replaced := false
-			if event.Kind == "ALFA" && len(d.events) > 0 {
+			if event.Protocol == ProtocolPOCSAG && event.Kind == "ALFA" && len(d.events) > 0 {
 				latest := &d.events[0]
 				if latest.Kind == "NUM" && latest.Address == event.Address && latest.Function == event.Function && latest.Baud == event.Baud && event.Received.Sub(latest.Received) < time.Second {
 					*latest, replaced = event, true
 				}
+			}
+			if !replaced && len(d.events) > 0 {
+				latest := d.events[0]
+				replaced = latest.Protocol == event.Protocol && latest.Address == event.Address && latest.Kind == event.Kind && latest.Message == event.Message && event.Received.Sub(latest.Received) < time.Second
 			}
 			if !replaced {
 				d.events = append(d.events, Event{})
@@ -284,7 +370,7 @@ func (d *Decoder) reader(reader io.Reader, generation uint64) {
 			if len(d.events) > maxEvents {
 				d.events = d.events[:maxEvents]
 			}
-			d.lastBaud, d.state = event.Baud, "DECODIFICANDO"
+			d.lastBaud, d.lastSyncLevel, d.lastPhase, d.lastCycle, d.lastFrame, d.state = event.Baud, event.SyncLevel, event.Phase, event.Cycle, event.Frame, "DECODIFICANDO"
 			d.mu.Unlock()
 			d.decoded.Add(1)
 			d.appendHistory(event)
@@ -371,6 +457,27 @@ func (d *Decoder) SetPaused(paused bool) {
 
 func (d *Decoder) SetFrequency(hz int64) { d.frequency.Store(hz) }
 
+func (d *Decoder) SetProtocol(protocol Protocol) {
+	if protocol != ProtocolPOCSAG && protocol != ProtocolFLEX {
+		return
+	}
+	d.mu.RLock()
+	current, restart := d.protocol, d.running.Load()
+	d.mu.RUnlock()
+	if current == protocol {
+		return
+	}
+	if restart {
+		d.Stop()
+	}
+	d.mu.Lock()
+	d.protocol = protocol
+	d.mu.Unlock()
+	if restart {
+		d.Configure(true)
+	}
+}
+
 func (d *Decoder) Clear() {
 	d.mu.Lock()
 	d.events = nil
@@ -386,6 +493,41 @@ func (d *Decoder) Clear() {
 	}
 }
 
+func (d *Decoder) ClearProtocol(protocol Protocol) {
+	d.mu.Lock()
+	kept := d.events[:0]
+	for _, event := range d.events {
+		if event.Protocol != protocol {
+			kept = append(kept, event)
+		}
+	}
+	d.events = kept
+	events := append([]Event(nil), kept...)
+	d.mu.Unlock()
+	if d.historyPath == "" {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(d.historyPath), 0755); err != nil {
+		d.setPersistError(err)
+		return
+	}
+	f, err := os.Create(d.historyPath)
+	if err != nil {
+		d.setPersistError(err)
+		return
+	}
+	encoder := json.NewEncoder(f)
+	for index := len(events) - 1; index >= 0 && err == nil; index-- {
+		err = encoder.Encode(events[index])
+	}
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		d.setPersistError(err)
+	}
+}
+
 func (d *Decoder) Snapshot() Status {
 	d.mu.RLock()
 	queued, pid := uint64(0), 0
@@ -395,7 +537,7 @@ func (d *Decoder) Snapshot() Status {
 	if d.cmd != nil && d.cmd.Process != nil {
 		pid = d.cmd.Process.Pid
 	}
-	status := Status{Running: d.running.Load(), Paused: d.paused, State: d.state, Error: d.lastError, Events: append([]Event(nil), d.events...), Queued: queued, Dropped: d.dropped.Load(), LastBaud: d.lastBaud, InputPeakDBFS: math.Float64frombits(d.inputPeak.Load()), ProcessID: pid, Decoded: d.decoded.Load()}
+	status := Status{Running: d.running.Load(), Paused: d.paused, State: d.state, Error: d.lastError, Events: append([]Event(nil), d.events...), Queued: queued, Dropped: d.dropped.Load(), LastBaud: d.lastBaud, InputPeakDBFS: math.Float64frombits(d.inputPeak.Load()), ProcessID: pid, Decoded: d.decoded.Load(), Protocol: d.protocol, LastSyncLevel: d.lastSyncLevel, LastPhase: d.lastPhase, LastCycle: d.lastCycle, LastFrame: d.lastFrame}
 	d.mu.RUnlock()
 	return status
 }
@@ -435,6 +577,9 @@ func (d *Decoder) loadHistory() {
 	for s.Scan() {
 		var e Event
 		if json.Unmarshal(s.Bytes(), &e) == nil {
+			if e.Protocol == "" {
+				e.Protocol = ProtocolPOCSAG
+			}
 			loaded = append(loaded, e)
 			if len(loaded) > maxEvents {
 				loaded = loaded[1:]

@@ -1656,6 +1656,10 @@
     "text.log0219": "die gesendete Nummer fehlt",
     "text.log0220": "der gesendete Austausch fehlt",
     "text.log0221": "der empfangene Austausch fehlt",
+    "text.log0222": "die empfangene japanische Präfektur muss zwischen 01 und 50 liegen",
+    "text.log0223": "JA-PRÄFEKTUR",
+    "text.log0224": "SENDEN %s",
+    "text.log0225": "%s · %s · %d QSO",
     "text.audioNotchTune": "KERBABSTIMMUNG",
     "text.audioNotchWidth": "KERBBREITE",
     "text.audioNotchCenter": "CENTER%s",
@@ -1766,7 +1770,15 @@
     "text.tetrapolCurrentCall": "AKTUELLER ANRUF",
     "text.tetrapolClearVoiceActive": "UNVERSCHLÜSSELTE SPRACHE AKTIV",
     "text.tetrapolHistoryPending": "Der Verlauf wird durch neue TCH-Sitzungen ergänzt.",
-    "text.tetrapolWaitingEvents": "Warte auf Runtime-Ereignisse…"
+    "text.tetrapolWaitingEvents": "Warte auf Runtime-Ereignisse…",
+    "text.tetraDestinationPlaceholder": "ZIELE: 1001, 5000",
+    "text.tetraFilterDestinations": "ZIELE FILTERN",
+    "text.tetraDestinationsFiltered": "%d Ziele zugelassen",
+    "text.tetraDestinationRejected": "ZIEL NICHT ZUGELASSEN",
+    "text.tetraDestinationInvalid": "UNGÜLTIGE ZIELLISTE · AUDIO GESPERRT",
+    "text.tetraDestinationEmpty": "FILTER OHNE ZIELE AKTIV · AUDIO GESPERRT",
+    "text.tetraAudioRejections": "Abgelehnt E/U/I/D/F   %d / %d / %d / %d / %d",
+    "text.tetraMACFragments": "MAC-Frag S/T/F/V %d/%d/%d/%d · D-NWRK %d · FEHLER %d"
   },
   "name": "Deutsch"
 }

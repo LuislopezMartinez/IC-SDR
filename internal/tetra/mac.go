@@ -171,6 +171,8 @@ type resourceAddress struct {
 	Type              byte
 	SSI               uint32
 	Encrypted         bool
+	FillBits          bool
+	StartFragment     bool
 	UsageMarker       uint8
 	HasUsageMarker    bool
 	HeaderBits        int
@@ -192,6 +194,8 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 	}
 	encryption := bitsToUint(bits, 4, 2)
 	lengthField := bitsToUint(bits, 7, 6)
+	fillBits := bits[2] != 0
+	startFragment := lengthField == 0x3f
 	lengthBits := 0
 	if lengthField >= 1 && lengthField <= 0x3a {
 		lengthBits = int(lengthField) * 8
@@ -248,7 +252,7 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 			// The clear MAC header already contains SSI+USAGE and encryption
 			// mode. Keep that association even though the following allocation
 			// cannot be interpreted without decrypting the PDU.
-			return resourceAddress{Type: addrType, SSI: ssi, Encrypted: true, UsageMarker: usageMarker, HasUsageMarker: hasUsageMarker, HeaderBits: cur, LengthBits: lengthBits, ChannelAllocation: true}, "", true
+			return resourceAddress{Type: addrType, SSI: ssi, Encrypted: true, FillBits: fillBits, StartFragment: startFragment, UsageMarker: usageMarker, HasUsageMarker: hasUsageMarker, HeaderBits: cur, LengthBits: lengthBits, ChannelAllocation: true}, "", true
 		}
 		if cur+23 <= len(bits) {
 			assignedSlots = uint8(bitsToUint(bits, cur+2, 4))
@@ -270,7 +274,68 @@ func parseMACResourceDetailed(bits []byte) (resourceAddress, string, bool) {
 	if cur > len(bits) {
 		return resourceAddress{}, i18n.Source("text.1d4574e7be32"), false
 	}
-	return resourceAddress{Type: addrType, SSI: ssi, Encrypted: encryption > 0, UsageMarker: usageMarker, HasUsageMarker: hasUsageMarker, HeaderBits: cur, LengthBits: lengthBits, ChannelAllocation: hasAllocation, Carrier: carrier, AssignedSlots: assignedSlots, AllocationFields: allocationFields}, "", true
+	return resourceAddress{Type: addrType, SSI: ssi, Encrypted: encryption > 0, FillBits: fillBits, StartFragment: startFragment, UsageMarker: usageMarker, HasUsageMarker: hasUsageMarker, HeaderBits: cur, LengthBits: lengthBits, ChannelAllocation: hasAllocation, Carrier: carrier, AssignedSlots: assignedSlots, AllocationFields: allocationFields}, "", true
+}
+
+type macFragmentPDU struct {
+	End     bool
+	Payload []byte
+}
+
+// parseMACFragment decodes downlink MAC-FRAG and MAC-END headers. These PDUs
+// continue a TM-SDU whose MAC-RESOURCE length indication was 63.
+func parseMACFragment(bits []byte) (macFragmentPDU, bool) {
+	if len(bits) < 4 || bitsToUint(bits, 0, 2) != 1 {
+		return macFragmentPDU{}, false
+	}
+	end := bits[2] != 0
+	fillBits := bits[3] != 0
+	off, limit := 4, len(bits)
+	if end {
+		if len(bits) < 12 {
+			return macFragmentPDU{}, false
+		}
+		length := int(bitsToUint(bits, 4, 6)) * 8
+		off = 10
+		if length > 0 && length < limit {
+			limit = length
+		}
+		granting := bits[off] != 0
+		off++
+		if granting {
+			if off+8 > limit {
+				return macFragmentPDU{}, false
+			}
+			off += 8
+		}
+		if off >= limit {
+			return macFragmentPDU{}, false
+		}
+		allocation := bits[off] != 0
+		off++
+		if allocation {
+			var ok bool
+			off, ok = skipChannelAllocation(bits[:limit], off)
+			if !ok {
+				return macFragmentPDU{}, false
+			}
+		}
+	}
+	if off > limit {
+		return macFragmentPDU{}, false
+	}
+	payload := append([]byte(nil), bits[off:limit]...)
+	if fillBits {
+		payload = trimTrailingFillBits(payload)
+	}
+	return macFragmentPDU{End: end, Payload: payload}, true
+}
+
+func trimTrailingFillBits(bits []byte) []byte {
+	for len(bits) > 0 && bits[len(bits)-1] == 0 {
+		bits = bits[:len(bits)-1]
+	}
+	return bits
 }
 
 // skipChannelAllocation advances over 21.4.2.2 channel allocation, including

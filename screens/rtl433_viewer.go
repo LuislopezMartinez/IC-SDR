@@ -82,7 +82,7 @@ func (v *rtl433Viewer) draw() {
 	columns := []struct {
 		x     float32
 		title string
-	}{{28, i18n.Source("text.f7c6c10fbcc4")}, {195, i18n.Source("text.d94e697e01c6")}, {300, i18n.Source("text.5cf99be8ab9b")}, {405, i18n.Source("text.a80919f103aa")}, {585, i18n.Source("text.cd4c8ecf7e4b")}, {705, "ID"}, {820, i18n.Source("text.4e89bb9f11b4")}, {915, i18n.Source("text.a4d1abed0b2b")}, {980, i18n.Source("text.3f3c5df3dada")}, {1050, i18n.Source("text.33663bd5c0bf")}, {1120, i18n.Source("text.50d30c134163")}}
+	}{{28, i18n.Source("text.f7c6c10fbcc4")}, {225, i18n.Source("text.d94e697e01c6")}, {330, i18n.Source("text.5cf99be8ab9b")}, {430, i18n.Source("text.a80919f103aa")}, {585, i18n.Source("text.cd4c8ecf7e4b")}, {705, "ID"}, {820, i18n.Source("text.4e89bb9f11b4")}, {915, i18n.Source("text.a4d1abed0b2b")}, {980, i18n.Source("text.3f3c5df3dada")}, {1050, i18n.Source("text.33663bd5c0bf")}, {1120, i18n.Source("text.50d30c134163")}}
 	rl.DrawRectangle(20, 82, 1360, 34, colors.panelAlt)
 	for _, c := range columns {
 		simpleui.DrawTextStyled(c.title, c.x, 89, 14, simpleui.FontSemiBold, colors.cyan)
@@ -118,9 +118,9 @@ func (v *rtl433Viewer) draw() {
 			v.selected = index
 		}
 		simpleui.DrawTextStyled(e.Received.Format("2006-01-02 15:04:05"), 28, y-1, 13, simpleui.FontMono, colors.text)
-		simpleui.DrawText(fmt.Sprintf("%.3f", e.FreqMHz), 195, y-1, 13, colors.text)
-		simpleui.DrawText(fmt.Sprint(e.Protocol), 300, y-1, 13, colors.text)
-		simpleui.DrawText(short(e.Model, 18), 405, y-1, 13, colors.text)
+		simpleui.DrawText(fmt.Sprintf("%.3f", e.FreqMHz), 225, y-1, 13, colors.text)
+		simpleui.DrawText(fmt.Sprint(e.Protocol), 330, y-1, 13, colors.text)
+		simpleui.DrawText(short(e.Model, 15), 430, y-1, 13, colors.text)
 		simpleui.DrawText(short(e.Type, 11), 585, y-1, 13, colors.text)
 		simpleui.DrawText(short(e.ID, 10), 705, y-1, 13, colors.text)
 		simpleui.DrawText(short(e.Channel, 6), 820, y-1, 13, colors.text)

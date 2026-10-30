@@ -32,7 +32,7 @@ func RunPOCSAGViewer(snapshotPath string) {
 	simpleui.SetMinimumSize(960, 540)
 	simpleui.SetCanvasFilter(rl.FilterPoint)
 	simpleui.SetTextScale(1.25)
-	simpleui.SetTitle("IC-SDR · TERMINAL POCSAG")
+	simpleui.SetTitle("IC-SDR · TERMINAL DE RADIOMENSAJERÍA")
 	simpleui.SetMaximizeKey(0)
 	v := &pocsagViewer{path: snapshotPath, selected: -1}
 	v.search = simpleui.NewTextField("pocsagViewerSearch", 830, 22, 300, 42, "FILTRAR CAPCODE O MENSAJE", 14)
@@ -86,7 +86,7 @@ func (v *pocsagViewer) draw() {
 		v.copySelected()
 	}
 	rl.DrawRectangle(0, 0, 1500, 820, colors.background)
-	simpleui.DrawTextStyled("TERMINAL POCSAG", 28, 22, 22, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled("TERMINAL DE RADIOMENSAJERÍA", 28, 22, 22, simpleui.FontSemiBold, colors.cyan)
 	simpleui.DrawText(fmt.Sprintf("%d mensajes · rueda/cursores para desplazarse", len(v.filtered)), 28, 52, 13, colors.muted)
 	if time.Now().Before(v.feedbackUntil) {
 		simpleui.DrawTextStyled(v.feedback, 500, 35, 13, simpleui.FontSemiBold, colors.green)
@@ -134,7 +134,7 @@ func (v *pocsagViewer) draw() {
 		simpleui.DrawTextStyled(fmt.Sprintf("%07d", e.Address), 320, y, 13, simpleui.FontMono, colors.text)
 		simpleui.DrawText(strconv.Itoa(e.Function), 465, y, 13, colors.text)
 		simpleui.DrawText(strconv.Itoa(e.Baud), 525, y, 13, colors.text)
-		simpleui.DrawText(e.Kind, 600, y, 13, colors.text)
+		simpleui.DrawText(string(e.Protocol)+"/"+e.Kind, 600, y, 13, colors.text)
 		simpleui.DrawText(short(e.Message, 95), 680, y, 13, colors.text)
 	}
 	drawPanel(20, 710, 1460, 90)
@@ -151,7 +151,7 @@ func (v *pocsagViewer) copySelected() {
 		return
 	}
 	e := v.filtered[v.selected]
-	rl.SetClipboardText(fmt.Sprintf("%s · %.6f MHz · CAPCODE %07d · F%d · %d baud · %s", e.Received.Format("2006-01-02 15:04:05"), float64(e.FrequencyHz)/1e6, e.Address, e.Function, e.Baud, e.Message))
+	rl.SetClipboardText(fmt.Sprintf("%s · %s · %.6f MHz · CAPCODE %07d · %d baud · %s", e.Received.Format("2006-01-02 15:04:05"), e.Protocol, float64(e.FrequencyHz)/1e6, e.Address, e.Baud, e.Message))
 	v.feedback, v.feedbackUntil = "MENSAJE COPIADO", time.Now().Add(2*time.Second)
 }
 

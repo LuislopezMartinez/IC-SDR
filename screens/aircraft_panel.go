@@ -241,7 +241,7 @@ func (p *AircraftPanel) DrawPanel() {
 		name string
 	}{{40, i18n.Source("text.ab556fe26885")}, {260, i18n.Source("text.f0417f5218f5")}, {375, i18n.Source("text.a1f6986b3cd0")}, {480, i18n.Source("text.5743f7dd78c6")}, {590, i18n.Source("text.48b9f0f98bd8")}, {700, i18n.Source("text.6cbb45c7f467")}, {810, i18n.Source("text.a87d437284ec")}, {950, i18n.Source("text.5b99241b86d1")}, {1080, i18n.Source("text.b0ddd4ea3459")}}
 	for _, c := range cols {
-		simpleui.DrawText(c.name, c.x, toolY+78, 12, colors.muted)
+		simpleui.DrawText(c.name, c.x, toolY+77, 13, colors.muted)
 	}
 	for i, a := range list {
 		if i >= 3 {
@@ -263,11 +263,11 @@ func (p *AircraftPanel) DrawPanel() {
 		}
 		values := []string{name + " / " + a.ICAO, a.Source, a.LastSeen.Local().Format("15:04:05"), alt, f(a.Speed, "%.0f"), f(a.Track, "%.0f°"), f(a.VerticalRate, "%.0f"), f(a.Latitude, "%.5f"), f(a.Longitude, "%.5f")}
 		for j, value := range values {
-			simpleui.DrawText(sondeClip(value, 20), cols[j].x, toolY+101+float32(i)*23, 12, colors.text)
+			simpleui.DrawText(sondeClip(value, 18), cols[j].x, toolY+100+float32(i)*23, 13, colors.text)
 		}
 	}
 	if len(list) == 0 {
-		simpleui.DrawText(i18n.Source("text.c9ee8539ff8d"), 40, toolY+110, 13, colors.muted)
+		simpleui.DrawText(i18n.Source("text.c9ee8539ff8d"), 40, toolY+109, 14, colors.muted)
 	}
-	simpleui.DrawText(sondeClip(p.feedback+i18n.Source("text.72bc437f7de7"), 150), 40, toolY+174, 12, colors.muted)
+	simpleui.DrawText(sondeClip(p.feedback+i18n.Source("text.72bc437f7de7"), 140), 40, toolY+173, 13, colors.muted)
 }

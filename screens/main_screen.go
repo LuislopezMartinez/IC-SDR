@@ -849,6 +849,9 @@ func (screen *MainScreen) shouldDrawWaterfall() bool {
 }
 
 func (screen *MainScreen) Close() {
+	if screen.memoryPanel != nil {
+		screen.memoryPanel.Close()
+	}
 	if screen.feedbackWindow != nil {
 		screen.feedbackWindow.Close()
 	}
@@ -1504,7 +1507,8 @@ func (screen *MainScreen) applyUtilitiesLayout(collapsed bool) {
 		}
 		bounds := element.Bounds()
 		isExpandedSSTVControl := strings.HasPrefix(element.ID(), "sstvCandidate") && bounds.Y >= 458
-		if (!isExpandedSSTVControl && bounds.Y < toolY) || bounds.Y >= designHeight || bounds.X < collapsedToolContentX {
+		isExpandedDigitalControl := (strings.HasPrefix(element.ID(), "digitalVoice") || strings.HasPrefix(element.ID(), "digitalDetect")) && bounds.Y >= 488
+		if (!isExpandedSSTVControl && !isExpandedDigitalControl && bounds.Y < toolY) || bounds.Y >= designHeight || bounds.X < collapsedToolContentX {
 			continue
 		}
 		if collapsed {
@@ -1714,6 +1718,14 @@ func (screen *MainScreen) selectTool(tool string) {
 	}
 	screen.activeTool = tool
 	screen.setViewMode(1)
+	if screen.mode != nil {
+		screen.mode.SetFontSize(uiMinimumFontSize)
+		if tool == tetrapolToolID || tool == i18n.Source("text.93239b223632") {
+			// TETRAPOL and DMR BETA need all eight letters in the compact header
+			// selector. Eleven is the largest monospaced size that fits.
+			screen.mode.SetFontSize(11)
+		}
+	}
 	if tool == i18n.Source("text.93239b223632") && screen.mode != nil && screen.mode.SelectedText() != i18n.Source("text.2604864ce4d3") {
 		for index, item := range screen.mode.Items() {
 			if item == i18n.Source("text.2604864ce4d3") {
@@ -1881,6 +1893,21 @@ func (screen *MainScreen) selectTool(tool string) {
 	}
 	screen.markSettingsDirty()
 	screen.markSettingsDirty()
+}
+
+// SelectToolForAudit exposes deterministic tool selection to the internal
+// screenshot harness. It is intentionally label/id based and has no effect in
+// normal application runs.
+func (screen *MainScreen) SelectToolForAudit(query string) bool {
+	query = strings.TrimSpace(query)
+	for _, item := range toolMenuItems {
+		if strings.EqualFold(item.id, query) || strings.EqualFold(item.label, query) {
+			screen.setViewMode(1)
+			screen.selectTool(item.id)
+			return true
+		}
+	}
+	return false
 }
 
 func (screen *MainScreen) cycleViewMode() {
@@ -2073,26 +2100,20 @@ func (screen *MainScreen) selectBand(band BandDefinition) {
 	screen.bandName = band.Name
 	screen.band.SetLabel(i18n.Source("text.eae2605aec31") + band.Name)
 	screen.selectMode(recommendedModeForBand(band))
-	screen.frequencyHz = band.FrequencyHz
-	screen.centerFrequencyHz = band.FrequencyHz
 	screen.spanHz = band.SpanHz
 	screen.tuningStepHz = recommendedStepForBand(band)
 	screen.restoreBandDisplayProfile()
 	if screen.stepSelector != nil {
 		screen.stepSelector.SetSelected(screen.tuningStepHz)
 	}
-	screen.waterfall.Reset()
-	if screen.receiver != nil {
-		screen.receiver.SetCenterFrequency(band.FrequencyHz)
-		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
-	}
-	screen.markSettingsDirty()
+	screen.applyTuning(tuningRequest{FrequencyHz: screen.bandProfileFrequency(band.FrequencyHz), Center: tuningCenter})
 }
 
 func (screen *MainScreen) selectTuningStep(stepHz int64) {
 	if stepHz <= 0 {
 		return
 	}
+	previousFrequency := screen.frequencyHz
 	screen.setFrequencyDigitExponent(-1)
 	screen.tuningStepHz = stepHz
 	screen.frequencyHz = max(int64(math.Round(float64(screen.frequencyHz)/float64(stepHz)))*stepHz, 1_000)
@@ -2113,6 +2134,7 @@ func (screen *MainScreen) selectTuningStep(stepHz int64) {
 		}
 		screen.receiver.SetDemodulator(screen.receiverDemodMode(), screen.frequencyHz, screen.demodBandwidthHz)
 	}
+	screen.resetTETRAAfterManualSpectrumTune(previousFrequency)
 	screen.markSettingsDirty()
 }
 

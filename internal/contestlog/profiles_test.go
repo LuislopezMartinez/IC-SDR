@@ -83,3 +83,20 @@ func TestTemplateAllowedBandsProduceOperationalWarning(t *testing.T) {
 		t.Fatalf("disallowed band warning missing: %v", warnings)
 	}
 }
+
+func TestJIDXSSBProfileIsReadyForDXSingleOperator(t *testing.T) {
+	profile, ok := ProfileByID(JIDXSSB)
+	if !ok || profile.CabrilloName != "JIDX-SSB" || profile.Mode != "SSB" || profile.ReceivedExchange != "NUMBER" || !profile.OfficialScoring {
+		t.Fatalf("unexpected JIDX profile: %+v, %v", profile, ok)
+	}
+	session, err := NewSession(JIDXSSB, "EA3ABC", "EA3ABC", Config{SentValue: "14", OperatorCategory: "MULTI-OP", Transmitter: "TWO"}, profile.Start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.SentValue != "14" || session.CategoryOperator != "SINGLE-OP" || session.CategoryTransmitter != "ONE" {
+		t.Fatalf("JIDX setup was not normalized: %+v", session)
+	}
+	if _, err := NewSession(JIDXSSB, "K1ABC", "", Config{SentValue: "41"}, profile.Start); err == nil {
+		t.Fatal("invalid CQ zone was accepted")
+	}
+}

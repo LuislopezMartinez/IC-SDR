@@ -29,6 +29,7 @@ type POCSAGPanel struct {
 	enable                           *simpleui.Switch
 	pause, edit, open, export, clear *simpleui.Button
 	presets                          []*simpleui.Button
+	protocolButtons                  []*simpleui.Button
 	presetFrequencies                []int64
 	presetDefinitions                []pocsagPreset
 	activePreset                     int
@@ -44,6 +45,7 @@ type POCSAGPanel struct {
 	viewerDone                       chan struct{}
 	feedback                         string
 	feedbackUntil                    time.Time
+	protocol                         pocsag.Protocol
 }
 
 type pocsagPreset struct {
@@ -52,7 +54,16 @@ type pocsagPreset struct {
 	FrequencyHz int64  `json:"frequencyHz"`
 }
 
-func loadPOCSAGPresets() []pocsagPreset {
+func defaultPagingPresets(protocol pocsag.Protocol) []pocsagPreset {
+	if protocol == pocsag.ProtocolFLEX {
+		return []pocsagPreset{
+			{"PAÍSES BAJOS", "Red FLEX observada en 169.650 MHz", 169_650_000},
+			{"FLEX 2", "Configure aquí una red FLEX local", 0},
+			{"FLEX 3", "Configure aquí una red FLEX local", 0},
+			{"FLEX 4", "Configure aquí una red FLEX local", 0},
+			{"CUSTOM", "Configure aquí su frecuencia", 0},
+		}
+	}
 	defaults := []pocsagPreset{
 		{"BÉLGICA", "ASTRID — red de radiomensajería POCSAG 2400", 169_625_000},
 		{"SUIZA", "Swiss Paging — canal nacional F5", 169_700_000},
@@ -60,7 +71,20 @@ func loadPOCSAGPresets() []pocsagPreset {
 		{"ALEMANIA", "Cityruf / Euromessage — radiomensajería POCSAG", 466_075_000},
 		{"CUSTOM", "Configure aquí su frecuencia", 0},
 	}
-	path := resources.WritablePath("config", "pocsag-presets.json")
+	return defaults
+}
+
+func pagingPresetsPath(protocol pocsag.Protocol) string {
+	name := "pocsag-presets.json"
+	if protocol == pocsag.ProtocolFLEX {
+		name = "flex-presets.json"
+	}
+	return resources.WritablePath("config", name)
+}
+
+func loadPagingPresets(protocol pocsag.Protocol) []pocsagPreset {
+	defaults := defaultPagingPresets(protocol)
+	path := pagingPresetsPath(protocol)
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		_ = os.MkdirAll(filepath.Dir(path), 0755)
@@ -98,10 +122,33 @@ func loadPOCSAGPresets() []pocsagPreset {
 	return valid
 }
 
-func pocsagPresetsPath() string { return resources.WritablePath("config", "pocsag-presets.json") }
+type pagingPreference struct {
+	Protocol pocsag.Protocol `json:"protocol"`
+}
+
+func pagingPreferencePath() string { return resources.WritablePath("config", "paging.json") }
+
+func loadPagingProtocol() pocsag.Protocol {
+	data, err := os.ReadFile(pagingPreferencePath())
+	var preference pagingPreference
+	if err == nil && json.Unmarshal(data, &preference) == nil && preference.Protocol == pocsag.ProtocolFLEX {
+		return pocsag.ProtocolFLEX
+	}
+	return pocsag.ProtocolPOCSAG
+}
+
+func savePagingProtocol(protocol pocsag.Protocol) {
+	data, err := json.MarshalIndent(pagingPreference{Protocol: protocol}, "", "  ")
+	if err == nil {
+		err = os.MkdirAll(filepath.Dir(pagingPreferencePath()), 0755)
+	}
+	if err == nil {
+		_ = os.WriteFile(pagingPreferencePath(), data, 0644)
+	}
+}
 
 func NewPOCSAGPanel(screen *MainScreen) *POCSAGPanel {
-	p := &POCSAGPanel{BaseElement: simpleui.NewBaseElement("pocsagTable", 0, 0, designWidth, designHeight), screen: screen, selected: -1, activePreset: -1, snapshotPath: resources.WritablePath("cache", "pocsag-messages.json")}
+	p := &POCSAGPanel{BaseElement: simpleui.NewBaseElement("pocsagTable", 0, 0, designWidth, designHeight), screen: screen, selected: -1, activePreset: -1, snapshotPath: resources.WritablePath("cache", "pocsag-messages.json"), protocol: loadPagingProtocol()}
 	p.enable = simpleui.NewSwitch("pocsagEnabled", 42, toolY+42, 180, 30, "DECODER", false, uiMinimumFontSize)
 	p.enable.SetTrackColors(colors.panelAlt, colors.green)
 	p.enable.OnChange(func(active bool) {
@@ -116,7 +163,11 @@ func NewPOCSAGPanel(screen *MainScreen) *POCSAGPanel {
 		p.controls = append(p.controls, b)
 		return b
 	}
-	definitions := loadPOCSAGPresets()
+	for index, protocol := range []pocsag.Protocol{pocsag.ProtocolPOCSAG, pocsag.ProtocolFLEX} {
+		selected := protocol
+		p.protocolButtons = append(p.protocolButtons, button("pagingProtocol"+string(protocol), 42+float32(index)*102, toolY+10, 96, 28, string(protocol), colors.panelAlt, func() { p.selectProtocol(selected) }))
+	}
+	definitions := loadPagingPresets(p.protocol)
 	p.presetDefinitions = append([]pocsagPreset(nil), definitions...)
 	for index, definition := range definitions {
 		hz := definition.FrequencyHz
@@ -141,6 +192,7 @@ func NewPOCSAGPanel(screen *MainScreen) *POCSAGPanel {
 	p.export = button("pocsagExport", 452, toolY+218, 132, 28, "EXPORTAR", colors.green, p.exportCSV)
 	p.clear = button("pocsagClear", 590, toolY+218, 112, 28, "LIMPIAR", actionClearFill, p.clearEvents)
 	p.controls = append([]simpleui.Element{p.enable}, p.controls...)
+	p.styleProtocolButtons()
 	p.stylePresets()
 	p.SetVisible(false)
 	return p
@@ -162,6 +214,7 @@ func (p *POCSAGPanel) Enter() {
 		p.screen.filter.SetLabel("FIL 12.5 kHz")
 	}
 	if p.screen.receiver != nil {
+		p.screen.receiver.SetPOCSAGProtocol(p.protocol)
 		p.screen.receiver.SetDemodulator(nfm, p.screen.frequencyHz, 12_500)
 		p.screen.receiver.SetPOCSAGFrequency(p.screen.frequencyHz)
 		p.screen.receiver.ConfigurePOCSAG(true)
@@ -201,6 +254,13 @@ func (p *POCSAGPanel) Tick() {
 	p.nextRefresh = time.Now().Add(100 * time.Millisecond)
 	if p.screen.receiver != nil {
 		p.status = p.screen.receiver.POCSAGStatus()
+		filtered := p.status.Events[:0]
+		for _, event := range p.status.Events {
+			if event.Protocol == p.protocol {
+				filtered = append(filtered, event)
+			}
+		}
+		p.status.Events = filtered
 	}
 	p.stylePresets()
 	p.scroll = min(p.scroll, max(0, len(p.status.Events)-6))
@@ -248,7 +308,6 @@ func (p *POCSAGPanel) DrawPanel() {
 	}
 	drawPanel(24, toolY+8, 900, 248)
 	drawPanel(936, toolY+8, 640, 248)
-	simpleui.DrawTextStyled("POCSAG", 42, toolY+16, uiSectionFontSize, simpleui.FontSemiBold, colors.cyan)
 	simpleui.DrawTextStyled(p.status.State, 250, toolY+20, uiMinimumFontSize, simpleui.FontSemiBold, stateColor)
 	detail := "Runtime multimon-ng · PCM 22.050 Hz"
 	if p.status.Error != "" {
@@ -256,6 +315,9 @@ func (p *POCSAGPanel) DrawPanel() {
 	}
 	simpleui.DrawText(detail, 370, toolY+22, uiCaptionFontSize, colors.muted)
 	baud := "AUTO 512 / 1200 / 2400"
+	if p.protocol == pocsag.ProtocolFLEX {
+		baud = "AUTO FLEX / FLEX_NEXT"
+	}
 	if p.status.LastBaud > 0 {
 		baud = fmt.Sprintf("AUTO · ÚLTIMO %d BAUD", p.status.LastBaud)
 	}
@@ -264,10 +326,14 @@ func (p *POCSAGPanel) DrawPanel() {
 	// Keep live telemetry inside the left panel. Two short, stable lines avoid
 	// variable counters growing into the terminal header on the right.
 	simpleui.DrawText(fmt.Sprintf("MSG %d  ·  COLA %d  ·  DROP %d", len(p.status.Events), p.status.Queued, p.status.Dropped), 650, toolY+45, uiCaptionFontSize, colors.muted)
-	simpleui.DrawText(fmt.Sprintf("NIVEL %.0f dBFS  ·  PID %d", p.status.InputPeakDBFS, p.status.ProcessID), 650, toolY+61, uiCaptionFontSize, colors.muted)
+	diagnostic := fmt.Sprintf("NIVEL %.0f dBFS  ·  PID %d", p.status.InputPeakDBFS, p.status.ProcessID)
+	if p.protocol == pocsag.ProtocolFLEX && p.status.LastBaud > 0 {
+		diagnostic = fmt.Sprintf("SYNC L%d · FASE %s · C%02d F%03d", p.status.LastSyncLevel, p.status.LastPhase, p.status.LastCycle, p.status.LastFrame)
+	}
+	simpleui.DrawText(diagnostic, 650, toolY+61, uiCaptionFontSize, colors.muted)
 	for index, preset := range p.presetDefinitions {
 		x := 42 + float32(index)*170
-		simpleui.DrawTextStyled(preset.Label, x+8, toolY+80, uiCaptionFontSize, simpleui.FontSemiBold, colors.cyan)
+		simpleui.DrawTextStyled(preset.Label, x+8, toolY+79, uiBodyFontSize, simpleui.FontSemiBold, colors.cyan)
 		if index == p.activePreset {
 			rl.DrawCircle(int32(x+148), int32(toolY+86), 5, colors.cyan)
 		}
@@ -278,9 +344,9 @@ func (p *POCSAGPanel) DrawPanel() {
 	headers := []struct {
 		x    float32
 		text string
-	}{{952, "HORA"}, {1035, "CAPCODE"}, {1137, "FUN"}, {1182, "BAUD"}, {1242, "TIPO"}, {1300, "MENSAJE"}}
+	}{{952, "HORA"}, {1035, "CAPCODE"}, {1137, map[bool]string{true: "FASE", false: "FUN"}[p.protocol == pocsag.ProtocolFLEX]}, {1182, "BAUD"}, {1242, "TIPO"}, {1300, "MENSAJE"}}
 	for _, h := range headers {
-		simpleui.DrawTextStyled(h.text, h.x, toolY+51, uiCaptionFontSize, simpleui.FontSemiBold, colors.muted)
+		simpleui.DrawTextStyled(h.text, h.x, toolY+50, uiBodyFontSize, simpleui.FontSemiBold, colors.muted)
 	}
 	rl.DrawLine(950, int32(toolY+72), 1560, int32(toolY+72), colors.border)
 	for row := 0; row < 6 && p.scroll+row < len(p.status.Events); row++ {
@@ -292,15 +358,63 @@ func (p *POCSAGPanel) DrawPanel() {
 		} else if row%2 == 0 {
 			rl.DrawRectangle(946, int32(y-3), 618, 23, colors.panelAlt)
 		}
-		simpleui.DrawTextStyled(e.Received.Format("15:04:05"), 952, y, uiCaptionFontSize, simpleui.FontMono, colors.text)
-		simpleui.DrawTextStyled(fmt.Sprintf("%07d", e.Address), 1035, y, uiCaptionFontSize, simpleui.FontMono, colors.text)
-		simpleui.DrawText(strconv.Itoa(e.Function), 1147, y, uiCaptionFontSize, colors.text)
-		simpleui.DrawText(strconv.Itoa(e.Baud), 1182, y, uiCaptionFontSize, colors.text)
-		simpleui.DrawText(e.Kind, 1242, y, uiCaptionFontSize, colors.text)
-		simpleui.DrawText(short(e.Message, 34), 1300, y, uiCaptionFontSize, colors.text)
+		simpleui.DrawTextStyled(e.Received.Format("15:04:05"), 952, y-1, uiBodyFontSize, simpleui.FontMono, colors.text)
+		simpleui.DrawTextStyled(fmt.Sprintf("%07d", e.Address), 1035, y-1, uiBodyFontSize, simpleui.FontMono, colors.text)
+		function := strconv.Itoa(e.Function)
+		if e.Protocol == pocsag.ProtocolFLEX {
+			function = e.Phase
+		}
+		simpleui.DrawText(function, 1147, y-1, uiBodyFontSize, colors.text)
+		simpleui.DrawText(strconv.Itoa(e.Baud), 1182, y-1, uiBodyFontSize, colors.text)
+		simpleui.DrawText(e.Kind, 1242, y-1, uiBodyFontSize, colors.text)
+		simpleui.DrawText(short(e.Message, 31), 1300, y-1, uiBodyFontSize, colors.text)
 	}
 	if time.Now().Before(p.feedbackUntil) {
 		simpleui.DrawTextStyled(p.feedback, 1190, toolY+222, uiCaptionFontSize, simpleui.FontSemiBold, colors.green)
+	}
+}
+
+func (p *POCSAGPanel) selectProtocol(protocol pocsag.Protocol) {
+	if protocol != pocsag.ProtocolPOCSAG && protocol != pocsag.ProtocolFLEX {
+		return
+	}
+	p.protocol = protocol
+	p.selected, p.scroll = -1, 0
+	p.applyProtocolPresets()
+	if p.screen.settingsPath != "" {
+		savePagingProtocol(protocol)
+	}
+	if p.screen.receiver != nil {
+		p.screen.receiver.SetPOCSAGProtocol(protocol)
+	}
+	p.styleProtocolButtons()
+}
+
+func (p *POCSAGPanel) applyProtocolPresets() {
+	definitions := loadPagingPresets(p.protocol)
+	p.presetDefinitions = append(p.presetDefinitions[:0], definitions...)
+	p.presetFrequencies = p.presetFrequencies[:0]
+	for index, preset := range definitions {
+		p.presetFrequencies = append(p.presetFrequencies, preset.FrequencyHz)
+		if index < len(p.presets) {
+			label := "CUSTOM"
+			if preset.FrequencyHz >= 1_000 {
+				label = fmt.Sprintf("%.3f MHz", float64(preset.FrequencyHz)/1e6)
+			}
+			p.presets[index].SetLabel(label)
+		}
+	}
+	p.stylePresets()
+}
+
+func (p *POCSAGPanel) styleProtocolButtons() {
+	protocols := []pocsag.Protocol{pocsag.ProtocolPOCSAG, pocsag.ProtocolFLEX}
+	for index, button := range p.protocolButtons {
+		if index < len(protocols) && protocols[index] == p.protocol {
+			button.SetColors(mixColor(colors.panelAlt, colors.green, .30), colors.green, colors.text)
+		} else {
+			button.SetColors(colors.panelAlt, colors.border, colors.text)
+		}
 	}
 }
 
@@ -440,18 +554,18 @@ func (p *POCSAGPanel) savePresetEditor() {
 		label := strings.TrimSpace(p.editorFields[index*3].Text())
 		description := strings.TrimSpace(p.editorFields[index*3+1].Text())
 		mhz, err := strconv.ParseFloat(strings.ReplaceAll(p.editorFields[index*3+2].Text(), ",", "."), 64)
-		if err != nil || mhz < .001 || mhz > 6000 || label == "" {
-			p.editorError = fmt.Sprintf("Revise la fila %d: nombre y frecuencia válida son obligatorios.", index+1)
+		if err != nil || mhz < 0 || mhz > 6000 || label == "" {
+			p.editorError = fmt.Sprintf("Revise la fila %d: nombre y frecuencia entre 0 y 6000 MHz.", index+1)
 			return
 		}
 		updated = append(updated, pocsagPreset{Label: label, Description: description, FrequencyHz: int64(math.Round(mhz * 1e6))})
 	}
 	data, err := json.MarshalIndent(updated, "", "  ")
 	if err == nil {
-		err = os.MkdirAll(filepath.Dir(pocsagPresetsPath()), 0755)
+		err = os.MkdirAll(filepath.Dir(pagingPresetsPath(p.protocol)), 0755)
 	}
 	if err == nil {
-		err = os.WriteFile(pocsagPresetsPath(), data, 0644)
+		err = os.WriteFile(pagingPresetsPath(p.protocol), data, 0644)
 	}
 	if err != nil {
 		p.editorError = "No se pudo guardar: " + err.Error()
@@ -460,7 +574,11 @@ func (p *POCSAGPanel) savePresetEditor() {
 	p.presetDefinitions = updated
 	for index, preset := range updated {
 		p.presetFrequencies[index] = preset.FrequencyHz
-		p.presets[index].SetLabel(fmt.Sprintf("%.3f MHz", float64(preset.FrequencyHz)/1e6))
+		buttonLabel := "CUSTOM"
+		if preset.FrequencyHz >= 1_000 {
+			buttonLabel = fmt.Sprintf("%.3f MHz", float64(preset.FrequencyHz)/1e6)
+		}
+		p.presets[index].SetLabel(buttonLabel)
 	}
 	p.editorOpen = false
 	p.stylePresets()
@@ -474,7 +592,7 @@ func (p *POCSAGPanel) DrawOverlay() {
 	modal := rl.Rectangle{X: 300, Y: 90, Width: 1000, Height: 690}
 	rl.DrawRectangleRounded(modal, .025, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(modal, .025, 8, 2, colors.cyan)
-	simpleui.DrawTextStyled("EDITAR FRECUENCIAS POCSAG", 330, 118, 22, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled("EDITAR FRECUENCIAS "+string(p.protocol), 330, 118, 22, simpleui.FontSemiBold, colors.cyan)
 	simpleui.DrawText("Los cambios se guardan como presets locales. Frecuencia expresada en MHz.", 330, 152, 14, colors.muted)
 	for index := range p.presetDefinitions {
 		y := float32(224 + index*82)
@@ -503,7 +621,7 @@ func (p *POCSAGPanel) togglePause() {
 
 func (p *POCSAGPanel) clearEvents() {
 	if p.screen.receiver != nil {
-		p.screen.receiver.ClearPOCSAG()
+		p.screen.receiver.ClearPOCSAGProtocol(p.protocol)
 	}
 	p.selected, p.scroll = -1, 0
 }
@@ -563,9 +681,9 @@ func ExportPOCSAGCSV(events []pocsag.Event) (string, error) {
 	_, _ = file.Write([]byte{0xEF, 0xBB, 0xBF})
 	w := csv.NewWriter(file)
 	w.Comma = ';'
-	_ = w.Write([]string{"fecha", "hora", "frecuencia_hz", "capcode", "funcion", "baud", "tipo", "mensaje", "raw"})
+	_ = w.Write([]string{"fecha", "hora", "protocolo", "frecuencia_hz", "capcode", "funcion", "baud", "fase", "ciclo", "trama", "tipo", "mensaje", "raw"})
 	for _, e := range events {
-		_ = w.Write([]string{e.Received.Format("2006-01-02"), e.Received.Format("15:04:05"), strconv.FormatInt(e.FrequencyHz, 10), strconv.FormatUint(e.Address, 10), strconv.Itoa(e.Function), strconv.Itoa(e.Baud), e.Kind, e.Message, e.Raw})
+		_ = w.Write([]string{e.Received.Format("2006-01-02"), e.Received.Format("15:04:05"), string(e.Protocol), strconv.FormatInt(e.FrequencyHz, 10), strconv.FormatUint(e.Address, 10), strconv.Itoa(e.Function), strconv.Itoa(e.Baud), e.Phase, strconv.Itoa(e.Cycle), strconv.Itoa(e.Frame), e.Kind, e.Message, e.Raw})
 	}
 	w.Flush()
 	if err := w.Error(); err != nil {

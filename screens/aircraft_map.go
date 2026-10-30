@@ -233,7 +233,7 @@ func (v *aircraftMap) draw() {
 	}
 	rl.EndScissorMode()
 	simpleui.DrawText(i18n.Source("text.efeab38ced85"), 24, 20, 24, colors.cyan)
-	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.6a5c9b643e60"), len(v.list)), 340, 29, 13, colors.muted)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.6a5c9b643e60"), len(v.list)), 390, 29, 13, colors.muted)
 	v.details()
 	simpleui.DrawText(i18n.Source("text.6ec2a8e7cdac"), 1015, 742, 9, colors.muted)
 }

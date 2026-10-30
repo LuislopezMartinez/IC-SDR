@@ -18,14 +18,11 @@ const (
 	FontMono
 )
 
-//go:embed assets/fonts/Inter-Regular.ttf
-var interRegularData []byte
+//go:embed assets/fonts/B612Mono-Regular.ttf
+var b612MonoRegularData []byte
 
-//go:embed assets/fonts/Inter-SemiBold.ttf
-var interSemiBoldData []byte
-
-//go:embed assets/fonts/JetBrainsMono-Regular.ttf
-var jetBrainsMonoData []byte
+//go:embed assets/fonts/B612Mono-Bold.ttf
+var b612MonoBoldData []byte
 
 type fontKey struct {
 	style FontStyle
@@ -118,11 +115,11 @@ func cachedFont(style FontStyle, size int32) rl.Font {
 func fontData(style FontStyle) []byte {
 	switch style {
 	case FontSemiBold:
-		return interSemiBoldData
+		return b612MonoBoldData
 	case FontMono:
-		return jetBrainsMonoData
+		return b612MonoRegularData
 	default:
-		return interRegularData
+		return b612MonoRegularData
 	}
 }
 
@@ -131,7 +128,11 @@ func supportedCodepoints() []rune {
 	for value := rune(32); value <= 255; value++ {
 		codepoints = append(codepoints, value)
 	}
-	codepoints = append(codepoints, '€', '₽', 'Ω', 'Δ', 'π', '∞', '≈', '≠', '≤', '≥', '±', '×', '÷', '√', '→', '←', '↑', '↓', '—', '–', '…', '•', '✓')
+	codepoints = append(codepoints,
+		'€', '₽', 'Ω', 'Δ', 'π', '∞', '≈', '≠', '≤', '≥', '±', '×', '÷', '√',
+		'→', '←', '↑', '↓', '↗', '↪', '⇧', '⇩',
+		'—', '–', '…', '•', '□', '■', '▶', '★', '✓', '✗', '✎', '⧉', '＋',
+	)
 	seen := map[rune]bool{}
 	for _, r := range codepoints {
 		seen[r] = true

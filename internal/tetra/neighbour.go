@@ -32,8 +32,12 @@ func carrierFrequency(carrier uint32, network NetworkInfo) int64 {
 	if !network.Valid {
 		return 0
 	}
+	return carrierFrequencyParameters(carrier, network.FrequencyBand, network.FrequencyOffset)
+}
+
+func carrierFrequencyParameters(carrier uint32, band, offset uint8) int64 {
 	offsets := [4]int64{0, 6250, -6250, 12500}
-	return int64(network.FrequencyBand)*100_000_000 + int64(carrier)*25_000 + offsets[network.FrequencyOffset&3]
+	return int64(band)*100_000_000 + int64(carrier)*25_000 + offsets[offset&3]
 }
 
 // parseNeighbourBroadcast handles MLE D-NWRK-BROADCAST and its optional
@@ -111,6 +115,11 @@ func parseNeighbour(r *bitReader, system SystemInfo, network NetworkInfo) (Neigh
 		return Neighbour{}, false
 	}
 	n := Neighbour{CellID: uint8(cellID), Carrier: carrier, MCC: system.MCC, MNC: system.MNC, Synchronized: syncValue != 0, ServiceLevel: uint8(service), LastSeen: time.Now()}
+	if network.Valid {
+		n.FrequencyBand = network.FrequencyBand
+		n.FrequencyOffset = network.FrequencyOffset
+		n.DuplexSpacing = network.DuplexSpacing
+	}
 	options, ok := r.take(1)
 	if !ok {
 		return Neighbour{}, false
@@ -119,10 +128,29 @@ func parseNeighbour(r *bitReader, system SystemInfo, network NetworkInfo) (Neigh
 		n.FrequencyHz = carrierFrequency(n.Carrier, network)
 		return n, true
 	}
-	if ext, present, valid := r.optional(10); !valid {
+	if present, ok := r.take(1); !ok {
 		return Neighbour{}, false
-	} else if present {
-		n.Carrier |= ext << 12
+	} else if present != 0 {
+		band, ok := r.take(4)
+		if !ok {
+			return Neighbour{}, false
+		}
+		offset, ok := r.take(2)
+		if !ok {
+			return Neighbour{}, false
+		}
+		duplex, ok := r.take(3)
+		if !ok {
+			return Neighbour{}, false
+		}
+		reverse, ok := r.take(1)
+		if !ok {
+			return Neighbour{}, false
+		}
+		n.FrequencyBand = uint8(band)
+		n.FrequencyOffset = uint8(offset)
+		n.DuplexSpacing = uint8(duplex)
+		n.Reverse = reverse != 0
 	}
 	if value, present, valid := r.optional(10); !valid {
 		return Neighbour{}, false
@@ -161,6 +189,8 @@ func parseNeighbour(r *bitReader, system SystemInfo, network NetworkInfo) (Neigh
 			return Neighbour{}, false
 		}
 	}
-	n.FrequencyHz = carrierFrequency(n.Carrier, network)
+	if network.Valid || n.FrequencyBand != 0 {
+		n.FrequencyHz = carrierFrequencyParameters(n.Carrier, n.FrequencyBand, n.FrequencyOffset)
+	}
 	return n, true
 }

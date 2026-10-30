@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -78,6 +79,11 @@ type MemoryPanel struct {
 	pendingHotkey                                                              int
 	shortcutFeedback                                                           string
 	shortcutFeedbackUntil                                                      time.Time
+	manager                                                                    *memoryManagerProcess
+	managerButton                                                              *simpleui.Button
+	nextManagerSync                                                            time.Time
+	memoryFileStamp, groupFileStamp, commandFileStamp                          time.Time
+	commandPath                                                                string
 }
 
 var memoryGroupPalette = []rl.Color{
@@ -88,7 +94,7 @@ var memoryGroupPalette = []rl.Color{
 }
 
 func NewMemoryPanel(screen *MainScreen) *MemoryPanel {
-	p := &MemoryPanel{BaseElement: simpleui.NewBaseElement("memoryModal", 0, 0, designWidth, designHeight), screen: screen, selected: -1, lastClicked: -1, selectedGroup: i18n.Source("text.201f15dab8b3"), markersVisible: screen.memoryViewEnabled, path: resources.WritablePath("config", "memories.json"), groupColorsPath: resources.WritablePath("config", "memory-groups.json"), groupColors: map[string]string{}, pendingDeleteIndex: -1, pendingEditIndex: -1}
+	p := &MemoryPanel{BaseElement: simpleui.NewBaseElement("memoryModal", 0, 0, designWidth, designHeight), screen: screen, selected: -1, lastClicked: -1, selectedGroup: i18n.Source("text.201f15dab8b3"), markersVisible: screen.memoryViewEnabled, path: resources.WritablePath("config", "memories.json"), groupColorsPath: resources.WritablePath("config", "memory-groups.json"), commandPath: resources.WritablePath("cache", "memory-manager-command.json"), groupColors: map[string]string{}, pendingDeleteIndex: -1, pendingEditIndex: -1}
 	p.load()
 	p.loadGroupColors()
 	p.rebuildGroups()
@@ -96,7 +102,8 @@ func NewMemoryPanel(screen *MainScreen) *MemoryPanel {
 	p.viewSwitch.SetTrackColors(rl.Color{R: 51, G: 61, B: 70, A: 255}, colors.blue)
 	p.viewSwitch.OnChange(screen.setMemoryView)
 	p.activeOnly = simpleui.NewButton("memoryOnlyActive", 1462, 638, 98, 25, i18n.Source("text.201f15dab8b3"), 9)
-	p.addGroup = simpleui.NewButton("memoryAddGroup", 41, 793, 182, 25, i18n.Source("text.2ab8750edbcc"), 11)
+	p.addGroup = simpleui.NewButton("memoryAddGroup", 41, 793, 86, 25, "+ GRUPO", 10)
+	p.managerButton = simpleui.NewButton("memoryManager", 132, 793, 91, 25, "GESTOR", 10)
 	p.add = simpleui.NewButton("memoryAdd", 1355, 665, 126, 25, i18n.Source("text.0692b8193af5"), 12)
 	p.markerView = simpleui.NewButton("memoryMarkerView", 1487, 665, 73, 25, i18n.Source("text.1f435148d912"), 9)
 	p.tune = simpleui.NewButton("memoryTune", 1355, 692, 205, 25, i18n.Source("text.4089163c4819"), 12)
@@ -106,6 +113,7 @@ func NewMemoryPanel(screen *MainScreen) *MemoryPanel {
 	p.remove = simpleui.NewButton("memoryDelete", 1355, 800, 205, 25, i18n.Source("text.b243b05a8aa4"), 12)
 	p.add.SetColors(rl.Color{R: 20, G: 105, B: 70, A: 255}, colors.green, colors.text)
 	p.addGroup.SetColors(rl.Color{R: 28, G: 62, B: 88, A: 255}, colors.blue, colors.text)
+	p.managerButton.SetColors(rl.Color{R: 10, G: 102, B: 136, A: 255}, colors.cyan, colors.text)
 	p.tune.SetColors(rl.Color{R: 20, G: 85, B: 125, A: 255}, colors.cyan, colors.text)
 	p.edit.SetColors(rl.Color{R: 28, G: 62, B: 88, A: 255}, colors.blue, colors.text)
 	p.duplicate.SetColors(rl.Color{R: 28, G: 62, B: 88, A: 255}, colors.blue, colors.text)
@@ -113,6 +121,7 @@ func NewMemoryPanel(screen *MainScreen) *MemoryPanel {
 	p.remove.SetColors(rl.Color{R: 112, G: 31, B: 35, A: 255}, colors.red, colors.text)
 	p.add.OnClick(p.openSaveModal)
 	p.addGroup.OnClick(p.openNewGroupModal)
+	p.managerButton.OnClick(p.openMemoryManager)
 	p.tune.OnClick(p.tuneSelected)
 	p.edit.OnClick(p.editSelection)
 	p.duplicate.OnClick(p.duplicateSelected)
@@ -134,7 +143,16 @@ func NewMemoryPanel(screen *MainScreen) *MemoryPanel {
 			p.activeOnly.SetLabel(i18n.Source("text.201f15dab8b3"))
 		}
 	})
-	p.controls = []simpleui.Element{p.viewSwitch, p.addGroup, p.add, p.tune, p.edit, p.duplicate, p.move, p.remove, p.markerView, p.activeOnly}
+	p.controls = []simpleui.Element{p.viewSwitch, p.addGroup, p.managerButton, p.add, p.tune, p.edit, p.duplicate, p.move, p.remove, p.markerView, p.activeOnly}
+	if info, err := os.Stat(p.path); err == nil {
+		p.memoryFileStamp = info.ModTime()
+	}
+	if info, err := os.Stat(p.groupColorsPath); err == nil {
+		p.groupFileStamp = info.ModTime()
+	}
+	if info, err := os.Stat(p.commandPath); err == nil {
+		p.commandFileStamp = info.ModTime()
+	}
 	p.SetVisible(false)
 	return p
 }
@@ -472,7 +490,11 @@ func (p *MemoryPanel) normalizeMemoryModes() bool {
 func (p *MemoryPanel) save() {
 	_ = os.MkdirAll(filepath.Dir(p.path), 0755)
 	data, _ := json.MarshalIndent(p.memories, "", "  ")
-	_ = os.WriteFile(p.path, data, 0644)
+	if replaceLiveSnapshot(p.path, data) == nil {
+		if info, err := os.Stat(p.path); err == nil {
+			p.memoryFileStamp = info.ModTime()
+		}
+	}
 }
 func (p *MemoryPanel) rebuildGroups() {
 	seen := map[string]bool{}
@@ -1342,13 +1364,13 @@ func (p *MemoryPanel) DrawPanel() {
 			groupColor, rowText, activeColor, starColor = selectionText, selectionText, selectionText, selectionText
 		}
 		rl.DrawRectangle(248, int32(yy-3), 4, 22, groupColor)
-		active := "□"
+		active := "--"
 		if m.ScanEnabled {
-			active = "■"
+			active = "ON"
 		}
 		star := ""
 		if m.Priority {
-			star = "★"
+			star = "!"
 		}
 		drawMemoryText(active, 257, yy, activeColor)
 		drawMemoryText(memoryHotkeyLabel(m.Hotkey), 300, yy, colors.blue)
@@ -1369,6 +1391,7 @@ func (p *MemoryPanel) DrawPanel() {
 }
 
 func (p *MemoryPanel) Tick() {
+	p.syncMemoryManager()
 	if p.screen.webServer != nil && p.screen.webServer.RemoteActive() {
 		return
 	}
@@ -1455,6 +1478,79 @@ func (p *MemoryPanel) Tick() {
 			}
 		}
 	}
+}
+
+func (p *MemoryPanel) openMemoryManager() {
+	if p.manager != nil && p.manager.cmd != nil && p.manager.cmd.Process != nil {
+		focusRTL433Viewer(p.manager.cmd.Process.Pid)
+		return
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return
+	}
+	cmd := exec.Command(executable, "--memory-manager", p.path, p.groupColorsPath, p.commandPath, p.selectedGroup)
+	cmd.SysProcAttr = rtl433ViewerProcessAttributes()
+	if cmd.Start() != nil {
+		return
+	}
+	done := make(chan struct{})
+	p.manager = &memoryManagerProcess{cmd: cmd, done: done}
+	go func() { _ = cmd.Wait(); close(done) }()
+}
+
+func (p *MemoryPanel) syncMemoryManager() {
+	if p.manager != nil {
+		select {
+		case <-p.manager.done:
+			p.manager = nil
+		default:
+		}
+	}
+	if time.Now().Before(p.nextManagerSync) {
+		return
+	}
+	p.nextManagerSync = time.Now().Add(250 * time.Millisecond)
+	if info, err := os.Stat(p.path); err == nil && info.ModTime().After(p.memoryFileStamp) {
+		selectedName, selectedFrequency := "", int64(0)
+		if p.selected >= 0 && p.selected < len(p.memories) {
+			selectedName, selectedFrequency = p.memories[p.selected].Name, p.memories[p.selected].FrequencyHz
+		}
+		data, readErr := os.ReadFile(p.path)
+		var memories []MemoryEntry
+		if readErr == nil && json.Unmarshal(data, &memories) == nil {
+			p.memories, p.selected = memories, -1
+			for index, memory := range memories {
+				if memory.Name == selectedName && memory.FrequencyHz == selectedFrequency {
+					p.selected = index
+					break
+				}
+			}
+			p.memoryFileStamp = info.ModTime()
+			p.loadGroupColors()
+			p.rebuildGroups()
+		}
+	}
+	if info, err := os.Stat(p.groupColorsPath); err == nil && info.ModTime().After(p.groupFileStamp) {
+		p.groupFileStamp = info.ModTime()
+		p.loadGroupColors()
+		p.rebuildGroups()
+	}
+	if info, err := os.Stat(p.commandPath); err == nil && info.ModTime().After(p.commandFileStamp) {
+		p.commandFileStamp = info.ModTime()
+		data, readErr := os.ReadFile(p.commandPath)
+		var command memoryManagerCommand
+		if readErr == nil && json.Unmarshal(data, &command) == nil && command.Action == "tune" && command.Memory.FrequencyHz > 0 {
+			p.recall(command.Memory)
+		}
+	}
+}
+
+func (p *MemoryPanel) Close() {
+	if p.manager != nil && p.manager.cmd != nil && p.manager.cmd.Process != nil {
+		_ = p.manager.cmd.Process.Kill()
+	}
+	p.manager = nil
 }
 
 func (p *MemoryPanel) filteredIndices() []int {

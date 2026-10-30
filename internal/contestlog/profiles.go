@@ -14,6 +14,7 @@ const GenericSSB = "GENERIC-SSB"
 const (
 	CQWWSSB = "CQ-WW-SSB"
 	CQWWCW  = "CQ-WW-CW"
+	JIDXSSB = "JIDX-SSB"
 )
 
 type Profile struct {
@@ -37,6 +38,10 @@ var profiles = []Profile{
 	{ID: CQWWCW, Name: "CQ WW CW 2026", CabrilloName: CQWWCW, Mode: "CW",
 		Start: time.Date(2026, 11, 28, 0, 0, 0, 0, time.UTC), End: time.Date(2026, 11, 30, 0, 0, 0, 0, time.UTC),
 		DuplicateRule: "BAND", PointsPerQSO: 1, SentExchange: "FIXED", SentValue: "CQ-ZONE", ReceivedExchange: "CQ_ZONE",
+		AllowedBands: []string{"160M", "80M", "40M", "20M", "15M", "10M"}, OfficialScoring: true, BuiltIn: true},
+	{ID: JIDXSSB, Name: "Japan International DX SSB 2026", CabrilloName: JIDXSSB, Mode: "SSB",
+		Start: time.Date(2026, 11, 14, 7, 0, 0, 0, time.UTC), End: time.Date(2026, 11, 15, 13, 0, 0, 0, time.UTC),
+		DuplicateRule: "BAND", PointsPerQSO: 1, SentExchange: "FIXED", SentValue: "CQ-ZONE", ReceivedExchange: "NUMBER",
 		AllowedBands: []string{"160M", "80M", "40M", "20M", "15M", "10M"}, OfficialScoring: true, BuiltIn: true},
 	{ID: OceaniaDXSSB, Name: "Oceania DX SSB 2026", CabrilloName: OceaniaDXSSB, Mode: "SSB",
 		Start: time.Date(2026, 10, 3, 6, 0, 0, 0, time.UTC), End: time.Date(2026, 10, 4, 6, 0, 0, 0, time.UTC),

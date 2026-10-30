@@ -30,6 +30,11 @@ func (r *Receiver) SetTETRAAudioPolicy(slot int, clearOnly bool) {
 		r.tetra.SetAudioPolicy(slot, clearOnly)
 	}
 }
+func (r *Receiver) SetTETRADestinationFilter(enabled bool, destinations []uint32) {
+	if r.tetra != nil {
+		r.tetra.SetDestinationFilter(enabled, destinations)
+	}
+}
 func (r *Receiver) TETRALiveSnapshot(frequencyHz int64) tetra.LiveSnapshot {
 	if r.tetra == nil {
 		return tetra.LiveSnapshot{FrequencyHz: frequencyHz}

@@ -199,7 +199,7 @@ func (panel *TETRAPOLPanel) drawGSSIFilter() {
 			simpleui.DrawText("—", 1112, y, 11, colors.muted)
 		}
 		if row < len(panel.allowedGSSIRows) {
-			simpleui.DrawTextStyled("✓", 1402, y, 11, simpleui.FontSemiBold, colors.green)
+			simpleui.DrawTextStyled("OK", 1402, y, 11, simpleui.FontSemiBold, colors.green)
 			simpleui.DrawTextStyled(fmt.Sprintf("GSSI %d", panel.allowedGSSIRows[row]), 1422, y, 11, simpleui.FontMono, colors.text)
 		} else {
 			simpleui.DrawText("—", 1402, y, 11, colors.muted)

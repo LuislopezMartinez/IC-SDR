@@ -9,7 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"go-zero/internal/iqcapture"
@@ -26,6 +29,8 @@ type TETRAPanel struct {
 	topmostSwitch                                               *simpleui.Switch
 	listenSelector                                              *simpleui.Dropdown
 	clearOnlySwitch                                             *simpleui.Switch
+	destinationField                                            *simpleui.TextField
+	destinationSwitch                                           *simpleui.Switch
 	enabled                                                     bool
 	autoCenter                                                  bool
 	nextCenter                                                  time.Time
@@ -39,6 +44,10 @@ type TETRAPanel struct {
 	viewerDone                                                  chan struct{}
 	listenSlot                                                  int
 	clearOnly                                                   bool
+	destinationFilterEnabled                                    bool
+	destinationFilterText                                       string
+	pendingManualTune                                           bool
+	restartAfter                                                time.Time
 	viewerTopmost                                               bool
 	iqWriter                                                    *iqcapture.Writer
 	iqCapture                                                   *simpleui.Button
@@ -72,6 +81,21 @@ func NewTETRAPanel(screen *MainScreen) *TETRAPanel {
 	p.clearOnlySwitch.OnChange(func(active bool) { p.clearOnly = active; p.applyAudioPolicy() })
 	p.clearOnlySwitch.SetTrackColors(colors.red, colors.green)
 	p.controls = append(p.controls, p.clearOnlySwitch)
+	p.destinationField = simpleui.NewTextField("tetraDestinations", 990, toolY+218, 300, 32, i18n.Source("text.tetraDestinationPlaceholder"), 12)
+	p.destinationField.SetMaxLength(180)
+	p.destinationField.SetText(p.destinationFilterText)
+	p.destinationField.OnChange(func(value string) {
+		p.destinationFilterText = value
+		p.applyAudioPolicy()
+	})
+	p.controls = append(p.controls, p.destinationField)
+	p.destinationSwitch = simpleui.NewSwitch("tetraFilterDestinations", 1305, toolY+218, 245, 32, i18n.Source("text.tetraFilterDestinations"), p.destinationFilterEnabled, 12)
+	p.destinationSwitch.SetTrackColors(colors.red, colors.green)
+	p.destinationSwitch.OnChange(func(active bool) {
+		p.destinationFilterEnabled = active
+		p.applyAudioPolicy()
+	})
+	p.controls = append(p.controls, p.destinationSwitch)
 	p.autoCenter = true
 	p.autoCenterSwitch = simpleui.NewSwitch("tetraAutoCenter", 1175, toolY+28, 140, 34, i18n.Source("text.f476d405a516"), true, 12)
 	p.autoCenterSwitch.OnChange(func(active bool) { p.autoCenter = active })
@@ -115,6 +139,7 @@ func NewTETRAPanel(screen *MainScreen) *TETRAPanel {
 
 func (p *TETRAPanel) tune(hz int64) {
 	s := p.screen
+	previousFrequency := s.frequencyHz
 	p.centerError, p.centerFiltered, p.centerStable = 0, 0, 0
 	s.frequencyHz = hz
 	s.centerFrequencyHz = hz
@@ -134,6 +159,9 @@ func (p *TETRAPanel) tune(hz int64) {
 	}
 	s.waterfall.Reset()
 	s.markSettingsDirty()
+	if hz != previousFrequency {
+		p.resetAfterManualTune()
+	}
 }
 func (p *TETRAPanel) Enter() {
 	s := p.screen
@@ -160,6 +188,9 @@ func (p *TETRAPanel) Leave() {
 	p.apply()
 }
 func (p *TETRAPanel) apply() {
+	if !p.enabled {
+		p.pendingManualTune = false
+	}
 	if p.enabled {
 		// TETRA carriers occupy a 25 kHz channel. Reassert the wide preset when
 		// starting as memories and previous modes may have restored another one.
@@ -181,6 +212,7 @@ func (p *TETRAPanel) apply() {
 		}
 		p.screen.receiver.ConfigureTETRA(p.enabled)
 		p.screen.receiver.SetTETRAAudioPolicy(p.listenSlot, p.clearOnly)
+		p.applyDestinationFilter()
 	}
 	if p.enabled {
 		p.start.SetLabel(i18n.Source("text.42a572b1399e"))
@@ -194,6 +226,11 @@ func (p *TETRAPanel) applyAudioPolicy() {
 	if p.screen.receiver != nil {
 		p.screen.receiver.SetTETRAAudioPolicy(p.listenSlot, p.clearOnly)
 	}
+	p.applyDestinationFilter()
+	p.writeViewerSettings()
+	if p.destinationFilterEnabled {
+		return
+	}
 	mode := i18n.Source("text.6ea56fae9eac")
 	if p.listenSlot > 0 {
 		mode = fmt.Sprintf("TS%d", p.listenSlot)
@@ -204,6 +241,61 @@ func (p *TETRAPanel) applyAudioPolicy() {
 	} else {
 		p.feedback += i18n.Source("text.6e360165a1a2")
 	}
+}
+
+func (p *TETRAPanel) applyDestinationFilter() {
+	destinations, err := parseTETRADestinations(p.destinationFilterText)
+	if p.destinationField != nil {
+		if err != nil {
+			p.destinationField.SetBorderColor(colors.red)
+		} else {
+			p.destinationField.ClearBorderColor()
+		}
+	}
+	if p.screen.receiver != nil {
+		// Invalid input is deliberately installed as an enabled empty list. This
+		// keeps audio fail-closed while the user corrects the value.
+		if p.destinationFilterEnabled && err != nil {
+			p.screen.receiver.SetTETRADestinationFilter(true, nil)
+		} else {
+			p.screen.receiver.SetTETRADestinationFilter(p.destinationFilterEnabled, destinations)
+		}
+	}
+	if !p.destinationFilterEnabled {
+		return
+	}
+	if err != nil {
+		p.feedback = i18n.Source("text.tetraDestinationInvalid")
+		return
+	}
+	if len(destinations) == 0 {
+		p.feedback = i18n.Source("text.tetraDestinationEmpty")
+		return
+	}
+	p.feedback = fmt.Sprintf(i18n.Source("text.tetraDestinationsFiltered"), len(destinations))
+}
+
+func parseTETRADestinations(value string) ([]uint32, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	parts := strings.FieldsFunc(value, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
+	unique := make(map[uint32]struct{}, len(parts))
+	destinations := make([]uint32, 0, len(parts))
+	for _, part := range parts {
+		parsed, err := strconv.ParseUint(part, 10, 24)
+		if err != nil || parsed == 0 || parsed > uint64(tetra.MaxSSI) {
+			return nil, fmt.Errorf("invalid TETRA destination %q", part)
+		}
+		destination := uint32(parsed)
+		if _, exists := unique[destination]; exists {
+			continue
+		}
+		unique[destination] = struct{}{}
+		destinations = append(destinations, destination)
+	}
+	return destinations, nil
 }
 func (p *TETRAPanel) Close() {
 	p.stopWavecomIQ()
@@ -250,6 +342,7 @@ func (p *TETRAPanel) stopWavecomIQ() {
 }
 func (p *TETRAPanel) Tick() {
 	p.readViewerCommand()
+	p.resumeAfterManualTune()
 	p.writeSnapshot()
 	if p.viewerDone != nil {
 		select {
@@ -313,7 +406,9 @@ type tetraViewerCommand struct {
 }
 
 type tetraViewerSettings struct {
-	Topmost bool `json:"topmost"`
+	Topmost                  bool   `json:"topmost"`
+	DestinationFilterEnabled bool   `json:"destinationFilterOn,omitempty"`
+	DestinationFilterText    string `json:"destinationFilter,omitempty"`
 }
 
 func (p *TETRAPanel) loadViewerSettings() {
@@ -324,11 +419,13 @@ func (p *TETRAPanel) loadViewerSettings() {
 	var settings tetraViewerSettings
 	if json.Unmarshal(data, &settings) == nil {
 		p.viewerTopmost = settings.Topmost
+		p.destinationFilterEnabled = settings.DestinationFilterEnabled
+		p.destinationFilterText = settings.DestinationFilterText
 	}
 }
 
 func (p *TETRAPanel) writeViewerSettings() {
-	data, err := json.Marshal(tetraViewerSettings{Topmost: p.viewerTopmost})
+	data, err := json.Marshal(tetraViewerSettings{Topmost: p.viewerTopmost, DestinationFilterEnabled: p.destinationFilterEnabled, DestinationFilterText: p.destinationFilterText})
 	if err != nil {
 		return
 	}
@@ -347,22 +444,47 @@ func (p *TETRAPanel) readViewerCommand() {
 		return
 	}
 	p.tune(command.TuneHz)
-	if p.screen.receiver != nil {
-		p.screen.receiver.ClearTETRA()
-	}
 	p.feedback = fmt.Sprintf(i18n.Source("text.06c9a891286c"), float64(command.TuneHz)/1e6)
 	p.nextSnapshot = time.Time{}
 }
 
 func (p *TETRAPanel) resetAfterManualTune() {
 	p.centerError, p.centerFiltered, p.centerStable = 0, 0, 0
-	p.nextCenter = time.Now().Add(time.Second)
-	if p.screen.receiver != nil {
-		p.screen.receiver.ClearTETRA()
+	now := time.Now()
+	p.nextCenter = now.Add(time.Second)
+	if p.enabled && p.screen.receiver != nil {
+		if !p.pendingManualTune {
+			// Stop the streaming decoder before clearing it. Its DSP buffers and
+			// pending-burst coordinates belong to the previous RF channel and must
+			// be destroyed together rather than partially reset in place.
+			p.screen.receiver.ConfigureTETRA(false)
+			p.screen.receiver.ClearTETRA()
+		}
+		p.pendingManualTune = true
+		p.restartAfter = now.Add(350 * time.Millisecond)
 	}
 	p.feedback = i18n.Source("text.de635a72ba73")
 	p.nextSnapshot = time.Time{}
 	p.writeSnapshot()
+}
+
+func (p *TETRAPanel) resumeAfterManualTune() {
+	if !p.pendingManualTune || time.Now().Before(p.restartAfter) {
+		return
+	}
+	p.pendingManualTune = false
+	if !p.enabled || p.screen.receiver == nil {
+		return
+	}
+	// Reassert the final VFO after the user has stopped moving the wheel. Any
+	// intermediate retunes have now settled and the fresh decoder sees only the
+	// selected channel's stream state.
+	p.screen.receiver.SetDemodulator(i18n.Source("text.f69d86a86926"), p.screen.frequencyHz, tetraChannelBandwidthHz)
+	p.screen.receiver.ConfigureTETRA(true)
+	p.screen.receiver.SetTETRAAudioPolicy(p.listenSlot, p.clearOnly)
+	p.applyDestinationFilter()
+	p.nextCenter = time.Now().Add(time.Second)
+	p.nextSnapshot = time.Time{}
 }
 func (p *TETRAPanel) writeSnapshot() {
 	if p.screen.receiver == nil {
@@ -455,12 +577,12 @@ func (p *TETRAPanel) DrawPanel() {
 	drawTETRAStatusField(i18n.Source("text.d950abf6eb7f"), fmt.Sprintf("%3.0f %%", status.Quality), 690, toolY+72, 115)
 	drawTETRAStatusField(i18n.Source("text.92f7f9489fec"), fmt.Sprintf(i18n.Source("text.9404d61a8128"), status.FrequencyErrorHz), 815, toolY+72, 120)
 	drawTETRAStatusField(i18n.Source("text.eead08562c7e"), fmt.Sprintf(i18n.Source("text.9404d61a8128"), p.centerError), 945, toolY+72, 145)
-	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.424222ae30be"), status.BER, status.FER, status.SyncHits, status.NormalBursts, status.AACHValid, status.AACHRejected, status.SCHValid, status.SCHCRCFailures, status.MACResources, status.CMCEEvents), toolContentX, toolY+99, 13, colors.muted)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.424222ae30be"), status.BER, status.FER, status.SyncHits, status.NormalBursts, status.AACHValid, status.AACHRejected, status.SCHValid, status.SCHCRCFailures, status.MACResources, status.CMCEEvents), toolContentX, toolY+105, 11, colors.muted)
 	if !status.LastSync.IsZero() {
-		simpleui.DrawText(i18n.Source("text.25379e6c4353")+status.LastSync.Format("15:04:05"), toolContentX, toolY+124, 13, colors.green)
+		simpleui.DrawText(i18n.Source("text.25379e6c4353")+status.LastSync.Format("15:04:05"), toolContentX, toolY+130, 12, colors.green)
 	}
 	if status.System.Valid {
-		simpleui.DrawText(fmt.Sprintf(i18n.Source("text.61e4cb911239"), status.System.MCC, status.System.MNC, status.System.ColourCode, status.System.Timeslot, status.System.Frame, status.System.Multiframe), toolContentX, toolY+148, 13, colors.green)
+		simpleui.DrawText(fmt.Sprintf(i18n.Source("text.61e4cb911239"), status.System.MCC, status.System.MNC, status.System.ColourCode, status.System.Timeslot, status.System.Frame, status.System.Multiframe), toolContentX, toolY+151, 12, colors.green)
 	}
 	constellation := rl.Rectangle{X: 1310, Y: toolY + 72, Width: 150, Height: 108}
 	rl.DrawRectangleRec(constellation, colors.background)
@@ -476,18 +598,29 @@ func (p *TETRAPanel) DrawPanel() {
 	if msg == "" {
 		msg = i18n.Source("text.04226178982c")
 	}
-	simpleui.DrawText(msg, toolContentX, toolY+174, 12, colors.muted)
+	simpleui.DrawText(msg, toolContentX, toolY+173, 13, colors.muted)
 }
 
 func drawTETRAStatusField(label, value string, x, y, width float32) {
-	simpleui.DrawTextStyled(label, x, y, 11, simpleui.FontSemiBold, colors.muted)
-	valueX := x + 58
-	// Clip unexpectedly long state text to its reserved column so it can never
-	// invade the next live field.
-	maxChars := int((width - 58) / 7)
-	if maxChars > 1 && len([]rune(value)) > maxChars {
-		runes := []rune(value)
-		value = string(runes[:maxChars-1]) + "…"
+	// Monospaced cockpit fonts need the complete column width. Keeping the
+	// caption above the value avoids coupling layout to caption length and makes
+	// signed live values stable as their digit count changes.
+	simpleui.DrawTextStyled(label, x, y-1, 11, simpleui.FontSemiBold, colors.muted)
+	value = fitTETRAStatusValue(value, width, 13)
+	simpleui.DrawTextStyled(value, x, y+14, 13, simpleui.FontMono, colors.text)
+}
+
+func fitTETRAStatusValue(value string, width float32, size int32) string {
+	if simpleui.MeasureTextStyled(value, size, simpleui.FontMono).X <= width {
+		return value
 	}
-	simpleui.DrawText(value, valueX, y-1, 13, colors.text)
+	runes := []rune(value)
+	for len(runes) > 1 {
+		runes = runes[:len(runes)-1]
+		candidate := string(runes) + "..."
+		if simpleui.MeasureTextStyled(candidate, size, simpleui.FontMono).X <= width {
+			return candidate
+		}
+	}
+	return "..."
 }

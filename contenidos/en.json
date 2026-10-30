@@ -1656,6 +1656,10 @@
     "text.log0219": "the sent number is missing",
     "text.log0220": "the sent exchange is missing",
     "text.log0221": "the received exchange is missing",
+    "text.log0222": "the received Japanese prefecture must be between 01 and 50",
+    "text.log0223": "JA PREFECTURE",
+    "text.log0224": "SEND %s",
+    "text.log0225": "%s · %s · %d QSO",
     "text.audioNotchTune": "NOTCH TUNING",
     "text.audioNotchWidth": "NOTCH WIDTH",
     "text.audioNotchCenter": "CENTER %s",
@@ -1766,7 +1770,15 @@
     "text.tetrapolCurrentCall": "CURRENT CALL",
     "text.tetrapolClearVoiceActive": "CLEAR VOICE ACTIVE",
     "text.tetrapolHistoryPending": "The history will be populated by new TCH sessions.",
-    "text.tetrapolWaitingEvents": "Waiting for runtime events…"
+    "text.tetrapolWaitingEvents": "Waiting for runtime events…",
+    "text.tetraDestinationPlaceholder": "DESTINATIONS: 1001, 5000",
+    "text.tetraFilterDestinations": "FILTER DESTINATIONS",
+    "text.tetraDestinationsFiltered": "%d destinations allowed",
+    "text.tetraDestinationRejected": "DESTINATION NOT ALLOWED",
+    "text.tetraDestinationInvalid": "INVALID DESTINATION LIST · AUDIO BLOCKED",
+    "text.tetraDestinationEmpty": "FILTER ENABLED WITHOUT DESTINATIONS · AUDIO BLOCKED",
+    "text.tetraAudioRejections": "Reject E/U/I/D/F   %d / %d / %d / %d / %d",
+    "text.tetraMACFragments": "MAC frag S/P/C/D %d/%d/%d/%d · D-NWRK %d · ERR %d"
   },
   "name": "English"
 }

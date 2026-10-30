@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.25.2](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.25.2)**
+**Versión actual: [v0.26.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.26.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -30,6 +30,7 @@ IC-SDR integra herramientas para recibir y visualizar:
 - **ADS-B** — recepción de aeronaves en 1090 MHz y UAT 978 MHz.
 - **Radiosondas** — compatibilidad con RS41, DFM y M10/M20.
 - **APRS** — recepción y visualización de paquetes.
+- **POCSAG y FLEX** — terminal de radiomensajería para POCSAG 512/1200/2400, FLEX y FLEX_NEXT.
 - **RTL_433** — decodificación de sensores y dispositivos ISM, con exportación CSV.
 - **DMR** — recepción de radio digital.
 - **SSTV** — televisión de barrido lento.
@@ -53,6 +54,14 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio en directo de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.26.0
+
+- Terminal de radiomensajería ampliado con **FLEX** y **FLEX_NEXT**, además de POCSAG 512/1200/2400.
+- Registro de concurso: nuevo perfil y cálculo de puntuación para **Japan International DX SSB (JIDX)**, con validación de prefecturas y categorías.
+- TETRA reforzado con reconstrucción de tramas, información de vecinos y filtros de destinos para una visualización más útil.
+- Catálogo y gestión de memorias renovados, junto con mejoras de sintonía, mapas, visores y accesibilidad de la interfaz.
+- Correcciones de estabilidad en decodificadores, controles, traducciones y pruebas de regresión adicionales.
 
 ## Novedades de v0.25.2
 

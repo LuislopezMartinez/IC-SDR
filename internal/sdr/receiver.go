@@ -776,6 +776,12 @@ func (receiver *Receiver) SetPOCSAGFrequency(hz int64) {
 		receiver.pocsag.SetFrequency(hz)
 	}
 }
+
+func (receiver *Receiver) SetPOCSAGProtocol(protocol pocsag.Protocol) {
+	if receiver.pocsag != nil {
+		receiver.pocsag.SetProtocol(protocol)
+	}
+}
 func (receiver *Receiver) POCSAGStatus() pocsag.Status {
 	if receiver.pocsag == nil {
 		return pocsag.Status{State: "NO DISPONIBLE"}
@@ -790,6 +796,12 @@ func (receiver *Receiver) PausePOCSAG(paused bool) {
 func (receiver *Receiver) ClearPOCSAG() {
 	if receiver.pocsag != nil {
 		receiver.pocsag.Clear()
+	}
+}
+
+func (receiver *Receiver) ClearPOCSAGProtocol(protocol pocsag.Protocol) {
+	if receiver.pocsag != nil {
+		receiver.pocsag.ClearProtocol(protocol)
 	}
 }
 func (receiver *Receiver) SSTVStatus() sstv.Status {

@@ -63,6 +63,10 @@ func main() {
 		screens.RunFT8Viewer(os.Args[2])
 		return
 	}
+	if len(os.Args) == 6 && os.Args[1] == "--memory-manager" {
+		screens.RunMemoryManager(os.Args[2], os.Args[3], os.Args[4], os.Args[5])
+		return
+	}
 	if len(os.Args) == 3 && os.Args[1] == "--pocsag-viewer" {
 		screens.RunPOCSAGViewer(os.Args[2])
 		return
@@ -196,19 +200,46 @@ func main() {
 	defer mainScreen.Close()
 	startupStep("%s", i18n.Source("text.5f0bca1a6790"))
 	mainScreen.CreateControls()
+	auditScreenshot := strings.TrimSpace(os.Getenv("IC_SDR_AUDIT_SCREENSHOT"))
+	auditTool := strings.TrimSpace(os.Getenv("IC_SDR_AUDIT_TOOL"))
+	if auditTool != "" {
+		if !mainScreen.SelectToolForAudit(auditTool) {
+			startupStep("Auditoría UI: tool desconocido %q", auditTool)
+		}
+	}
 	startupStep("%s", i18n.Source("text.e0e73d388406"))
 	if err := mainScreen.StartConfiguredWebServer(); err != nil {
 		startupStep(i18n.Source("text.bfb85c80ae58"), err)
 	}
 	var firstFrame sync.Once
+	auditFrames := 0
 	simpleui.Run(func() {
 		firstFrame.Do(func() {
 			startupStep("%s", i18n.Source("text.3f70ba22ee80"))
 			stopWatchdog()
 		})
+		if auditScreenshot != "" {
+			auditFrames++
+			// The normal startup may restore the last persisted tool on its first
+			// frames. Reapply the requested audit tool once that restoration has
+			// completed so the resulting screenshot is deterministic.
+			if auditFrames >= 15 && auditTool != "" {
+				mainScreen.SelectToolForAudit(auditTool)
+			}
+		}
 		mainScreen.Draw()
+		if auditScreenshot != "" {
+			if auditFrames == 90 {
+				captureAuditScreenshot(auditScreenshot)
+				simpleui.RequestClose()
+			}
+		}
 	})
 	startupStep("%s", i18n.Source("text.b7ad813982af"))
+}
+
+func captureAuditScreenshot(path string) {
+	simpleui.RequestScreenshot(filepath.Clean(path))
 }
 
 func configureStartupLog() (*os.File, error) {

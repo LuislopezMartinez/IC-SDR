@@ -72,7 +72,7 @@ func (v *aprsViewer) draw() {
 	headers := []struct {
 		x float32
 		s string
-	}{{28, i18n.Source("text.f7c6c10fbcc4")}, {195, i18n.Source("text.16d535b5d63f")}, {315, i18n.Source("text.cd4c8ecf7e4b")}, {420, i18n.Source("text.2adab83f1039")}, {530, i18n.Source("text.963552275d93")}, {750, i18n.Source("text.a4c39f15e2ae")}, {950, i18n.Source("text.ad2e66181fd9")}, {1020, i18n.Source("text.cb279ab0b63f")}}
+	}{{28, i18n.Source("text.f7c6c10fbcc4")}, {215, i18n.Source("text.16d535b5d63f")}, {330, i18n.Source("text.cd4c8ecf7e4b")}, {420, i18n.Source("text.2adab83f1039")}, {530, i18n.Source("text.963552275d93")}, {750, i18n.Source("text.a4c39f15e2ae")}, {950, i18n.Source("text.ad2e66181fd9")}, {1020, i18n.Source("text.cb279ab0b63f")}}
 	rl.DrawRectangle(20, 82, 1410, 34, colors.panelAlt)
 	for _, h := range headers {
 		simpleui.DrawTextStyled(h.s, h.x, 91, 13, simpleui.FontSemiBold, colors.cyan)
@@ -107,8 +107,8 @@ func (v *aprsViewer) draw() {
 			v.selected = index
 		}
 		simpleui.DrawTextStyled(p.Received.Format("2006-01-02 15:04:05"), 28, y, 12, simpleui.FontMono, colors.text)
-		simpleui.DrawTextStyled(short(p.Source, 13), 195, y, 12, simpleui.FontSemiBold, colors.cyan)
-		simpleui.DrawText(p.Type, 315, y, 12, colors.green)
+		simpleui.DrawTextStyled(short(p.Source, 11), 215, y, 12, simpleui.FontSemiBold, colors.cyan)
+		simpleui.DrawText(p.Type, 330, y, 12, colors.green)
 		simpleui.DrawText(short(p.Destination, 12), 420, y, 12, colors.text)
 		route := p.Path
 		if route == "" {

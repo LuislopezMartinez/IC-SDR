@@ -38,7 +38,7 @@ var toolMenuItems = []toolMenuItem{
 	{id: datvToolID, label: "DATV", art: "menu-card-datv.png", row: 1},
 	{id: i18n.Source("text.820d4685bc9d"), label: i18n.Source("text.820d4685bc9d"), icon: "menu-sstv.png", art: "menu-card-sstv.png", row: 1},
 	{id: ft8ToolID, label: "FT8", icon: "menu-ft8.png", art: "menu-card-ft8.png", row: 1},
-	{id: pocsagToolID, label: "POCSAG", art: "menu-card-pocsag.png", row: 1},
+	{id: pocsagToolID, label: "POCSAG / FLEX", art: "menu-card-pocsag.png", row: 1},
 	{id: i18n.Source("text.4c4310fd27fd"), label: i18n.Source("text.4c4310fd27fd"), icon: "menu-aprs.png", art: "menu-card-aprs.png", row: 1},
 	{id: i18n.Source("text.8be70e7cb2c4"), label: i18n.Source("text.8be70e7cb2c4"), icon: "menu-rtl433.png", art: "menu-card-rtl433.png", row: 1},
 	{id: i18n.Source("text.7dd172035702"), label: i18n.Source("text.493b20493ea1"), icon: "menu-radiosonde.png", art: "menu-card-radiosonde.png", row: 1},

@@ -204,8 +204,8 @@ func (p *DMRPanel) DrawPanel() {
 	p.drawEvents(530, 665, 730, 217)
 	drawPanel(1270, 665, 280, 217)
 	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.ca1ffacff316"), status.FrequencyErrorHz, status.AFCCorrectionHz, status.AFCState), 1280, 636, 12, colors.muted)
-	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.dmrStoredEvents"), len(p.events)), 1280, 842, 11, colors.muted)
-	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.dmrSelectedSlot"), p.screen.dmrAudioSlot), 1280, 863, 11, colors.muted)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.dmrStoredEvents"), len(p.events)), 1280, 841, 12, colors.muted)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.dmrSelectedSlot"), p.screen.dmrAudioSlot), 1280, 862, 12, colors.muted)
 }
 
 func (p *DMRPanel) drawSlot(x, y, w, h float32, title, value string, selected bool) {
@@ -236,18 +236,34 @@ func (p *DMRPanel) drawEvents(x, y, w, h float32) {
 		if row%2 == 0 {
 			rl.DrawRectangle(int32(x+6), int32(ry-2), int32(w-12), 19, colors.panelAlt)
 		}
-		simpleui.DrawTextStyled(event.at, x+12, ry, 12, simpleui.FontMono, colors.muted)
-		simpleui.DrawText(event.state, x+82, ry, 12, event.color)
-		simpleui.DrawText(event.slot, x+155, ry, 12, colors.text)
-		detail := event.detail
-		if len(detail) > 64 {
-			detail = detail[:61] + "..."
-		}
-		simpleui.DrawText(detail, x+205, ry, 12, colors.text)
+		// Keep explicit columns wide enough for the monospaced UI font. The old
+		// offsets assumed a narrow proportional font and made the timestamp,
+		// state and slot overwrite one another.
+		simpleui.DrawTextStyled(event.at, x+12, ry-1, 12, simpleui.FontMono, colors.muted)
+		simpleui.DrawText(event.state, x+146, ry-1, 13, event.color)
+		simpleui.DrawText(event.slot, x+240, ry-1, 13, colors.text)
+		detailX := x + 286
+		detail := fitDMREventText(event.detail, x+w-12-detailX, 13)
+		simpleui.DrawText(detail, detailX, ry-1, 13, colors.text)
 	}
 	if p.previewPaused && p.previewNew > 0 {
 		badge := rl.Rectangle{X: x + w - 222, Y: y + h - 27, Width: 204, Height: 20}
 		rl.DrawRectangleRounded(badge, .4, 8, colors.orange)
 		drawCentered(fmt.Sprintf(i18n.Source("text.dmrNewEvents"), p.previewNew), badge, 10, simpleui.EnsureTextContrast(colors.text, colors.orange))
 	}
+}
+
+func fitDMREventText(value string, width float32, size int32) string {
+	if simpleui.MeasureText(value, size).X <= width {
+		return value
+	}
+	runes := []rune(value)
+	for len(runes) > 0 {
+		candidate := string(runes) + "..."
+		if simpleui.MeasureText(candidate, size).X <= width {
+			return candidate
+		}
+		runes = runes[:len(runes)-1]
+	}
+	return ""
 }

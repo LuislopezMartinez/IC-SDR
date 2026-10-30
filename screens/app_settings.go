@@ -91,10 +91,16 @@ type persistedAppSettings struct {
 	BandDisplayProfiles   map[string]bandDisplayProfile `json:"bandDisplayProfiles,omitempty"`
 }
 
-// bandDisplayProfile contains display and raster preferences that are useful
-// to restore when returning to a particular allocation. Frequency, mode and
-// decoder choice remain managed by the normal band and memory workflows.
+// bandDisplayProfile contains the operating preferences restored when the
+// user returns to an allocation. Decoder choice remains managed by the normal
+// tool and memory workflows so changing bands never starts a decoder silently.
 type bandDisplayProfile struct {
+	LastFrequencyHz   int64             `json:"lastFrequencyHz,omitempty"`
+	Mode              string            `json:"mode,omitempty"`
+	DemodBandwidthHz  int               `json:"demodBandwidthHz,omitempty"`
+	CenterMode        *bool             `json:"centerMode,omitempty"`
+	SquelchEnabled    *bool             `json:"squelchEnabled,omitempty"`
+	SquelchThreshold  int               `json:"squelchThreshold,omitempty"`
 	SpanHz            int64             `json:"spanHz"`
 	TuningStepHz      int64             `json:"tuningStepHz"`
 	SpectrumMinimumDB float32           `json:"spectrumMinimumDb"`
@@ -345,7 +351,13 @@ func (screen *MainScreen) rememberBandDisplayProfile() {
 	if screen.bandDisplayProfiles == nil {
 		screen.bandDisplayProfiles = make(map[string]bandDisplayProfile)
 	}
+	mode := screen.savedMode
+	if screen.mode != nil && screen.mode.SelectedText() != "" {
+		mode = screen.mode.SelectedText()
+	}
 	screen.bandDisplayProfiles[bandDisplayProfileKey(screen.bandCategory, screen.bandName)] = bandDisplayProfile{
+		LastFrequencyHz: screen.frequencyHz, Mode: mode, DemodBandwidthHz: screen.demodBandwidthHz,
+		CenterMode: boolSetting(screen.centerMode), SquelchEnabled: boolSetting(screen.squelchEnabled), SquelchThreshold: screen.squelchThreshold,
 		SpanHz: screen.spanHz, TuningStepHz: screen.tuningStepHz,
 		SpectrumMinimumDB: screen.spectrumMinimumDB, SpectrumMaximumDB: screen.spectrumMaximumDB,
 		FFTAveragingMs: screen.fftAveragingMs, FFTRefreshFPS: screen.fftRefreshFPS,
@@ -363,6 +375,47 @@ func (screen *MainScreen) restoreBandDisplayProfile() {
 	profile, ok := screen.bandDisplayProfiles[bandDisplayProfileKey(screen.bandCategory, screen.bandName)]
 	if !ok {
 		return
+	}
+	if validDemodMode(profile.Mode) {
+		screen.savedMode = profile.Mode
+		if screen.mode != nil && screen.mode.SelectedText() != profile.Mode {
+			screen.selectMode(profile.Mode)
+		}
+	}
+	if profile.DemodBandwidthHz >= 100 && profile.DemodBandwidthHz <= 2_000_000 {
+		screen.demodBandwidthHz = profile.DemodBandwidthHz
+		if screen.filterSelector != nil {
+			mode := profile.Mode
+			for index, preset := range filterCatalog[filterMode(mode)] {
+				if preset.BandwidthHz == profile.DemodBandwidthHz {
+					preset = screen.filterSelector.SelectPreset(mode, index)
+					if screen.filter != nil {
+						screen.filter.SetLabel(filterButtonLabel(preset))
+					}
+					break
+				}
+			}
+		}
+	}
+	if profile.CenterMode != nil {
+		screen.centerMode = *profile.CenterMode
+		if screen.vfoModeSwitch != nil {
+			screen.vfoModeSwitch.SetActive(!screen.centerMode)
+			label := i18n.Source("text.74b313a5c9bc")
+			if screen.centerMode {
+				label = i18n.Source("text.2215b79651c3")
+			}
+			screen.vfoModeSwitch.SetLabel(label)
+		}
+	}
+	if profile.SquelchEnabled != nil {
+		screen.squelchEnabled = *profile.SquelchEnabled
+		if screen.squelchSwitch != nil {
+			screen.squelchSwitch.SetActive(screen.squelchEnabled)
+		}
+	}
+	if float32(profile.SquelchThreshold) >= squelchMinimumDB && float32(profile.SquelchThreshold) <= squelchMaximumDB {
+		screen.squelchThreshold = profile.SquelchThreshold
 	}
 	if validSpan(profile.SpanHz) {
 		screen.spanHz = profile.SpanHz
@@ -419,6 +472,18 @@ func (screen *MainScreen) restoreBandDisplayProfile() {
 	if screen.wfOffsetSlider != nil {
 		screen.refreshWaterfallControls()
 	}
+}
+
+func (screen *MainScreen) bandProfileFrequency(fallback int64) int64 {
+	profile, ok := screen.bandDisplayProfiles[bandDisplayProfileKey(screen.bandCategory, screen.bandName)]
+	if !ok || profile.LastFrequencyHz < 1_000 {
+		return fallback
+	}
+	band, found := findBandRange(profile.LastFrequencyHz, screen.bandCategory)
+	if !found || band.category != screen.bandCategory || band.name != screen.bandName {
+		return fallback
+	}
+	return profile.LastFrequencyHz
 }
 
 func (screen *MainScreen) markSettingsDirty() {

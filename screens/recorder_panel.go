@@ -288,7 +288,7 @@ func (p *RecorderPanel) DrawPanel() {
 			rl.DrawRectangle(660, int32(yy-5), 888, 22, rl.Color{R: 18, G: 25, B: 34, A: 255})
 		}
 		simpleui.DrawTextStyled(trimMemory(filepath.Base(file), 82), 668, yy, 12, simpleui.FontMono, colors.text)
-		drawRecorderRowButton(recorderPlayBounds(i), "▶", colors.green)
+		drawRecorderRowButton(recorderPlayBounds(i), "PLAY", colors.green)
 		drawRecorderRowButton(recorderDeleteBounds(i), i18n.Source("text.9b89497fcb0b"), colors.red)
 	}
 }

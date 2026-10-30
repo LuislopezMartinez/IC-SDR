@@ -402,8 +402,10 @@ func (p *RTL433Panel) DrawSpectrumOverlay(x, y, w, h float32) {
 	// immediately below it, so both labels remain readable even when centered
 	// on exactly the same frequency.
 	labelX := min(max((left+right-tw)/2, x+120), x+w-tw-8)
-	rl.DrawRectangleRounded(rl.Rectangle{X: labelX - 6, Y: y + 4, Width: tw + 12, Height: 20}, .2, 5, rl.Color{R: 18, G: 11, B: 28, A: 225})
-	simpleui.DrawTextStyled(label, labelX, y+7, 12, simpleui.FontSemiBold, accent)
+	// The central FFT-fit button occupies the top overlay lane. Put the decoder
+	// bandwidth badge immediately below it so neither label masks the other.
+	rl.DrawRectangleRounded(rl.Rectangle{X: labelX - 6, Y: y + 35, Width: tw + 12, Height: 20}, .2, 5, rl.Color{R: 18, G: 11, B: 28, A: 225})
+	simpleui.DrawTextStyled(label, labelX, y+38, 12, simpleui.FontSemiBold, accent)
 	if p.pending {
 		futureLeft, futureRight := drawRange(p.pendingHz, 62, 3, rl.Color{R: 215, G: 180, B: 255, A: 255})
 		cursorX := (futureLeft + futureRight) / 2

@@ -73,6 +73,9 @@ func TestTuneFromRigPreservesFixedCenterInsideSpan(t *testing.T) {
 	if screen.centerFrequencyHz != 145_500_000 {
 		t.Fatalf("FIX center moved unnecessarily to %d", screen.centerFrequencyHz)
 	}
+	if screen.bandName != "2 m" {
+		t.Fatalf("band was not updated from RIG frequency: %q", screen.bandName)
+	}
 }
 
 func TestTuneFromRigRecentersCenterMode(t *testing.T) {

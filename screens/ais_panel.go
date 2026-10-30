@@ -185,7 +185,7 @@ func (p *AISPanel) DrawPanel() {
 		name string
 	}{{40, i18n.Source("text.86bc0565e4a8")}, {310, i18n.Source("text.a1f6986b3cd0")}, {410, i18n.Source("text.5b99241b86d1")}, {535, i18n.Source("text.b0ddd4ea3459")}, {665, i18n.Source("text.0ac388f099a3")}, {770, i18n.Source("text.6cbb45c7f467")}, {880, i18n.Source("text.f16fe7d4376e")}, {1090, i18n.Source("text.2adab83f1039")}}
 	for _, c := range cols {
-		simpleui.DrawText(c.name, c.x, toolY+78, 12, colors.muted)
+		simpleui.DrawText(c.name, c.x, toolY+77, 13, colors.muted)
 	}
 	sort.Slice(vessels, func(i, j int) bool { return vessels[i].LastSeen.After(vessels[j].LastSeen) })
 	for i, v := range vessels {
@@ -211,11 +211,11 @@ func (p *AISPanel) DrawPanel() {
 		}
 		values := []string{name, v.LastSeen.Local().Format("15:04:05"), lat, lon, speed, course, v.StatusText, v.Destination}
 		for j, value := range values {
-			simpleui.DrawText(sondeClip(value, 24), cols[j].x, toolY+101+float32(i)*23, 12, colors.text)
+			simpleui.DrawText(sondeClip(value, 22), cols[j].x, toolY+100+float32(i)*23, 13, colors.text)
 		}
 	}
 	if len(vessels) == 0 {
-		simpleui.DrawText(i18n.Source("text.40928f3855aa"), 40, toolY+110, 13, colors.muted)
+		simpleui.DrawText(i18n.Source("text.40928f3855aa"), 40, toolY+109, 14, colors.muted)
 	}
-	simpleui.DrawText(sondeClip(p.feedback+i18n.Source("text.85ae4ddda2ad"), 150), 40, toolY+174, 12, colors.muted)
+	simpleui.DrawText(sondeClip(p.feedback+i18n.Source("text.85ae4ddda2ad"), 140), 40, toolY+173, 13, colors.muted)
 }

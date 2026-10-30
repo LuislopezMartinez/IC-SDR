@@ -141,6 +141,22 @@ func (v *ft8ActivityViewer) read() {
 	if json.Unmarshal(data, &snapshot) != nil {
 		return
 	}
+	// Saved audit sessions can be older than the active 1 h map window. Shift
+	// only their timestamps during automated screenshots so the real table,
+	// CQ zones and station detail are exercised instead of an empty state.
+	if os.Getenv("IC_SDR_AUDIT_SCREENSHOT") != "" && len(snapshot.Status.Decodes) > 0 {
+		latest := snapshot.Status.Decodes[0].Slot
+		for _, decode := range snapshot.Status.Decodes[1:] {
+			if decode.Slot.After(latest) {
+				latest = decode.Slot
+			}
+		}
+		shift := time.Now().UTC().Add(-time.Minute).Sub(latest)
+		for index := range snapshot.Status.Decodes {
+			snapshot.Status.Decodes[index].Slot = snapshot.Status.Decodes[index].Slot.Add(shift)
+			snapshot.Status.Decodes[index].ReceivedAt = snapshot.Status.Decodes[index].ReceivedAt.Add(shift)
+		}
+	}
 	if validTheme(snapshot.Theme) && snapshot.Theme != v.panel.screen.themeName {
 		v.panel.screen.themeName = snapshot.Theme
 		colors = paletteForTheme(snapshot.Theme)
@@ -149,6 +165,15 @@ func (v *ft8ActivityViewer) read() {
 	v.panel.status = snapshot.Status
 	v.panel.mapDecodes = append(v.panel.mapDecodes[:0], snapshot.Status.Decodes...)
 	v.panel.mapHomeLat, v.panel.mapHomeLon, v.panel.mapHomeSet = snapshot.HomeLat, snapshot.HomeLon, true
+	if os.Getenv("IC_SDR_AUDIT_SCREENSHOT") != "" && snapshot.SelectedKey == "" && v.panel.mapSelected < 0 {
+		for index, decode := range v.panel.mapDecodes {
+			call, grid := ft8MessageStation(decode.Message)
+			if _, _, ok := maidenheadCenter(grid); ok && call != "" {
+				v.panel.mapSelected = index
+				break
+			}
+		}
+	}
 	if snapshot.SelectedKey != v.selectedKey {
 		v.selectedKey = snapshot.SelectedKey
 		v.panel.mapSelected = -1

@@ -1,12 +1,24 @@
 package simpleui
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 
 	"go-zero/internal/i18n"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-import rl "github.com/gen2brain/raylib-go/raylib"
+var pendingScreenshot string
+
+// RequestScreenshot saves the fully presented next frame. Calling raylib's
+// screenshot function from inside a draw callback captures the previous host
+// framebuffer because SimpleUI renders through an off-screen canvas first.
+func RequestScreenshot(path string) {
+	pendingScreenshot = filepath.Clean(path)
+}
 
 type runtimeConfig struct {
 	width, height               int32
@@ -161,13 +173,32 @@ func Run(draw func()) {
 	}()
 
 	traceLifecycle(i18n.Source("text.a75cdd388bc1"))
+	auditScreenshot := strings.TrimSpace(os.Getenv("IC_SDR_AUDIT_SCREENSHOT"))
+	auditFrames := 0
 	for !closeRequested.Load() && !rl.WindowShouldClose() {
 		handleWindowShortcuts()
 		runtime.canvas.Begin(runtime.background)
 		defaultManager.Update(currentInput())
 		draw()
 		defaultManager.Draw()
+		if auditScreenshot != "" {
+			auditFrames++
+			if auditFrames == 90 {
+				RequestScreenshot(auditScreenshot)
+				RequestClose()
+			}
+		}
 		runtime.canvas.End(runtime.letterbox)
+		if pendingScreenshot != "" {
+			path := pendingScreenshot
+			pendingScreenshot = ""
+			_ = os.MkdirAll(filepath.Dir(path), 0o755)
+			name := filepath.Base(path)
+			rl.TakeScreenshot(name)
+			if absolute, err := filepath.Abs(name); err == nil && absolute != path {
+				_ = os.Rename(absolute, path)
+			}
+		}
 	}
 }
 

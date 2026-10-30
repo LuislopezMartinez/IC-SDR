@@ -18,8 +18,8 @@ PCM de IC-SDR. La herramienta trabaja en USB, sincroniza automáticamente los
 ciclos UTC de 15 segundos y conserva las fuentes y avisos de licencia en
 DATA\tools\ft8\runtime. FFTW se distribuye como DLL separada junto al decoder.
 
-POCSAG utiliza `multimon-ng` 1.6.1 como proceso externo para decodificar
-simultáneamente 512, 1200 y 2400 baud. El ejecutable, la licencia GPL y el
+El terminal de radiomensajería utiliza `multimon-ng` 1.6.1 como proceso externo
+para decodificar POCSAG 512/1200/2400, FLEX y FLEX_NEXT. El ejecutable, la licencia GPL y el
 enlace a la fuente correspondiente se distribuyen en
 DATA\tools\pocsag\runtime. Un clon nuevo puede preparar este runtime con
 scripts\install-pocsag-runtime.ps1.

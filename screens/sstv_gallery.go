@@ -108,7 +108,10 @@ func RunSSTVGallery(snapshotPath string) {
 	simpleui.SetInitialWindowSize(1420, 820)
 	simpleui.SetMinimumSize(1024, 640)
 	simpleui.SetCanvasFilter(rl.FilterBilinear)
-	simpleui.SetTextScale(1.05)
+	// The editor is normally displayed scaled down from its 1600×900 canvas.
+	// Its cards have generous vertical margins, so use them for larger labels
+	// and descriptions instead of leaving the operational text undersized.
+	simpleui.SetTextScale(1.20)
 	simpleui.SetTitle("IC-SDR · GALERÍA SSTV")
 	simpleui.SetTheme(simpleUITheme(colors, snapshot.Theme == themeLight))
 	// The gallery opens directly in the visual comparator. The thumbnail rail

@@ -284,7 +284,9 @@ func (p *APRSPanel) DrawPanel() {
 	simpleui.DrawTextStyled(i18n.Source("text.92a8de300175"), 52, 721, 12, simpleui.FontSemiBold, colors.cyan)
 	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.c84551016365"), map[bool]string{true: i18n.Source("text.5d2bd518ab17"), false: i18n.Source("text.761bca5bfba7")}[status.KISS]), 52, 745, 13, colors.text)
 	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.78e70e4a8076"), status.Queued, status.Dropped), 52, 766, 12, colors.text)
-	simpleui.DrawText(short(status.Detail, 28), 52, 787, 12, colors.muted)
+	// The receiver card is intentionally narrow; keep its diagnostic on-card
+	// instead of allowing it to bleed into the packet table.
+	simpleui.DrawText(short(status.Detail, 20), 52, 787, 12, colors.muted)
 	if p.view == i18n.Source("text.ddadd1fb4789") {
 		p.drawRadar()
 		return

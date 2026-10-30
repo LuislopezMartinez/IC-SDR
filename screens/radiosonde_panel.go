@@ -204,9 +204,9 @@ func (p *RadiosondePanel) DrawPanel() {
 func (p *RadiosondePanel) drawTelemetry(status radiosonde.Status, events []radiosonde.Event) {
 	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.7a42bc962eaa"), float64(p.targetHz)/1e6, status.State, len(events), status.Dropped), 40, toolY+7, 12, colors.cyan)
 	if status.Error != "" {
-		simpleui.DrawText(sondeClip(status.Error, 72), 1020, toolY+36, 12, colors.red)
+		simpleui.DrawText(sondeClip(status.Error, 46), 1120, toolY+7, 12, colors.red)
 	} else {
-		simpleui.DrawText(i18n.Source("text.290eff6b039a"), 1020, toolY+36, 12, colors.muted)
+		simpleui.DrawText(i18n.Source("text.290eff6b039a"), 1120, toolY+7, 12, colors.muted)
 	}
 	columns := []struct {
 		x     float32

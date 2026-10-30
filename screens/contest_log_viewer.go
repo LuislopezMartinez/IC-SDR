@@ -473,6 +473,9 @@ func (v *ContestLogViewer) receivedExchangeLabel() string {
 	if v.session == nil {
 		return i18n.Source("text.log0060")
 	}
+	if v.session.Contest == contestlog.JIDXSSB {
+		return i18n.Source("text.log0223")
+	}
 	keys := map[string]string{"SERIAL": "text.log0060", "CQ_ZONE": "text.log0183", "ITU_ZONE": "text.log0184",
 		"SECTION": "text.log0185", "LOCATOR": "text.log0186", "NUMBER": "text.log0187", "TEXT": "text.log0188"}
 	if key := keys[v.session.ReceivedExchange]; key != "" {
@@ -542,6 +545,7 @@ func validationIssueLabel(code string) string {
 		"qso_frequency": "text.log0215", "qso_call": "text.log0216", "qso_rst_sent": "text.log0217",
 		"qso_rst_received": "text.log0218", "qso_serial_sent": "text.log0219",
 		"qso_exchange_sent": "text.log0220", "qso_exchange_received": "text.log0221",
+		"jidx_prefecture_received": "text.log0222",
 	}
 	if key, ok := keys[code]; ok {
 		return i18n.Source(key)
@@ -866,7 +870,7 @@ func (v *ContestLogViewer) highlightQSOIssue(code string) {
 		fields = []*simpleui.TextField{v.rstSent}
 	case "qso_rst_received":
 		fields = []*simpleui.TextField{v.rstReceived}
-	case "qso_exchange_received", "cq_zone_received":
+	case "qso_exchange_received", "cq_zone_received", "jidx_prefecture_received":
 		fields = []*simpleui.TextField{v.serialReceived}
 	}
 	for index, field := range fields {

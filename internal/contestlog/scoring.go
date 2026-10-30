@@ -56,6 +56,9 @@ func (s *Session) Score() Score {
 	if isCQWWContest(s.Contest) {
 		return s.cqwwScore()
 	}
+	if s.Contest == JIDXSSB {
+		return s.jidxScore()
+	}
 	if s.Contest != OceaniaDXSSB {
 		return s.genericScore()
 	}
@@ -107,6 +110,70 @@ func (s *Session) Score() Score {
 	result.Multipliers = len(multipliers)
 	result.Total = result.Points * result.Multipliers
 	return result
+}
+
+var jidxBandPoints = map[string]int{"160M": 4, "80M": 2, "40M": 1, "20M": 1, "15M": 1, "10M": 2}
+
+func (s *Session) jidxScore() Score {
+	result := Score{Bands: make(map[string]BandScore)}
+	multipliers := make(map[string]bool)
+	for _, q := range s.QSOs {
+		prefecture, err := strconv.Atoi(strings.TrimSpace(q.ReceivedExchangeText()))
+		if q.Time.IsZero() || q.FrequencyHz <= 0 || q.WorkedCall == "" || q.RSTSent == "" || q.RSTReceived == "" || err != nil || prefecture < 1 || prefecture > 50 {
+			result.Incomplete++
+			continue
+		}
+		if q.Duplicate {
+			result.Duplicates++
+			continue
+		}
+		if len(q.Warnings) > 0 {
+			result.Warnings++
+			continue
+		}
+		if s.CategoryBand != "" && s.CategoryBand != "ALL" && q.Band != s.CategoryBand {
+			result.NonScoring++
+			continue
+		}
+		if !IsJapaneseContestCall(q.WorkedCall) {
+			result.NonScoring++
+			continue
+		}
+		points, ok := jidxBandPoints[q.Band]
+		if !ok {
+			result.NonScoring++
+			continue
+		}
+		band := result.Bands[q.Band]
+		band.QSOs++
+		band.Points += points
+		key := q.Band + "\x00" + strconv.Itoa(prefecture)
+		if !multipliers[key] {
+			multipliers[key] = true
+			band.Multipliers++
+		}
+		result.Bands[q.Band] = band
+		result.ValidQSOs++
+		result.Points += points
+	}
+	result.Multipliers = len(multipliers)
+	result.Total = result.Points * result.Multipliers
+	return result
+}
+
+func IsJapaneseContestCall(call string) bool {
+	identity, ok := LookupCallIdentity(call)
+	if ok && (identity.Entity == "Japan" || identity.Entity == "Ogasawara" || identity.Entity == "Minami Torishima") {
+		return true
+	}
+	call = NormalizeCall(call)
+	for _, part := range strings.Split(call, "/") {
+		if len(part) >= 2 && ((part[0] == 'J' && part[1] >= 'A' && part[1] <= 'S') ||
+			((part[0] == '7' || part[0] == '8') && part[1] >= 'J' && part[1] <= 'N')) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Session) cqwwScore() Score {

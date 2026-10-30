@@ -101,6 +101,8 @@ func TestBandDisplayProfilesRestoreVisualSettingsIndependently(t *testing.T) {
 	// The constructor restores the developer's portable settings; pin the band
 	// under test so this unit test is independent of DATA/config/settings.json.
 	screen.bandCategory, screen.bandName = "HAM", "20 m"
+	screen.frequencyHz, screen.savedMode, screen.demodBandwidthHz, screen.centerMode = 14_225_000, "USB", 2_700, false
+	screen.squelchEnabled, screen.squelchThreshold = true, -73
 	screen.spanHz, screen.tuningStepHz = 100_000, 1_000
 	screen.spectrumMinimumDB, screen.spectrumMaximumDB = -96, -16
 	screen.fftAveragingMs, screen.fftRefreshFPS = 180, 25
@@ -115,12 +117,17 @@ func TestBandDisplayProfilesRestoreVisualSettingsIndependently(t *testing.T) {
 	screen.rememberBandDisplayProfile()
 
 	screen.bandName = "20 m"
+	screen.frequencyHz, screen.savedMode, screen.demodBandwidthHz, screen.centerMode = 14_100_000, "AM", 9_000, true
+	screen.squelchEnabled, screen.squelchThreshold = false, -100
 	screen.spanHz, screen.tuningStepHz = 2_000_000, 100
 	screen.spectrumMinimumDB, screen.spectrumMaximumDB = -37, 0
 	screen.restoreBandDisplayProfile()
 
 	if screen.spanHz != 100_000 || screen.tuningStepHz != 1_000 {
 		t.Fatalf("restored 20 m raster = %d/%d", screen.spanHz, screen.tuningStepHz)
+	}
+	if screen.bandProfileFrequency(14_200_000) != 14_225_000 || screen.savedMode != "USB" || screen.demodBandwidthHz != 2_700 || screen.centerMode || !screen.squelchEnabled || screen.squelchThreshold != -73 {
+		t.Fatalf("restored 20 m operating profile is incomplete: freq=%d mode=%s bw=%d center=%v sql=%v/%d", screen.bandProfileFrequency(14_200_000), screen.savedMode, screen.demodBandwidthHz, screen.centerMode, screen.squelchEnabled, screen.squelchThreshold)
 	}
 	if screen.spectrumMinimumDB != -96 || screen.spectrumMaximumDB != -16 || screen.fftAveragingMs != 180 || screen.fftRefreshFPS != 25 || screen.fftPeakHold || screen.fftPeakDecay != 7 || screen.fftWindow != "FLAT TOP" {
 		t.Fatalf("restored 20 m spectrum profile is incomplete")

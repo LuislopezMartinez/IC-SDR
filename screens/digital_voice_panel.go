@@ -255,7 +255,7 @@ func (p *DigitalVoicePanel) DrawPanel() {
 	if p.lastError != "" {
 		detail = p.lastError
 	}
-	simpleui.DrawText(trimDigital(detail, 62), call.X+15, call.Y+90, 10, colors.muted)
+	simpleui.DrawText(trimDigital(detail, 58), call.X+15, call.Y+89, 11, colors.muted)
 
 	metrics := rl.Rectangle{X: x + 522, Y: y + 124, Width: 252, Height: 112}
 	drawPanel(metrics.X, metrics.Y, metrics.Width, metrics.Height)
@@ -267,13 +267,13 @@ func (p *DigitalVoicePanel) DrawPanel() {
 	context := rl.Rectangle{X: x + 788, Y: y + 124, Width: 426, Height: 112}
 	drawPanel(context.X, context.Y, context.Width, context.Height)
 	simpleui.DrawTextStyled(i18n.Source("text.4a444df712c4"), context.X+14, context.Y+10, 13, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawText(i18n.Source("text.8aa75e7708c6")+fallback(status.Slot)+"    CC  "+fallback(status.ColorCode)+i18n.Source("text.cbd17bc64986")+fallback(status.NAC), context.X+14, context.Y+38, 12, colors.text)
-	simpleui.DrawText(i18n.Source("text.3d2b56dc4923")+fallback(status.RAN)+i18n.Source("text.cd3eee1922c5")+fallback(status.System)+i18n.Source("text.1d226d27511e")+fallback(status.Site), context.X+14, context.Y+61, 12, colors.text)
+	simpleui.DrawText(i18n.Source("text.8aa75e7708c6")+fallback(status.Slot)+"    CC  "+fallback(status.ColorCode)+i18n.Source("text.cbd17bc64986")+fallback(status.NAC), context.X+14, context.Y+37, 13, colors.text)
+	simpleui.DrawText(i18n.Source("text.3d2b56dc4923")+fallback(status.RAN)+i18n.Source("text.cd3eee1922c5")+fallback(status.System)+i18n.Source("text.1d226d27511e")+fallback(status.Site), context.X+14, context.Y+60, 13, colors.text)
 	duration := "--:--"
 	if status.VoiceActive && !status.StartedAt.IsZero() {
 		duration = time.Since(status.StartedAt).Truncate(time.Second).String()
 	}
-	simpleui.DrawText(i18n.Source("text.1d833b90d9c3")+duration+i18n.Source("text.f9b479570a6b")+voice, context.X+14, context.Y+84, 12, colors.text)
+	simpleui.DrawText(i18n.Source("text.1d833b90d9c3")+duration+i18n.Source("text.f9b479570a6b")+voice, context.X+14, context.Y+83, 13, colors.text)
 
 	p.drawActivity(x+18, y+247, w-36, 76, status.Events)
 }
@@ -281,21 +281,21 @@ func (p *DigitalVoicePanel) DrawPanel() {
 func (p *DigitalVoicePanel) drawActivity(x, y, w, h float32, events []digitalvoice.Event) {
 	drawPanel(x, y, w, h)
 	simpleui.DrawTextStyled(i18n.Source("text.414e69ec8567"), x+12, y+6, 13, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawText(i18n.Source("text.e7563517a678"), x+12, y+28, 11, colors.muted)
-	simpleui.DrawText(i18n.Source("text.ab06b3638fb5"), x+82, y+28, 11, colors.muted)
-	simpleui.DrawText(i18n.Source("text.12dd6f102b80"), x+172, y+28, 11, colors.muted)
-	simpleui.DrawText(i18n.Source("text.9a965b631371"), x+242, y+28, 11, colors.muted)
-	simpleui.DrawText(i18n.Source("text.4d33cd7f8416"), x+350, y+28, 11, colors.muted)
+	simpleui.DrawText(i18n.Source("text.e7563517a678"), x+12, y+27, 12, colors.muted)
+	simpleui.DrawText(i18n.Source("text.ab06b3638fb5"), x+82, y+27, 12, colors.muted)
+	simpleui.DrawText(i18n.Source("text.12dd6f102b80"), x+172, y+27, 12, colors.muted)
+	simpleui.DrawText(i18n.Source("text.9a965b631371"), x+242, y+27, 12, colors.muted)
+	simpleui.DrawText(i18n.Source("text.4d33cd7f8416"), x+350, y+27, 12, colors.muted)
 	if len(events) == 0 {
-		simpleui.DrawText(i18n.Source("text.19706ce22b79"), x+12, y+50, 12, colors.muted)
+		simpleui.DrawText(i18n.Source("text.19706ce22b79"), x+12, y+49, 13, colors.muted)
 		return
 	}
 	e := events[len(events)-1]
-	simpleui.DrawText(e.At, x+12, y+50, 12, colors.text)
-	simpleui.DrawText(e.Protocol, x+82, y+50, 12, colors.text)
-	simpleui.DrawText(fallback(e.Slot), x+172, y+50, 12, colors.text)
-	simpleui.DrawText(fallback(e.Source), x+242, y+50, 12, colors.text)
-	simpleui.DrawText(trimDigital(fallback(e.Target)+" · "+e.Detail, 85), x+350, y+50, 12, colors.text)
+	simpleui.DrawText(e.At, x+12, y+49, 13, colors.text)
+	simpleui.DrawText(e.Protocol, x+82, y+49, 13, colors.text)
+	simpleui.DrawText(fallback(e.Slot), x+172, y+49, 13, colors.text)
+	simpleui.DrawText(fallback(e.Source), x+242, y+49, 13, colors.text)
+	simpleui.DrawText(trimDigital(fallback(e.Target)+" · "+e.Detail, 78), x+350, y+49, 13, colors.text)
 }
 
 func fallback(value string) string {

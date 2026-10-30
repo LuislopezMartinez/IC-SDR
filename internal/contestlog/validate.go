@@ -43,6 +43,14 @@ func (s *Session) ValidateSubmission() []ValidationIssue {
 			add("location")
 		}
 	}
+	if s.Contest == JIDXSSB {
+		if s.CategoryOperator != "SINGLE-OP" || s.CategoryTransmitter != "ONE" {
+			add("cqww_single_operator")
+		}
+		if !validCQZone(s.SentValue) {
+			add("cq_zone_sent")
+		}
+	}
 	if len(s.QSOs) == 0 {
 		add("no_qsos")
 	}
@@ -110,8 +118,16 @@ func (s *Session) validateQSOs(requireContestExchange bool) []ValidationIssue {
 		if requireContestExchange && isCQWWContest(s.Contest) && strings.TrimSpace(q.ReceivedExchangeText()) != "" && !validCQZone(q.ReceivedExchangeText()) {
 			add("cq_zone_received")
 		}
+		if requireContestExchange && s.Contest == JIDXSSB && strings.TrimSpace(q.ReceivedExchangeText()) != "" && !validJIDXPrefecture(q.ReceivedExchangeText()) {
+			add("jidx_prefecture_received")
+		}
 	}
 	return issues
+}
+
+func validJIDXPrefecture(value string) bool {
+	prefecture, err := strconv.Atoi(strings.TrimSpace(value))
+	return err == nil && prefecture >= 1 && prefecture <= 50
 }
 
 func isCQWWContest(contest string) bool { return contest == CQWWSSB || contest == CQWWCW }

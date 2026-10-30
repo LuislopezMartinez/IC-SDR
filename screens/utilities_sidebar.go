@@ -33,6 +33,7 @@ type UtilitiesSidebar struct {
 	recall    *simpleui.Button
 	hotkey    *simpleui.Button
 	add       *simpleui.Button
+	manager   *simpleui.Button
 	edit      *simpleui.Button
 	remove    *simpleui.Button
 	record    *simpleui.Button
@@ -81,9 +82,11 @@ func NewUtilitiesSidebar(screen *MainScreen) *UtilitiesSidebar {
 		screen.scanPanel.centerToMemory = !screen.scanPanel.centerToMemory
 		screen.markSettingsDirty()
 	})
-	p.add = button("utilityMemoryAdd", i18n.Source("text.0692b8193af5"), 182, 433, 152, 31, screen.memoryPanel.openSaveModal)
-	addGroup := button("utilityMemoryAddGroup", i18n.Source("text.6b5ffd7d7172"), 24, 433, 150, 31, screen.memoryPanel.openNewGroupModal)
+	p.add = button("utilityMemoryAdd", "+ MEMORIA", 130, 433, 100, 31, screen.memoryPanel.openSaveModal)
+	addGroup := button("utilityMemoryAddGroup", "+ GRUPO", 24, 433, 100, 31, screen.memoryPanel.openNewGroupModal)
 	_ = addGroup
+	p.manager = button("utilityMemoryManager", "GESTOR", 236, 433, 98, 31, screen.memoryPanel.openMemoryManager)
+	p.manager.SetColors(rl.Color{R: 10, G: 102, B: 136, A: 255}, colors.cyan, colors.text)
 	p.groupPick = simpleui.NewDropdown("utilityMemoryFilter", 24, 470, 220, 32, i18n.Source("text.201f15dab8b3"), screen.memoryPanel.groups, 13)
 	p.groupPick.OnChange(func(_ int, group string) {
 		screen.memoryPanel.selectedGroup, screen.memoryPanel.selected, screen.memoryPanel.scrollOffset = group, -1, 0

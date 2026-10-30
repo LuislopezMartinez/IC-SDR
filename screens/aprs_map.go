@@ -139,7 +139,7 @@ func (v *aprsMap) draw() {
 	}
 	rl.EndScissorMode()
 	simpleui.DrawText(i18n.Source("text.00227ac3528d"), 24, 20, 24, colors.cyan)
-	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.bf4a68fdefa8"), len(v.stations)), 310, 30, 12, colors.muted)
+	simpleui.DrawText(fmt.Sprintf(i18n.Source("text.bf4a68fdefa8"), len(v.stations)), 330, 30, 12, colors.muted)
 	v.details()
 	simpleui.DrawText(i18n.Source("text.b296ad90963e"), 24, 775, 11, colors.muted)
 }

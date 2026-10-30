@@ -13,8 +13,10 @@ import (
 
 const (
 	DefaultFrequencyHz int64 = 391_662_724
-	outputRate               = 72_000.0
-	symbolRate               = 18_000.0
+	// MaxSSI is the largest valid 24-bit TETRA individual or group address.
+	MaxSSI     = uint32(1<<24 - 1)
+	outputRate = 72_000.0
+	symbolRate = 18_000.0
 )
 
 type Point struct{ I, Q float32 }
@@ -40,6 +42,9 @@ type Status struct {
 	MLEProtocols                                           [8]uint64
 	LLCFragments, LLCReassembled                           uint64
 	MACPDUTypes                                            [4]uint64
+	MACFragmentStarts, MACFragmentParts                    uint64
+	MACFragmentCompleted, MACFragmentDropped               uint64
+	NeighbourBroadcasts, NeighbourParseFailures            uint64
 	Network                                                NetworkInfo
 	SlotEncrypted                                          [4]int8
 	SlotTraffic                                            [4]int8
@@ -53,6 +58,9 @@ type Status struct {
 	LastAudioDecision                                      string
 	AudioRejectedEncrypted, AudioRejectedUnselected        uint64
 	AudioRejectedInactive, AudioRejectedDamaged            uint64
+	AudioRejectedFiltered                                  uint64
+	DestinationFilterEnabled                               bool
+	DestinationFilterCount                                 int
 }
 
 type LiveSnapshot struct {
@@ -128,17 +136,21 @@ type Call struct {
 	Events      uint64    `json:"events"`
 }
 type Neighbour struct {
-	CellID       uint8     `json:"cellId"`
-	Carrier      uint32    `json:"carrier"`
-	FrequencyHz  int64     `json:"frequencyHz"`
-	MCC          uint16    `json:"mcc"`
-	MNC          uint16    `json:"mnc"`
-	LocationArea uint16    `json:"locationArea"`
-	Synchronized bool      `json:"synchronized"`
-	ServiceLevel uint8     `json:"serviceLevel"`
-	Priority     bool      `json:"priority"`
-	Voice        bool      `json:"voice"`
-	LastSeen     time.Time `json:"lastSeen"`
+	CellID          uint8     `json:"cellId"`
+	Carrier         uint32    `json:"carrier"`
+	FrequencyHz     int64     `json:"frequencyHz"`
+	FrequencyBand   uint8     `json:"frequencyBand,omitempty"`
+	FrequencyOffset uint8     `json:"frequencyOffset,omitempty"`
+	DuplexSpacing   uint8     `json:"duplexSpacing,omitempty"`
+	Reverse         bool      `json:"reverse,omitempty"`
+	MCC             uint16    `json:"mcc"`
+	MNC             uint16    `json:"mnc"`
+	LocationArea    uint16    `json:"locationArea"`
+	Synchronized    bool      `json:"synchronized"`
+	ServiceLevel    uint8     `json:"serviceLevel"`
+	Priority        bool      `json:"priority"`
+	Voice           bool      `json:"voice"`
+	LastSeen        time.Time `json:"lastSeen"`
 }
 
 // Decoder is a streaming pi/4-DQPSK front end. It deliberately owns no SDR:
@@ -175,6 +187,10 @@ type Decoder struct {
 	llcFragments, llcReassembled                           uint64
 	fragments                                              map[uint32]llcFragment
 	macPDUTypes                                            [4]uint64
+	macReassembly                                          [4]macFragmentState
+	macFragmentStarts, macFragmentParts                    uint64
+	macFragmentCompleted, macFragmentDropped               uint64
+	neighbourBroadcasts, neighbourParseFailures            uint64
 	network                                                NetworkInfo
 	slotEncrypted                                          [4]int8
 	slotEncryptionSeen                                     [4]time.Time
@@ -187,6 +203,8 @@ type Decoder struct {
 	listenSlot, activeAudioSlot                            int8
 	activeCallID                                           uint16
 	clearAudioOnly                                         bool
+	destinationFilterEnabled                               bool
+	destinationFilter                                      map[uint32]bool
 	activeAudioSeen                                        time.Time
 	audioFrames                                            uint64
 	lastAudio                                              time.Time
@@ -194,6 +212,7 @@ type Decoder struct {
 	lastAudioDecision                                      string
 	audioRejectedEncrypted, audioRejectedUnselected        uint64
 	audioRejectedInactive, audioRejectedDamaged            uint64
+	audioRejectedFiltered                                  uint64
 	voice                                                  [4]*voiceDecoder
 	onAudio                                                func([]float32)
 }
@@ -203,6 +222,19 @@ type llcFragment struct {
 	Bits       []byte
 	Updated    time.Time
 }
+
+type macFragmentState struct {
+	Active  bool
+	Address resourceAddress
+	Bits    []byte
+	Parts   int
+	Updated time.Time
+}
+
+const (
+	macFragmentTimeout = 2 * time.Second
+	maxMACFragmentBits = 4096
+)
 
 func New(inputRate float64, codecPath string, onAudio func([]float32)) *Decoder {
 	if inputRate <= 0 {
@@ -226,6 +258,9 @@ func New(inputRate float64, codecPath string, onAudio func([]float32)) *Decoder 
 	d.activeAudioSlot, d.activeAudioSeen = 0, time.Time{}
 	d.activeCallID = 0
 	d.audioFrames, d.lastAudio = 0, time.Time{}
+	d.lastAudioDecision = i18n.Source("text.f23c887ad72d")
+	d.audioRejectedEncrypted, d.audioRejectedUnselected = 0, 0
+	d.audioRejectedInactive, d.audioRejectedDamaged, d.audioRejectedFiltered = 0, 0, 0
 	d.channelErrors, d.channelBits, d.channelFrames, d.channelBad = 0, 0, 0, 0
 	d.lastAudioDecision = i18n.Source("text.f23c887ad72d")
 	d.audioRejectedEncrypted, d.audioRejectedUnselected = 0, 0
@@ -245,6 +280,49 @@ func (d *Decoder) SetAudioPolicy(slot int, clearOnly bool) {
 	d.activeAudioSlot, d.activeAudioSeen = 0, time.Time{}
 	d.activeCallID = 0
 	d.mu.Unlock()
+}
+
+// SetDestinationFilter installs an explicit destination allow list. Enabled
+// and destinations are deliberately separate: enabled with an empty list is a
+// fail-closed state and must never be confused with a disabled filter.
+func (d *Decoder) SetDestinationFilter(enabled bool, destinations []uint32) {
+	filter := make(map[uint32]bool, len(destinations))
+	for _, destination := range destinations {
+		if destination > 0 && destination <= MaxSSI {
+			filter[destination] = true
+		}
+	}
+	d.mu.Lock()
+	d.destinationFilterEnabled = enabled
+	d.destinationFilter = filter
+	d.activeAudioSlot, d.activeAudioSeen, d.activeCallID = 0, time.Time{}, 0
+	d.mu.Unlock()
+}
+
+func (d *Decoder) destinationAllowedCallLocked(call Call, known bool) bool {
+	if !d.destinationFilterEnabled {
+		return true
+	}
+	return known && d.destinationFilter[call.SSI]
+}
+
+func (d *Decoder) destinationAllowedLocked() bool {
+	call, known := d.calls[d.activeCallID]
+	known = known && call.Active && time.Since(call.LastSeen) <= 8*time.Second
+	return d.destinationAllowedCallLocked(call, known)
+}
+
+func (d *Decoder) rejectDestinationLocked(slot int) {
+	d.audioRejectedFiltered++
+	d.lastAudioDecision = i18n.Source("text.tetraDestinationRejected")
+	d.revokeDestinationLocked(slot)
+}
+
+func (d *Decoder) revokeDestinationLocked(slot int) {
+	if d.activeAudioSlot == int8(slot+1) {
+		d.activeAudioSlot, d.activeCallID = 0, 0
+		d.activeAudioSeen = time.Time{}
+	}
 }
 
 func (d *Decoder) Configure(enabled bool) {
@@ -288,7 +366,10 @@ func (d *Decoder) Clear() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.symbols, d.syncHits, d.normalBursts, d.bschFailures, d.dropped = 0, 0, 0, 0, 0
-	d.totalBits, d.lastSyncBit = 0, 0
+	// totalBits and lastSyncBit are stream coordinates owned by the running
+	// decoder loop. Resetting them here while its local bit buffer and pending
+	// bursts survive poisons the pending queue after a manual retune. A true
+	// channel change stops and restarts the loop; Clear only resets history.
 	d.freqErr, d.afcHz = 0, 0
 	d.timingPhase, d.timingError = 0, 0
 	d.system = SystemInfo{}
@@ -302,6 +383,10 @@ func (d *Decoder) Clear() {
 	d.llcFragments, d.llcReassembled = 0, 0
 	d.fragments = make(map[uint32]llcFragment)
 	d.macPDUTypes, d.network = [4]uint64{}, NetworkInfo{}
+	d.macReassembly = [4]macFragmentState{}
+	d.macFragmentStarts, d.macFragmentParts = 0, 0
+	d.macFragmentCompleted, d.macFragmentDropped = 0, 0
+	d.neighbourBroadcasts, d.neighbourParseFailures = 0, 0
 	d.slotEncrypted = [4]int8{-1, -1, -1, -1}
 	d.slotEncryptionSeen = [4]time.Time{}
 	for i := range d.usageEncrypted {
@@ -383,7 +468,7 @@ func (d *Decoder) Snapshot() Status {
 	if d.channelFrames > 0 {
 		fer = 100 * float32(d.channelBad) / float32(d.channelFrames)
 	}
-	return Status{Running: d.running, State: d.state, InputRate: d.rate, OutputRate: outputRate, SymbolRate: symbolRate, LevelDBFS: d.level, Quality: d.quality, FrequencyErrorHz: d.freqErr, BER: ber, FER: fer, TimingPhase: d.timingPhase, TimingError: d.timingError, Symbols: d.symbols, SyncHits: d.syncHits, NormalBursts: d.normalBursts, BSCHFailures: d.bschFailures, Dropped: d.dropped, LastSync: d.lastSync, System: d.system, Constellation: points, SlotBursts: d.slotBursts, FramedBursts: d.framedBursts, SCHValid: d.schValid, SCHCRCFailures: d.schCRCFailures, MACResources: d.macResources, MACRejected: d.macRejected, MACChannelAlloc: d.macChannelAlloc, MACEncrypted: d.macEncrypted, LLCRejected: d.llcRejected, LLCNonCMCE: d.llcNonCMCE, CMCEEvents: d.cmceEvents, LLCTypes: d.llcTypes, MLEProtocols: d.mleProtocols, LLCFragments: d.llcFragments, LLCReassembled: d.llcReassembled, MACPDUTypes: d.macPDUTypes, Network: d.network, SlotEncrypted: slotEncrypted, SlotTraffic: slotTraffic, AACHValid: d.aachValid, AACHRejected: d.aachRejected, ListenSlot: d.listenSlot, ActiveAudioSlot: activeAudioSlot, ClearAudioOnly: d.clearAudioOnly, AudioFrames: d.audioFrames, LastAudio: d.lastAudio, VoiceCodecReady: codecReady, VoiceCodecError: codecError, LastAudioDecision: d.lastAudioDecision, AudioRejectedEncrypted: d.audioRejectedEncrypted, AudioRejectedUnselected: d.audioRejectedUnselected, AudioRejectedInactive: d.audioRejectedInactive, AudioRejectedDamaged: d.audioRejectedDamaged}
+	return Status{Running: d.running, State: d.state, InputRate: d.rate, OutputRate: outputRate, SymbolRate: symbolRate, LevelDBFS: d.level, Quality: d.quality, FrequencyErrorHz: d.freqErr, BER: ber, FER: fer, TimingPhase: d.timingPhase, TimingError: d.timingError, Symbols: d.symbols, SyncHits: d.syncHits, NormalBursts: d.normalBursts, BSCHFailures: d.bschFailures, Dropped: d.dropped, LastSync: d.lastSync, System: d.system, Constellation: points, SlotBursts: d.slotBursts, FramedBursts: d.framedBursts, SCHValid: d.schValid, SCHCRCFailures: d.schCRCFailures, MACResources: d.macResources, MACRejected: d.macRejected, MACChannelAlloc: d.macChannelAlloc, MACEncrypted: d.macEncrypted, LLCRejected: d.llcRejected, LLCNonCMCE: d.llcNonCMCE, CMCEEvents: d.cmceEvents, LLCTypes: d.llcTypes, MLEProtocols: d.mleProtocols, LLCFragments: d.llcFragments, LLCReassembled: d.llcReassembled, MACPDUTypes: d.macPDUTypes, MACFragmentStarts: d.macFragmentStarts, MACFragmentParts: d.macFragmentParts, MACFragmentCompleted: d.macFragmentCompleted, MACFragmentDropped: d.macFragmentDropped, NeighbourBroadcasts: d.neighbourBroadcasts, NeighbourParseFailures: d.neighbourParseFailures, Network: d.network, SlotEncrypted: slotEncrypted, SlotTraffic: slotTraffic, AACHValid: d.aachValid, AACHRejected: d.aachRejected, ListenSlot: d.listenSlot, ActiveAudioSlot: activeAudioSlot, ClearAudioOnly: d.clearAudioOnly, AudioFrames: d.audioFrames, LastAudio: d.lastAudio, VoiceCodecReady: codecReady, VoiceCodecError: codecError, LastAudioDecision: d.lastAudioDecision, AudioRejectedEncrypted: d.audioRejectedEncrypted, AudioRejectedUnselected: d.audioRejectedUnselected, AudioRejectedInactive: d.audioRejectedInactive, AudioRejectedDamaged: d.audioRejectedDamaged, AudioRejectedFiltered: d.audioRejectedFiltered, DestinationFilterEnabled: d.destinationFilterEnabled, DestinationFilterCount: len(d.destinationFilter)}
 }
 
 func (d *Decoder) Live(frequencyHz int64) LiveSnapshot {
@@ -684,10 +769,11 @@ func (d *Decoder) processNormalBurst(burst []byte, slot int, ndb2 bool) {
 			callID := d.usageCall[usage]
 			call, confirmed := d.calls[callID]
 			confirmed = confirmed && call.Active && time.Since(call.LastSeen) <= 8*time.Second
+			destinationAllowed := d.destinationAllowedCallLocked(call, confirmed)
 			currentCall, currentConfirmed := d.calls[d.activeCallID]
 			currentConfirmed = currentConfirmed && currentCall.Active && time.Since(currentCall.LastSeen) <= 2*time.Second
 			canTakeAuto := d.listenSlot != 0 || d.activeAudioSlot == int8(slot+1) || (!currentConfirmed && (confirmed || activeExpired))
-			if allowed && selected && canTakeAuto {
+			if allowed && selected && destinationAllowed && canTakeAuto {
 				d.activeAudioSlot = int8(slot + 1)
 				d.activeAudioSeen = time.Now()
 				if confirmed {
@@ -699,6 +785,11 @@ func (d *Decoder) processNormalBurst(burst []byte, slot int, ndb2 bool) {
 				} else if activeExpired {
 					d.activeCallID = 0
 				}
+			} else if !destinationAllowed && d.activeAudioSlot == int8(slot+1) {
+				// A new unlisted or still-unknown call reused the active slot.
+				// Revoke it immediately so audio from the previous allowed call
+				// cannot leak during the normal expiry window.
+				d.revokeDestinationLocked(slot)
 			}
 		}
 		d.slotTrafficSeen[slot] = time.Now()
@@ -721,7 +812,9 @@ func (d *Decoder) processNormalBurst(burst []byte, slot int, ndb2 bool) {
 			d.schCRCFailures++
 		}
 		if aachOK && usage > 3 && !secondHalfStolen {
-			if d.activeAudioSlot != int8(slot+1) || time.Since(d.activeAudioSeen) > 5*time.Second {
+			if !d.destinationAllowedLocked() {
+				d.rejectDestinationLocked(slot)
+			} else if d.activeAudioSlot != int8(slot+1) || time.Since(d.activeAudioSeen) > 5*time.Second {
 				d.audioRejectedUnselected++
 				d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.2a23a8778525"), slot+1)
 			} else if d.clearAudioOnly && d.slotEncrypted[slot] != 0 {
@@ -755,6 +848,7 @@ func (d *Decoder) processNormalBurst(burst []byte, slot int, ndb2 bool) {
 }
 
 func (d *Decoder) processMACPayloadLocked(payload []byte, slot int) {
+	d.expireMACFragmentsLocked(time.Now())
 	for offset := 0; offset+16 <= len(payload); {
 		pdu := payload[offset:]
 		pduType := bitsToUint(pdu, 0, 2)
@@ -763,7 +857,9 @@ func (d *Decoder) processMACPayloadLocked(payload []byte, slot int) {
 		case 0:
 			lengthField := bitsToUint(pdu, 7, 6)
 			lengthBits := int(lengthField) * 8
-			d.processMACResourceLocked(pdu, slot)
+			if d.processMACResourceLocked(pdu, slot) {
+				return
+			}
 			if lengthField < 1 || lengthField > 0x3a || lengthBits > len(pdu) {
 				return
 			}
@@ -771,6 +867,10 @@ func (d *Decoder) processMACPayloadLocked(payload []byte, slot int) {
 			if pdu[2] != 0 {
 				return
 			}
+		case 1:
+			d.processMACFragmentLocked(pdu, slot)
+			// MAC-FRAG and MAC-END are always the last PDU in their block.
+			return
 		case 2:
 			if network, valid := parseMACSysinfo(pdu); valid {
 				d.network = network
@@ -785,9 +885,93 @@ func (d *Decoder) processMACPayloadLocked(payload []byte, slot int) {
 	}
 }
 
+func (d *Decoder) expireMACFragmentsLocked(now time.Time) {
+	for slot := range d.macReassembly {
+		state := &d.macReassembly[slot]
+		if state.Active && now.Sub(state.Updated) > macFragmentTimeout {
+			*state = macFragmentState{}
+			d.macFragmentDropped++
+		}
+	}
+}
+
+func (d *Decoder) startMACFragmentLocked(payload []byte, address resourceAddress, slot int) {
+	if slot < 0 || slot >= len(d.macReassembly) || address.Encrypted || address.HeaderBits >= len(payload) {
+		d.macFragmentDropped++
+		return
+	}
+	bits := append([]byte(nil), payload[address.HeaderBits:]...)
+	if address.FillBits {
+		bits = trimTrailingFillBits(bits)
+	}
+	if len(bits) == 0 || len(bits) > maxMACFragmentBits {
+		d.macFragmentDropped++
+		return
+	}
+	if d.macReassembly[slot].Active {
+		d.macFragmentDropped++
+	}
+	address.HeaderBits, address.LengthBits = 0, 0
+	address.StartFragment, address.FillBits = false, false
+	d.macReassembly[slot] = macFragmentState{Active: true, Address: address, Bits: bits, Parts: 1, Updated: time.Now()}
+	d.macFragmentStarts++
+}
+
+func (d *Decoder) processMACFragmentLocked(payload []byte, slot int) {
+	fragment, ok := parseMACFragment(payload)
+	if !ok || slot < 0 || slot >= len(d.macReassembly) {
+		d.macFragmentDropped++
+		return
+	}
+	targetSlot := slot
+	if !d.macReassembly[targetSlot].Active {
+		// A multi-slot control channel may continue a fragmented TM-SDU on a
+		// different physical slot. Follow it only when exactly one live start
+		// exists; otherwise association would be ambiguous and unsafe.
+		candidate := -1
+		for index := range d.macReassembly {
+			if !d.macReassembly[index].Active {
+				continue
+			}
+			if candidate >= 0 {
+				candidate = -2
+				break
+			}
+			candidate = index
+		}
+		if candidate >= 0 {
+			targetSlot = candidate
+		}
+	}
+	state := &d.macReassembly[targetSlot]
+	if !state.Active || time.Since(state.Updated) > macFragmentTimeout || len(fragment.Payload) == 0 || len(state.Bits)+len(fragment.Payload) > maxMACFragmentBits {
+		if state.Active {
+			*state = macFragmentState{}
+		}
+		d.macFragmentDropped++
+		return
+	}
+	state.Bits = append(state.Bits, fragment.Payload...)
+	state.Parts++
+	state.Updated = time.Now()
+	d.macFragmentParts++
+	if !fragment.End {
+		return
+	}
+	bits := append([]byte(nil), state.Bits...)
+	address := state.Address
+	*state = macFragmentState{}
+	d.macFragmentCompleted++
+	d.processLLCLocked(bits, address, targetSlot)
+}
+
 func (d *Decoder) processVoiceLocked(coded []byte, si SystemInfo, slot int) {
 	if d.onAudio == nil || slot < 0 || slot > 3 {
 		d.lastAudioDecision = i18n.Source("text.6c1b0a200965")
+		return
+	}
+	if !d.destinationAllowedLocked() {
+		d.rejectDestinationLocked(slot)
 		return
 	}
 	if d.clearAudioOnly && d.slotEncrypted[slot] != 0 {
@@ -848,14 +1032,14 @@ func (d *Decoder) recordChannelResultLocked(ok bool, errors, bits int) {
 
 // processMACResourceLocked consumes one already delimited MAC-RESOURCE. The
 // decoder mutex is held by processNormalBurst while this method updates state.
-func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
+func (d *Decoder) processMACResourceLocked(payload []byte, slot int) bool {
 	address, reason, ok := parseMACResourceDetailed(payload)
 	if !ok {
 		d.macRejected++
 		if reason == i18n.Source("text.16d64e4e5757") {
 			d.macEncrypted++
 		}
-		return
+		return false
 	}
 	d.macResources++
 	if slot >= 0 && slot < 4 {
@@ -879,6 +1063,15 @@ func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
 	fresh.Seen = u.Seen + 1
 	d.users[address.SSI] = fresh
 	d.state = i18n.Source("text.4af968458e3c")
+	if address.StartFragment {
+		d.startMACFragmentLocked(payload, address, slot)
+		return true
+	}
+	d.processLLCLocked(payload, address, slot)
+	return false
+}
+
+func (d *Decoder) processLLCLocked(payload []byte, address resourceAddress, slot int) {
 	pdu, llcOK := parseLLC(payload, address)
 	if !llcOK || pdu.FCSInvalid {
 		d.llcRejected++
@@ -977,12 +1170,19 @@ func (d *Decoder) processMACResourceLocked(payload []byte, slot int) {
 		}
 		d.state = i18n.Source("text.294f01df2e1e") + cmce.Kind
 	} else {
+		isNeighbourBroadcast := pdisc == 5 && len(tl) >= 6 && bitsToUint(tl, 3, 3) == 2
+		if isNeighbourBroadcast {
+			d.neighbourBroadcasts++
+		}
 		if parsed, ok := parseNeighbourBroadcast(tl, d.system, d.network); ok {
 			for _, neighbour := range parsed {
 				d.neighbours[neighbour.CellID] = neighbour
 			}
 			d.state = i18n.Source("text.79cfaa890cbf")
 			return
+		}
+		if isNeighbourBroadcast {
+			d.neighbourParseFailures++
 		}
 		d.llcNonCMCE++
 	}

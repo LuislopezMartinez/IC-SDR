@@ -152,10 +152,14 @@ func NewSessionFromProfile(profile Profile, stationCall, operator string, config
 		location = "DX"
 	}
 	isCQWW := profile.CabrilloName == CQWWSSB || profile.CabrilloName == CQWWCW
+	isSingleOperator := isCQWW || profile.CabrilloName == JIDXSSB
 	operatorCategory := choice(config.OperatorCategory, []string{"SINGLE-OP", "MULTI-OP"}, "SINGLE-OP")
 	transmitter := choice(config.Transmitter, []string{"ONE", "TWO", "UNLIMITED"}, "ONE")
-	if isCQWW {
+	if isSingleOperator {
 		operatorCategory, transmitter = "SINGLE-OP", "ONE"
+	}
+	if profile.CabrilloName == JIDXSSB && !validCQZone(sentValue) {
+		return nil, errors.New(i18n.Source("text.log0211"))
 	}
 	return &Session{Version: SchemaVersion, Contest: profile.CabrilloName, ContestName: profile.Name, ContestMode: profile.Mode,
 		ContestStart: profile.Start, ContestEnd: profile.End, DuplicateRule: profile.DuplicateRule, PointsPerQSO: profile.PointsPerQSO,
@@ -558,6 +562,9 @@ func (s *Session) normalizeReceived(entry Entry) (string, int, error) {
 		if s.ReceivedExchange == "SERIAL" {
 			value = serial(parsed)
 		}
+	}
+	if s.Contest == JIDXSSB && !validJIDXPrefecture(value) {
+		return "", 0, errors.New(i18n.Source("text.log0222"))
 	}
 	return value, number, nil
 }

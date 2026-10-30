@@ -580,14 +580,14 @@ func (p *FT8Panel) drawFT8Dashboard() {
 		heading = "REGIÓN: " + strings.ToUpper(clipFT8(p.mapRegionFilter, 18))
 		drawModalAction(ft8RegionClear, "VER TODAS", colors.cyan, false)
 	} else {
-		simpleui.DrawText(fmt.Sprintf("%d regiones · %d QSO completados", len(regions), qso.completed), 1343, 308, 9, colors.muted)
+		simpleui.DrawText(fmt.Sprintf("%d regiones · %d QSO completados", len(regions), qso.completed), 1343, 307, 10, colors.muted)
 	}
 	simpleui.DrawTextStyled(heading, 1140, 304, uiSectionFontSize, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawText("REGIÓN", 1140, 335, 10, colors.muted)
-	drawFT8RightAligned("EST.", 1374, 335, 10, simpleui.FontRegular, colors.muted)
-	drawFT8RightAligned("MSG", 1420, 335, 10, simpleui.FontRegular, colors.muted)
-	drawFT8RightAligned("SNR", 1470, 335, 10, simpleui.FontRegular, colors.muted)
-	drawFT8RightAligned("DIST.", 1544, 335, 10, simpleui.FontRegular, colors.muted)
+	simpleui.DrawTextStyled("REGIÓN", 1140, 334, 11, simpleui.FontSemiBold, colors.muted)
+	drawFT8RightAligned("EST.", 1374, 334, 11, simpleui.FontSemiBold, colors.muted)
+	drawFT8RightAligned("MSG", 1420, 334, 11, simpleui.FontSemiBold, colors.muted)
+	drawFT8RightAligned("SNR", 1470, 334, 11, simpleui.FontSemiBold, colors.muted)
+	drawFT8RightAligned("DIST.", 1544, 334, 11, simpleui.FontSemiBold, colors.muted)
 	rl.DrawLine(1140, 354, 1556, 354, colors.border)
 	for row, region := range regions[p.mapRegionOffset:] {
 		if row >= 8 {
@@ -602,11 +602,11 @@ func (p *FT8Panel) drawFT8Dashboard() {
 			rl.DrawRectangle(1140, int32(y-3), 416, 24, mixColor(colors.panelAlt, colors.blue, .04))
 		}
 		drawFT8RegionFlag(region.name, 1144, y+2)
-		simpleui.DrawText(clipFT8(region.name, 16), 1167, y+3, 10, colors.text)
-		drawFT8RightAligned(fmt.Sprintf("%d", region.stations), 1374, y+3, 10, simpleui.FontMono, colors.text)
-		drawFT8RightAligned(fmt.Sprintf("%d", region.messages), 1420, y+3, 10, simpleui.FontMono, colors.text)
-		drawFT8RightAligned(fmt.Sprintf("%+d", region.bestSNR), 1470, y+3, 10, simpleui.FontMono, ft8SNRColor(region.bestSNR))
-		drawFT8RightAligned(fmt.Sprintf("%.0f km", region.maxDistance), 1544, y+3, 10, simpleui.FontMono, colors.muted)
+		simpleui.DrawText(clipFT8(region.name, 16), 1167, y+2, 12, colors.text)
+		drawFT8RightAligned(fmt.Sprintf("%d", region.stations), 1374, y+2, 12, simpleui.FontMono, colors.text)
+		drawFT8RightAligned(fmt.Sprintf("%d", region.messages), 1420, y+2, 12, simpleui.FontMono, colors.text)
+		drawFT8RightAligned(fmt.Sprintf("%+d", region.bestSNR), 1470, y+2, 12, simpleui.FontMono, ft8SNRColor(region.bestSNR))
+		drawFT8RightAligned(fmt.Sprintf("%.0f km", region.maxDistance), 1544, y+2, 12, simpleui.FontMono, colors.muted)
 	}
 	if len(regions) > 8 {
 		track := rl.Rectangle{X: 1552, Y: 360, Width: 4, Height: 198}
@@ -724,6 +724,9 @@ func (p *FT8Panel) drawFT8SelectedCard(positioned int) {
 	if station.hasPosition {
 		homeLat, homeLon := p.ft8HomePosition()
 		location = fmt.Sprintf("%.0f km  ·  %.0f°  ·  SNR %+d dB", ft8DistanceKM(homeLat, homeLon, station.lat, station.lon), ft8Bearing(homeLat, homeLon, station.lat, station.lon), station.latest.SNR)
+	}
+	if zone, ok := ft8CallCQZone(station.call); ok {
+		location = fmt.Sprintf("CQ %d  ·  %s", zone, location)
 	}
 	simpleui.DrawText(location, 1152, 641, uiBodyFontSize, colors.text)
 	localClock := "HORA LOCAL  NO DISPONIBLE"
@@ -1041,16 +1044,34 @@ func ft8RegionCountryCode(name string) countries.CountryCode {
 }
 
 func ft8CallRegion(call string) string {
+	initializeFT8DXCC()
+	if ft8DXCCData == nil {
+		return ft8FallbackCallRegion(call)
+	}
+	if entity, ok := ft8DXCCData.Lookup(call); ok {
+		return ft8EntityDisplayName(entity.Name)
+	}
+	return ft8FallbackCallRegion(call)
+}
+
+func initializeFT8DXCC() {
 	ft8DXCCOnce.Do(func() {
 		ft8DXCCData, _ = dxcc.Load(resources.Path("tools", "ft8", "cty.dat"))
 		if ft8DXCCData == nil {
 			ft8DXCCData, _ = dxcc.LoadBundled()
 		}
 	})
-	if entity, ok := ft8DXCCData.Lookup(call); ok {
-		return ft8EntityDisplayName(entity.Name)
+}
+
+func ft8CallCQZone(call string) (int, bool) {
+	initializeFT8DXCC()
+	if ft8DXCCData == nil {
+		return 0, false
 	}
-	return ft8FallbackCallRegion(call)
+	if entity, ok := ft8DXCCData.Lookup(call); ok {
+		return entity.CQZone, entity.CQZone >= 1 && entity.CQZone <= 40
+	}
+	return 0, false
 }
 
 func ft8EntityDisplayName(name string) string {

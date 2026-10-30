@@ -237,7 +237,7 @@ func (p *ContestLogPanel) refreshSentValueVisibility() {
 	}
 	profile, ok := p.selectedProfile()
 	p.sentValue.SetVisible(ok && profile.SentExchange == "FIXED")
-	if ok && (profile.ID == contestlog.CQWWSSB || profile.ID == contestlog.CQWWCW) {
+	if ok && (profile.ID == contestlog.CQWWSSB || profile.ID == contestlog.CQWWCW || profile.ID == contestlog.JIDXSSB) {
 		p.operatorCategoryValue, p.transmitterValue = "SINGLE-OP", "ONE"
 		p.refreshConfigLabels()
 		p.autofillCQZone()
@@ -246,7 +246,7 @@ func (p *ContestLogPanel) refreshSentValueVisibility() {
 
 func (p *ContestLogPanel) autofillCQZone() {
 	profile, ok := p.selectedProfile()
-	if !ok || (profile.ID != contestlog.CQWWSSB && profile.ID != contestlog.CQWWCW) {
+	if !ok || (profile.ID != contestlog.CQWWSSB && profile.ID != contestlog.CQWWCW && profile.ID != contestlog.JIDXSSB) {
 		return
 	}
 	current := strings.TrimSpace(p.sentValue.Text())
@@ -340,6 +340,9 @@ func (p *ContestLogPanel) clearDuplicatePreview() {
 func (p *ContestLogPanel) receivedExchangeLabel() string {
 	if p.session == nil {
 		return i18n.Source("text.log0111")
+	}
+	if p.session.Contest == contestlog.JIDXSSB {
+		return i18n.Source("text.log0223")
 	}
 	keys := map[string]string{"SERIAL": "text.log0111", "CQ_ZONE": "text.log0183", "ITU_ZONE": "text.log0184",
 		"SECTION": "text.log0185", "LOCATOR": "text.log0186", "NUMBER": "text.log0187", "TEXT": "text.log0188"}
@@ -643,9 +646,9 @@ func (p *ContestLogPanel) refreshVisibility(panelVisible bool) {
 	}
 	profile, ok := p.selectedProfile()
 	p.sentValue.SetVisible(panelVisible && creating && ok && profile.SentExchange == "FIXED")
-	cqww := ok && (profile.ID == contestlog.CQWWSSB || profile.ID == contestlog.CQWWCW)
-	p.operatorCategory.SetEnabled(!cqww)
-	p.transmitter.SetEnabled(!cqww)
+	singleOperator := ok && (profile.ID == contestlog.CQWWSSB || profile.ID == contestlog.CQWWCW || profile.ID == contestlog.JIDXSSB)
+	p.operatorCategory.SetEnabled(!singleOperator)
+	p.transmitter.SetEnabled(!singleOperator)
 	if p.history != nil {
 		p.history.SetVisible(panelVisible)
 		p.history.SetEnabled(p.session != nil || len(p.archivePaths()) > 0)
@@ -670,6 +673,9 @@ func (p *ContestLogPanel) DrawPanel() {
 		band = i18n.Source("text.log0025")
 	}
 	summary := fmt.Sprintf(i18n.Source("text.log0026"), p.session.StationCall, p.session.Contest, len(p.session.QSOs), p.session.NextSerial)
+	if p.session.SentExchange == "FIXED" {
+		summary = fmt.Sprintf(i18n.Source("text.log0225"), p.session.StationCall, p.session.Contest, len(p.session.QSOs))
+	}
 	simpleui.DrawText(fitContestLabel(summary, 218, 12), 382, toolY+34, 12, colors.text)
 	p.drawScorePanel(time.Now())
 	p.drawWorkedIdentity()
@@ -678,7 +684,11 @@ func (p *ContestLogPanel) DrawPanel() {
 	badgeFill := blendRGBA(colors.panelAlt, colors.orange, .35)
 	rl.DrawRectangleRounded(serialBadge, .16, 8, badgeFill)
 	rl.DrawRectangleRoundedLinesEx(serialBadge, .16, 8, 1.5, colors.orange)
-	serialText := fmt.Sprintf(i18n.Source("text.log0028"), p.session.NextSerial)
+	sentValue := strconv.Itoa(p.session.NextSerial)
+	if p.session.SentExchange == "FIXED" {
+		sentValue = p.session.SentValue
+	}
+	serialText := fmt.Sprintf(i18n.Source("text.log0224"), sentValue)
 	serialSize := simpleui.MeasureTextStyled(serialText, 13, simpleui.FontSemiBold)
 	simpleui.DrawTextStyled(serialText, serialBadge.X+(serialBadge.Width-serialSize.X)/2, serialBadge.Y+(serialBadge.Height-serialSize.Y)/2, 13, simpleui.FontSemiBold, colors.orange)
 	fieldLabels := []struct {
@@ -701,11 +711,18 @@ func (p *ContestLogPanel) DrawPanel() {
 }
 
 func (p *ContestLogPanel) scoreProjection(now time.Time) (contestScoreProjection, bool) {
-	if p.session == nil || (p.session.Contest != contestlog.CQWWSSB && p.session.Contest != contestlog.CQWWCW) || !p.hasWorkedIdentity {
+	if p.session == nil || (p.session.Contest != contestlog.CQWWSSB && p.session.Contest != contestlog.CQWWCW && p.session.Contest != contestlog.JIDXSSB) || !p.hasWorkedIdentity {
 		return contestScoreProjection{}, false
 	}
 	zone, err := strconv.Atoi(strings.TrimSpace(p.serialReceived.Text()))
-	if err != nil || zone < 1 || zone > 40 || contestlog.BandForFrequency(p.screen.frequencyHz) == "" {
+	maximum := 40
+	if p.session.Contest == contestlog.JIDXSSB {
+		maximum = 50
+		if !contestlog.IsJapaneseContestCall(p.workedCall.Text()) {
+			return contestScoreProjection{}, false
+		}
+	}
+	if err != nil || zone < 1 || zone > maximum || contestlog.BandForFrequency(p.screen.frequencyHz) == "" {
 		return contestScoreProjection{}, false
 	}
 	mode := p.screen.savedMode

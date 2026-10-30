@@ -276,7 +276,9 @@ func (p *DATVPanel) DrawPanel() {
 	rl.DrawCircle(382, int32(toolY+190), 7, stateColor)
 	simpleui.DrawTextStyled(strings.ToUpper(s.State), 399, toolY+179, uiMinimumFontSize, simpleui.FontSemiBold, stateColor)
 	simpleui.DrawText(fmt.Sprintf("LOCK %s · MER %.1f", yesNo(s.Locked), s.MER), 540, toolY+179, uiMinimumFontSize, colors.text)
-	simpleui.DrawText(fmt.Sprintf("TS %s · %.2f Mb/s", yesNo(s.TSValid), float64(s.Bitrate)/1e6), 690, toolY+179, uiMinimumFontSize, colors.text)
+	// The constellation begins at x=815. Keep the transport metric in its own
+	// column instead of letting the longer unit text disappear underneath it.
+	simpleui.DrawText(fmt.Sprintf("TS %s  %.2fM", yesNo(s.TSValid), float64(s.Bitrate)/1e6), 690, toolY+179, uiMinimumFontSize, colors.text)
 	if s.DecoderRate > 0 {
 		simpleui.DrawText(fmt.Sprintf("Canalizador %.3f→%.3f MS/s · AFC %s %+.0f Hz", float64(s.InputRate)/1e6, float64(s.DecoderRate)/1e6, s.AFCState, s.AFCCorrectionHz), 370, toolY+207, uiCaptionFontSize, colors.muted)
 	}
@@ -313,7 +315,7 @@ func (p *DATVPanel) drawConstellation(s datv.Status) {
 		rl.DrawCircle(int32(x), int32(y), 2, rl.Color{R: 30, G: 205, B: 240, A: 175})
 	}
 	label := datvFallback(s.Constellation, "CONSTELACIÓN")
-	simpleui.DrawTextStyled(label, box.X+5, box.Y+4, 10, simpleui.FontSemiBold, colors.muted)
+	simpleui.DrawTextStyled(label, box.X+5, box.Y+3, 11, simpleui.FontSemiBold, colors.muted)
 }
 func formatSymbolRate(v int) string {
 	if v >= 1_000_000 {

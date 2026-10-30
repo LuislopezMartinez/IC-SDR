@@ -249,7 +249,7 @@ func (p *DABPanel) DrawPanel() {
 	if service == "" {
 		service = "Sin servicio seleccionado"
 	}
-	simpleui.DrawTextStyled(clipDAB(service, 24), 1265, toolY+47, 18, simpleui.FontSemiBold, colors.text)
+	simpleui.DrawTextStyled(clipDAB(service, 26), 1265, toolY+47, 18, simpleui.FontSemiBold, colors.text)
 	format := "DAB/DAB+ · audio digital"
 	if status.AudioMode != "" {
 		format = "DAB+ · " + status.AudioMode
@@ -259,26 +259,26 @@ func (p *DABPanel) DrawPanel() {
 	if status.ServiceID != 0 {
 		serviceID = fmt.Sprintf("0x%X", status.ServiceID)
 	}
-	simpleui.DrawText("SERVICIO      "+serviceID, 1265, toolY+101, uiCaptionFontSize, colors.text)
-	simpleui.DrawText(fmt.Sprintf("CORRECCIÓN    %+.0f Hz", status.FrequencyErrorHz), 1265, toolY+123, uiCaptionFontSize, colors.text)
-	simpleui.DrawText(fmt.Sprintf("COLA IQ       %d / %d", status.InputQueued, status.InputCapacity), 1265, toolY+145, uiCaptionFontSize, colors.text)
+	simpleui.DrawText("SERVICIO      "+serviceID, 1265, toolY+100, uiBodyFontSize, colors.text)
+	simpleui.DrawText(fmt.Sprintf("CORRECCIÓN    %+.0f Hz", status.FrequencyErrorHz), 1265, toolY+122, uiBodyFontSize, colors.text)
+	simpleui.DrawText(fmt.Sprintf("COLA IQ       %d / %d", status.InputQueued, status.InputCapacity), 1265, toolY+144, uiBodyFontSize, colors.text)
 	dropColor := colors.muted
 	if status.Dropped > 0 {
 		dropColor = colors.orange
 	}
-	simpleui.DrawText(fmt.Sprintf("PÉRDIDAS      %d", status.Dropped), 1265, toolY+167, uiCaptionFontSize, dropColor)
+	simpleui.DrawText(fmt.Sprintf("PÉRDIDAS      %d", status.Dropped), 1265, toolY+166, uiBodyFontSize, dropColor)
 	audioRate := "—"
 	if status.AudioSampleRate > 0 {
 		audioRate = fmt.Sprintf("%d kHz · %d ch", status.AudioSampleRate/1000, status.AudioChannels)
 	}
-	simpleui.DrawText("AUDIO         "+audioRate, 1265, toolY+189, uiCaptionFontSize, colors.text)
+	simpleui.DrawText("AUDIO         "+audioRate, 1265, toolY+188, uiBodyFontSize, colors.text)
 	runtimeText := "DETENIDO"
 	runtimeColor := colors.muted
 	if status.Running {
 		runtimeText, runtimeColor = "ACTIVO", colors.green
 	}
 	rl.DrawLineEx(rl.Vector2{X: 1265, Y: toolY + 216}, rl.Vector2{X: 1565, Y: toolY + 216}, 1, colors.border)
-	simpleui.DrawText("RUNTIME       "+runtimeText, 1265, toolY+229, uiCaptionFontSize, runtimeColor)
+	simpleui.DrawText("RUNTIME       "+runtimeText, 1265, toolY+228, uiBodyFontSize, runtimeColor)
 }
 
 func drawDABDynamicLabel(label string) {

@@ -16,6 +16,24 @@ func TestParseEvent(t *testing.T) {
 	}
 }
 
+func TestParseFLEXEvent(t *testing.T) {
+	e, ok := ParseEvent([]byte(`{"demod_name":"flex_alphanumeric","capcode":1120103,"sync_baud":1600,"sync_level":2,"phase_number":"A","cycle_number":9,"frame_number":49,"message":"PRUEBA FLEX"}`))
+	if !ok || e.Protocol != ProtocolFLEX || e.Address != 1120103 || e.Baud != 1600 || e.Kind != "ALFA" || e.Message != "PRUEBA FLEX" || e.Phase != "A" || e.Cycle != 9 || e.Frame != 49 {
+		t.Fatalf("unexpected FLEX event: %+v, %v", e, ok)
+	}
+}
+
+func TestDecoderArgumentsSelectOnePagerFamily(t *testing.T) {
+	pocsagArgs := strings.Join(decoderArguments(ProtocolPOCSAG), " ")
+	flexArgs := strings.Join(decoderArguments(ProtocolFLEX), " ")
+	if !strings.Contains(pocsagArgs, "POCSAG1200") || strings.Contains(pocsagArgs, "FLEX") {
+		t.Fatalf("unexpected POCSAG arguments: %s", pocsagArgs)
+	}
+	if !strings.Contains(flexArgs, "-a FLEX") || !strings.Contains(flexArgs, "-a FLEX_NEXT") || strings.Contains(flexArgs, "POCSAG") {
+		t.Fatalf("unexpected FLEX arguments: %s", flexArgs)
+	}
+}
+
 func TestReaderPrefersAlphaAutoCandidate(t *testing.T) {
 	d := New("")
 	d.generation = 1
@@ -42,6 +60,21 @@ func TestHistoryRestoresNewestFirstAndFrequency(t *testing.T) {
 	events := New("", path).Snapshot().Events
 	if len(events) != 2 || events[0].Address != 2 || events[0].FrequencyHz != 466075000 {
 		t.Fatalf("unexpected restored history: %+v", events)
+	}
+}
+
+func TestClearProtocolPreservesOtherPagerHistory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "paging.jsonl")
+	d := New("", path)
+	d.events = []Event{{Address: 1, Protocol: ProtocolFLEX}, {Address: 2, Protocol: ProtocolPOCSAG}}
+	d.ClearProtocol(ProtocolFLEX)
+	events := d.Snapshot().Events
+	if len(events) != 1 || events[0].Protocol != ProtocolPOCSAG || events[0].Address != 2 {
+		t.Fatalf("clearing FLEX changed POCSAG history: %+v", events)
+	}
+	restored := New("", path).Snapshot().Events
+	if len(restored) != 1 || restored[0].Protocol != ProtocolPOCSAG {
+		t.Fatalf("persisted protocol history is incorrect: %+v", restored)
 	}
 }
 

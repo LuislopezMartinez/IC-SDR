@@ -252,7 +252,7 @@ func (p *FT8Panel) DrawPanel() {
 		slot = "CICLO UTC  " + displaySlot.UTC().Format("15:04:05")
 	}
 	simpleui.DrawTextStyled(slot, 610, toolY+18, uiCaptionFontSize, simpleui.FontSemiBold, colors.cyan)
-	simpleui.DrawText("UTC        SNR     DT       AUDIO       MENSAJE", 610, toolY+66, uiCaptionFontSize, colors.muted)
+	simpleui.DrawText("UTC        SNR     DT       AUDIO       MENSAJE", 610, toolY+65, uiBodyFontSize, colors.muted)
 	rl.DrawLine(608, int32(toolY+87), 1562, int32(toolY+87), colors.border)
 
 	selection, _ := tableSelectionColors()
@@ -268,15 +268,15 @@ func (p *FT8Panel) DrawPanel() {
 			continue
 		}
 		item := status.Decodes[index]
-		simpleui.DrawTextStyled(item.Slot.UTC().Format("15:04:05"), 610, y, uiCaptionFontSize, simpleui.FontMono, colors.muted)
+		simpleui.DrawTextStyled(item.Slot.UTC().Format("15:04:05"), 610, y-1, uiBodyFontSize, simpleui.FontMono, colors.muted)
 		snrColor := colors.green
 		if item.SNR < -18 {
 			snrColor = colors.orange
 		}
-		simpleui.DrawTextStyled(fmt.Sprintf("%+3d", item.SNR), 715, y, uiCaptionFontSize, simpleui.FontMono, snrColor)
-		simpleui.DrawTextStyled(fmt.Sprintf("%+4.1f", item.DT), 780, y, uiCaptionFontSize, simpleui.FontMono, colors.text)
-		simpleui.DrawTextStyled(fmt.Sprintf("%4.0f Hz", item.Frequency), 850, y, uiCaptionFontSize, simpleui.FontMono, colors.text)
-		simpleui.DrawTextStyled(clipFT8(item.Message, 62), 955, y, uiBodyFontSize, simpleui.FontSemiBold, colors.text)
+		simpleui.DrawTextStyled(fmt.Sprintf("%+3d", item.SNR), 715, y-1, uiBodyFontSize, simpleui.FontMono, snrColor)
+		simpleui.DrawTextStyled(fmt.Sprintf("%+4.1f", item.DT), 780, y-1, uiBodyFontSize, simpleui.FontMono, colors.text)
+		simpleui.DrawTextStyled(fmt.Sprintf("%4.0f Hz", item.Frequency), 850, y-1, uiBodyFontSize, simpleui.FontMono, colors.text)
+		simpleui.DrawTextStyled(clipFT8(item.Message, 59), 955, y-1, uiMinimumFontSize, simpleui.FontSemiBold, colors.text)
 	}
 	if len(status.Decodes) > 6 {
 		track := rl.Rectangle{X: 1566, Y: toolY + 92, Width: 4, Height: 150}
@@ -288,7 +288,7 @@ func (p *FT8Panel) DrawPanel() {
 		}
 		rl.DrawRectangleRounded(thumb, 1, 4, colors.cyan)
 	}
-	simpleui.DrawText("Rueda para desplazarte · doble clic para abrir el mapa", 610, toolY+225, 10, colors.muted)
+	simpleui.DrawText("Rueda para desplazarte · doble clic para abrir el mapa", 610, toolY+224, uiCaptionFontSize, colors.muted)
 	if status.Dropped > 0 {
 		simpleui.DrawText(fmt.Sprintf("Ciclos omitidos: %d", status.Dropped), 1390, toolY+224, uiCaptionFontSize, colors.orange)
 	} else if status.ResyncCount > 0 {
