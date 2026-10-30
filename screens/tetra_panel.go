@@ -29,6 +29,7 @@ type TETRAPanel struct {
 	topmostSwitch                                               *simpleui.Switch
 	listenSelector                                              *simpleui.Dropdown
 	clearOnlySwitch                                             *simpleui.Switch
+	allowUnconfirmedSwitch                                      *simpleui.Switch
 	destinationField                                            *simpleui.TextField
 	destinationSwitch                                           *simpleui.Switch
 	enabled                                                     bool
@@ -44,6 +45,7 @@ type TETRAPanel struct {
 	viewerDone                                                  chan struct{}
 	listenSlot                                                  int
 	clearOnly                                                   bool
+	allowUnconfirmed                                            bool
 	destinationFilterEnabled                                    bool
 	destinationFilterText                                       string
 	pendingManualTune                                           bool
@@ -78,9 +80,20 @@ func NewTETRAPanel(screen *MainScreen) *TETRAPanel {
 	p.listenSelector.OnChange(func(index int, _ string) { p.listenSlot = index; p.applyAudioPolicy() })
 	p.controls = append(p.controls, p.listenSelector)
 	p.clearOnlySwitch = simpleui.NewSwitch("tetraClearAudioOnly", 990, toolY+28, 175, 34, i18n.Source("text.21fb8da1b26a"), true, 12)
-	p.clearOnlySwitch.OnChange(func(active bool) { p.clearOnly = active; p.applyAudioPolicy() })
+	p.clearOnlySwitch.OnChange(func(active bool) {
+		p.clearOnly = active
+		if !active {
+			p.allowUnconfirmed = false
+			p.allowUnconfirmedSwitch.SetActive(false)
+		}
+		p.applyAudioPolicy()
+	})
 	p.clearOnlySwitch.SetTrackColors(colors.red, colors.green)
 	p.controls = append(p.controls, p.clearOnlySwitch)
+	p.allowUnconfirmedSwitch = simpleui.NewSwitch("tetraAllowUnconfirmed", 990, toolY+190, 300, 24, i18n.Source("text.tetraAllowUnconfirmed"), false, 10)
+	p.allowUnconfirmedSwitch.SetTrackColors(colors.panelAlt, colors.orange)
+	p.allowUnconfirmedSwitch.OnChange(func(active bool) { p.allowUnconfirmed = active; p.applyAudioPolicy() })
+	p.controls = append(p.controls, p.allowUnconfirmedSwitch)
 	p.destinationField = simpleui.NewTextField("tetraDestinations", 990, toolY+218, 300, 32, i18n.Source("text.tetraDestinationPlaceholder"), 12)
 	p.destinationField.SetMaxLength(180)
 	p.destinationField.SetText(p.destinationFilterText)
@@ -211,7 +224,7 @@ func (p *TETRAPanel) apply() {
 			p.screen.receiver.SetDemodulator(i18n.Source("text.f69d86a86926"), p.screen.frequencyHz, tetraChannelBandwidthHz)
 		}
 		p.screen.receiver.ConfigureTETRA(p.enabled)
-		p.screen.receiver.SetTETRAAudioPolicy(p.listenSlot, p.clearOnly)
+		p.screen.receiver.SetTETRAAudioPolicy(p.listenSlot, p.clearOnly, p.allowUnconfirmed)
 		p.applyDestinationFilter()
 	}
 	if p.enabled {
@@ -224,7 +237,7 @@ func (p *TETRAPanel) apply() {
 }
 func (p *TETRAPanel) applyAudioPolicy() {
 	if p.screen.receiver != nil {
-		p.screen.receiver.SetTETRAAudioPolicy(p.listenSlot, p.clearOnly)
+		p.screen.receiver.SetTETRAAudioPolicy(p.listenSlot, p.clearOnly, p.allowUnconfirmed)
 	}
 	p.applyDestinationFilter()
 	p.writeViewerSettings()
@@ -239,7 +252,7 @@ func (p *TETRAPanel) applyAudioPolicy() {
 	if p.clearOnly {
 		p.feedback += i18n.Source("text.213695e20627")
 	} else {
-		p.feedback += i18n.Source("text.6e360165a1a2")
+		p.feedback += i18n.Source("text.tetraUnknownAfterGrace")
 	}
 }
 
@@ -481,7 +494,7 @@ func (p *TETRAPanel) resumeAfterManualTune() {
 	// selected channel's stream state.
 	p.screen.receiver.SetDemodulator(i18n.Source("text.f69d86a86926"), p.screen.frequencyHz, tetraChannelBandwidthHz)
 	p.screen.receiver.ConfigureTETRA(true)
-	p.screen.receiver.SetTETRAAudioPolicy(p.listenSlot, p.clearOnly)
+	p.screen.receiver.SetTETRAAudioPolicy(p.listenSlot, p.clearOnly, p.allowUnconfirmed)
 	p.applyDestinationFilter()
 	p.nextCenter = time.Now().Add(time.Second)
 	p.nextSnapshot = time.Time{}
@@ -543,6 +556,9 @@ func (p *TETRAPanel) DrawPanel() {
 		status = p.screen.receiver.TETRAStatus()
 	}
 	simpleui.DrawTextStyled(i18n.Source("text.475e2d42303c"), toolContentX, toolY+7, 14, simpleui.FontSemiBold, colors.cyan)
+	if p.allowUnconfirmedSwitch != nil {
+		p.allowUnconfirmedSwitch.SetEnabled(p.clearOnly)
+	}
 	simpleui.DrawTextStyled(i18n.Source("text.8b5425ddae96"), 1120, toolY+76, 12, simpleui.FontSemiBold, colors.muted)
 	for i, encrypted := range status.SlotEncrypted {
 		x := float32(1139 + i*39)
@@ -561,9 +577,18 @@ func (p *TETRAPanel) DrawPanel() {
 		simpleui.DrawText(fmt.Sprintf("TS%d", i+1), x-12, toolY+119, 12, colors.text)
 	}
 	if status.ActiveAudioSlot > 0 {
-		label, color := fmt.Sprintf(i18n.Source("text.e7778a6fe59e"), status.ActiveAudioSlot), colors.orange
-		if status.AudioFrames > 0 && time.Since(status.LastAudio) < time.Second {
-			label, color = fmt.Sprintf(i18n.Source("text.666d67a4beb1"), status.ActiveAudioSlot), colors.green
+		slot := int(status.ActiveAudioSlot) - 1
+		label, color := status.LastAudioDecision, colors.orange
+		if slot >= 0 && slot < len(status.SlotEncrypted) {
+			switch status.SlotEncrypted[slot] {
+			case 0:
+				color = colors.green
+			case 1:
+				color = colors.red
+			}
+		}
+		if label == "" {
+			label = fmt.Sprintf(i18n.Source("text.e7778a6fe59e"), status.ActiveAudioSlot)
 		}
 		simpleui.DrawText(label, 1120, toolY+174, 12, color)
 	}

@@ -1778,7 +1778,12 @@
     "text.tetraDestinationInvalid": "INVALID DESTINATION LIST · AUDIO BLOCKED",
     "text.tetraDestinationEmpty": "FILTER ENABLED WITHOUT DESTINATIONS · AUDIO BLOCKED",
     "text.tetraAudioRejections": "Reject E/U/I/D/F   %d / %d / %d / %d / %d",
-    "text.tetraMACFragments": "MAC frag S/P/C/D %d/%d/%d/%d · D-NWRK %d · ERR %d"
+    "text.tetraMACFragments": "MAC frag S/P/C/D %d/%d/%d/%d · D-NWRK %d · ERR %d",
+    "text.tetraAllowUnconfirmed": "LISTEN TO UNCONFIRMED VOICE",
+    "text.tetraUnknownAfterGrace": " · UNCONFIRMED VOICE AFTER GRACE",
+    "text.tetraAudioAwaitingConfirmation": "TS%d AWAITING CONFIRMATION",
+    "text.tetraAudioPlayingUnconfirmed": "PLAYING TS%d · UNCONFIRMED",
+    "text.tetraAudioPlayingClear": "PLAYING TS%d · CLEAR"
   },
   "name": "English"
 }

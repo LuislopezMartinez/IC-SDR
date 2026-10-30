@@ -1779,6 +1779,11 @@
     "text.tetraDestinationInvalid": "LISTE DE DESTINATIONS INVALIDE · AUDIO BLOQUÉ",
     "text.tetraDestinationEmpty": "FILTRE ACTIF SANS DESTINATION · AUDIO BLOQUÉ",
     "text.tetraAudioRejections": "Rejet E/U/I/D/F   %d / %d / %d / %d / %d",
-    "text.tetraMACFragments": "Frag MAC D/P/C/R %d/%d/%d/%d · D-NWRK %d · ERR %d"
+    "text.tetraMACFragments": "Frag MAC D/P/C/R %d/%d/%d/%d · D-NWRK %d · ERR %d",
+    "text.tetraAllowUnconfirmed": "ÉCOUTER LA VOIX NON CONFIRMÉE",
+    "text.tetraUnknownAfterGrace": " · VOIX NON CONFIRMÉE APRÈS ATTENTE",
+    "text.tetraAudioAwaitingConfirmation": "TS%d EN ATTENTE DE CONFIRMATION",
+    "text.tetraAudioPlayingUnconfirmed": "LECTURE TS%d · NON CONFIRMÉ",
+    "text.tetraAudioPlayingClear": "LECTURE TS%d · EN CLAIR"
   }
 }

@@ -25,9 +25,9 @@ func (r *Receiver) ClearTETRA() {
 	r.stats.SquelchOpen = false
 	r.mu.Unlock()
 }
-func (r *Receiver) SetTETRAAudioPolicy(slot int, clearOnly bool) {
+func (r *Receiver) SetTETRAAudioPolicy(slot int, clearOnly, allowUnconfirmed bool) {
 	if r.tetra != nil {
-		r.tetra.SetAudioPolicy(slot, clearOnly)
+		r.tetra.SetAudioPolicy(slot, clearOnly, allowUnconfirmed)
 	}
 }
 func (r *Receiver) SetTETRADestinationFilter(enabled bool, destinations []uint32) {

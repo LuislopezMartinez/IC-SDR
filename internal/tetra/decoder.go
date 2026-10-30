@@ -50,7 +50,7 @@ type Status struct {
 	SlotTraffic                                            [4]int8
 	AACHValid, AACHRejected                                uint64
 	ListenSlot, ActiveAudioSlot                            int8
-	ClearAudioOnly                                         bool
+	ClearAudioOnly, AllowUnconfirmedAudio                  bool
 	AudioFrames                                            uint64
 	LastAudio                                              time.Time
 	VoiceCodecReady                                        bool
@@ -202,7 +202,9 @@ type Decoder struct {
 	aachValid, aachRejected                                uint64
 	listenSlot, activeAudioSlot                            int8
 	activeCallID                                           uint16
-	clearAudioOnly                                         bool
+	clearAudioOnly, allowUnconfirmedAudio                  bool
+	slotUnknownSince                                       [4]time.Time
+	pendingAudio                                           [4][]float32
 	destinationFilterEnabled                               bool
 	destinationFilter                                      map[uint32]bool
 	activeAudioSeen                                        time.Time
@@ -234,6 +236,10 @@ type macFragmentState struct {
 const (
 	macFragmentTimeout = 2 * time.Second
 	maxMACFragmentBits = 4096
+	// unknownAudioGrace gives MAC signalling a short opportunity to confirm
+	// clear traffic before the optional ambiguous-audio policy takes effect.
+	unknownAudioGrace      = 2 * time.Second
+	maxPendingAudioSamples = int(outputRate * 3)
 )
 
 func New(inputRate float64, codecPath string, onAudio func([]float32)) *Decoder {
@@ -255,6 +261,7 @@ func New(inputRate float64, codecPath string, onAudio func([]float32)) *Decoder 
 	}
 	d.slotTraffic = [4]int8{-1, -1, -1, -1}
 	d.slotEncryptionSeen = [4]time.Time{}
+	d.slotUnknownSince = [4]time.Time{}
 	d.activeAudioSlot, d.activeAudioSeen = 0, time.Time{}
 	d.activeCallID = 0
 	d.audioFrames, d.lastAudio = 0, time.Time{}
@@ -270,15 +277,19 @@ func New(inputRate float64, codecPath string, onAudio func([]float32)) *Decoder 
 }
 
 // SetAudioPolicy selects 0 for automatic listening or 1..4 for a fixed
-// timeslot. The policy is consumed by the TCH/ACELP audio stage.
-func (d *Decoder) SetAudioPolicy(slot int, clearOnly bool) {
+// timeslot. Confirmed encrypted traffic is always blocked. When clearOnly is
+// enabled, unknown traffic remains silent unless allowUnconfirmed is enabled
+// after a short signalling grace period.
+func (d *Decoder) SetAudioPolicy(slot int, clearOnly, allowUnconfirmed bool) {
 	if slot < 0 || slot > 4 {
 		slot = 0
 	}
 	d.mu.Lock()
 	d.listenSlot, d.clearAudioOnly = int8(slot), clearOnly
+	d.allowUnconfirmedAudio = clearOnly && allowUnconfirmed
 	d.activeAudioSlot, d.activeAudioSeen = 0, time.Time{}
 	d.activeCallID = 0
+	d.pendingAudio = [4][]float32{}
 	d.mu.Unlock()
 }
 
@@ -395,10 +406,13 @@ func (d *Decoder) Clear() {
 	}
 	d.slotTraffic = [4]int8{-1, -1, -1, -1}
 	d.slotTrafficSeen = [4]time.Time{}
+	d.slotUnknownSince = [4]time.Time{}
+	d.pendingAudio = [4][]float32{}
 	d.aachValid, d.aachRejected = 0, 0
 	d.activeAudioSlot, d.activeAudioSeen = 0, time.Time{}
 	d.activeCallID = 0
 	d.audioFrames, d.lastAudio = 0, time.Time{}
+	d.lastAudioDecision = i18n.Source("text.f23c887ad72d")
 	for _, voice := range d.voice {
 		if voice != nil {
 			voice.reset()
@@ -468,7 +482,7 @@ func (d *Decoder) Snapshot() Status {
 	if d.channelFrames > 0 {
 		fer = 100 * float32(d.channelBad) / float32(d.channelFrames)
 	}
-	return Status{Running: d.running, State: d.state, InputRate: d.rate, OutputRate: outputRate, SymbolRate: symbolRate, LevelDBFS: d.level, Quality: d.quality, FrequencyErrorHz: d.freqErr, BER: ber, FER: fer, TimingPhase: d.timingPhase, TimingError: d.timingError, Symbols: d.symbols, SyncHits: d.syncHits, NormalBursts: d.normalBursts, BSCHFailures: d.bschFailures, Dropped: d.dropped, LastSync: d.lastSync, System: d.system, Constellation: points, SlotBursts: d.slotBursts, FramedBursts: d.framedBursts, SCHValid: d.schValid, SCHCRCFailures: d.schCRCFailures, MACResources: d.macResources, MACRejected: d.macRejected, MACChannelAlloc: d.macChannelAlloc, MACEncrypted: d.macEncrypted, LLCRejected: d.llcRejected, LLCNonCMCE: d.llcNonCMCE, CMCEEvents: d.cmceEvents, LLCTypes: d.llcTypes, MLEProtocols: d.mleProtocols, LLCFragments: d.llcFragments, LLCReassembled: d.llcReassembled, MACPDUTypes: d.macPDUTypes, MACFragmentStarts: d.macFragmentStarts, MACFragmentParts: d.macFragmentParts, MACFragmentCompleted: d.macFragmentCompleted, MACFragmentDropped: d.macFragmentDropped, NeighbourBroadcasts: d.neighbourBroadcasts, NeighbourParseFailures: d.neighbourParseFailures, Network: d.network, SlotEncrypted: slotEncrypted, SlotTraffic: slotTraffic, AACHValid: d.aachValid, AACHRejected: d.aachRejected, ListenSlot: d.listenSlot, ActiveAudioSlot: activeAudioSlot, ClearAudioOnly: d.clearAudioOnly, AudioFrames: d.audioFrames, LastAudio: d.lastAudio, VoiceCodecReady: codecReady, VoiceCodecError: codecError, LastAudioDecision: d.lastAudioDecision, AudioRejectedEncrypted: d.audioRejectedEncrypted, AudioRejectedUnselected: d.audioRejectedUnselected, AudioRejectedInactive: d.audioRejectedInactive, AudioRejectedDamaged: d.audioRejectedDamaged, AudioRejectedFiltered: d.audioRejectedFiltered, DestinationFilterEnabled: d.destinationFilterEnabled, DestinationFilterCount: len(d.destinationFilter)}
+	return Status{Running: d.running, State: d.state, InputRate: d.rate, OutputRate: outputRate, SymbolRate: symbolRate, LevelDBFS: d.level, Quality: d.quality, FrequencyErrorHz: d.freqErr, BER: ber, FER: fer, TimingPhase: d.timingPhase, TimingError: d.timingError, Symbols: d.symbols, SyncHits: d.syncHits, NormalBursts: d.normalBursts, BSCHFailures: d.bschFailures, Dropped: d.dropped, LastSync: d.lastSync, System: d.system, Constellation: points, SlotBursts: d.slotBursts, FramedBursts: d.framedBursts, SCHValid: d.schValid, SCHCRCFailures: d.schCRCFailures, MACResources: d.macResources, MACRejected: d.macRejected, MACChannelAlloc: d.macChannelAlloc, MACEncrypted: d.macEncrypted, LLCRejected: d.llcRejected, LLCNonCMCE: d.llcNonCMCE, CMCEEvents: d.cmceEvents, LLCTypes: d.llcTypes, MLEProtocols: d.mleProtocols, LLCFragments: d.llcFragments, LLCReassembled: d.llcReassembled, MACPDUTypes: d.macPDUTypes, MACFragmentStarts: d.macFragmentStarts, MACFragmentParts: d.macFragmentParts, MACFragmentCompleted: d.macFragmentCompleted, MACFragmentDropped: d.macFragmentDropped, NeighbourBroadcasts: d.neighbourBroadcasts, NeighbourParseFailures: d.neighbourParseFailures, Network: d.network, SlotEncrypted: slotEncrypted, SlotTraffic: slotTraffic, AACHValid: d.aachValid, AACHRejected: d.aachRejected, ListenSlot: d.listenSlot, ActiveAudioSlot: activeAudioSlot, ClearAudioOnly: d.clearAudioOnly, AllowUnconfirmedAudio: d.allowUnconfirmedAudio, AudioFrames: d.audioFrames, LastAudio: d.lastAudio, VoiceCodecReady: codecReady, VoiceCodecError: codecError, LastAudioDecision: d.lastAudioDecision, AudioRejectedEncrypted: d.audioRejectedEncrypted, AudioRejectedUnselected: d.audioRejectedUnselected, AudioRejectedInactive: d.audioRejectedInactive, AudioRejectedDamaged: d.audioRejectedDamaged, AudioRejectedFiltered: d.audioRejectedFiltered, DestinationFilterEnabled: d.destinationFilterEnabled, DestinationFilterCount: len(d.destinationFilter)}
 }
 
 func (d *Decoder) Live(frequencyHz int64) LiveSnapshot {
@@ -749,9 +763,18 @@ func (d *Decoder) processNormalBurst(burst []byte, slot int, ndb2 bool) {
 	usage, aachOK := decodeAACH(burst, si)
 	d.mu.Lock()
 	if aachOK {
+		now := time.Now()
+		previousTraffic := d.slotTrafficSeen[slot]
 		d.aachValid++
 		d.slotTraffic[slot] = 0
 		if usage > 3 {
+			// A long gap indicates a new burst/call on this slot. Do not let
+			// the grace period or buffered samples from the previous call carry
+			// into the new one.
+			if !previousTraffic.IsZero() && now.Sub(previousTraffic) > 500*time.Millisecond {
+				d.slotUnknownSince[slot] = time.Time{}
+				d.pendingAudio[slot] = nil
+			}
 			d.slotTraffic[slot] = 1
 			// AACH identifies traffic by its usage marker. Encryption belongs to
 			// that marker, not to the timeslot where MAC-RESOURCE was received.
@@ -760,10 +783,18 @@ func (d *Decoder) processNormalBurst(burst []byte, slot int, ndb2 bool) {
 				encryption = d.usageEncrypted[usage]
 			}
 			d.slotEncrypted[slot] = encryption
-			d.slotEncryptionSeen[slot] = time.Now()
-			// In clear-only mode, unknown traffic is deliberately silent. A
-			// vocoder can produce scrambled-sounding output from encrypted TCH.
-			allowed := !d.clearAudioOnly || encryption == 0
+			d.slotEncryptionSeen[slot] = now
+			if encryption < 0 {
+				if d.slotUnknownSince[slot].IsZero() {
+					d.slotUnknownSince[slot] = now
+				}
+			} else {
+				d.slotUnknownSince[slot] = time.Time{}
+				d.pendingAudio[slot] = nil
+			}
+			// Never route known encrypted traffic. Unknown traffic may be decoded
+			// into a local short buffer while its signalling state is resolved.
+			allowed := encryption != 1
 			selected := d.listenSlot == 0 || d.listenSlot == int8(slot+1)
 			activeExpired := d.activeAudioSlot == 0 || time.Since(d.activeAudioSeen) > 1500*time.Millisecond
 			callID := d.usageCall[usage]
@@ -785,14 +816,20 @@ func (d *Decoder) processNormalBurst(burst []byte, slot int, ndb2 bool) {
 				} else if activeExpired {
 					d.activeCallID = 0
 				}
-			} else if !destinationAllowed && d.activeAudioSlot == int8(slot+1) {
+			} else if (!destinationAllowed || encryption == 1) && d.activeAudioSlot == int8(slot+1) {
 				// A new unlisted or still-unknown call reused the active slot.
 				// Revoke it immediately so audio from the previous allowed call
 				// cannot leak during the normal expiry window.
 				d.revokeDestinationLocked(slot)
 			}
 		}
-		d.slotTrafficSeen[slot] = time.Now()
+		if usage <= 3 {
+			// A valid but non-traffic AACH ends any ambiguous-audio grace
+			// window. A later call must not inherit buffered samples.
+			d.slotUnknownSince[slot] = time.Time{}
+			d.pendingAudio[slot] = nil
+		}
+		d.slotTrafficSeen[slot] = now
 	} else {
 		d.aachRejected++
 	}
@@ -817,9 +854,7 @@ func (d *Decoder) processNormalBurst(burst []byte, slot int, ndb2 bool) {
 			} else if d.activeAudioSlot != int8(slot+1) || time.Since(d.activeAudioSeen) > 5*time.Second {
 				d.audioRejectedUnselected++
 				d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.2a23a8778525"), slot+1)
-			} else if d.clearAudioOnly && d.slotEncrypted[slot] != 0 {
-				d.audioRejectedEncrypted++
-				d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.7eb6ee09206c"), slot+1)
+			} else if d.rejectEncryptedAudioLocked(slot) {
 			} else if half := descrambleBlock(coded[216:], si); half != nil {
 				voiceBits := make([]byte, 432)
 				copy(voiceBits[216:], half)
@@ -974,13 +1009,7 @@ func (d *Decoder) processVoiceLocked(coded []byte, si SystemInfo, slot int) {
 		d.rejectDestinationLocked(slot)
 		return
 	}
-	if d.clearAudioOnly && d.slotEncrypted[slot] != 0 {
-		d.audioRejectedEncrypted++
-		if d.slotEncrypted[slot] < 0 {
-			d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.9f2b662ac114"), slot+1)
-		} else {
-			d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.a77e9dacae7f"), slot+1)
-		}
+	if d.rejectEncryptedAudioLocked(slot) {
 		return
 	}
 	if d.activeAudioSlot != int8(slot+1) || time.Since(d.activeAudioSeen) > 5*time.Second {
@@ -1011,10 +1040,85 @@ func (d *Decoder) processVoiceBitsLocked(type4 []byte, slot int, stolen bool) {
 		d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.1623e5216486"), slot+1)
 		return
 	}
-	d.audioFrames++
-	d.lastAudio = time.Now()
-	d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.666d67a4beb1"), slot+1)
-	d.onAudio(pcm)
+	d.emitAudioLocked(slot, pcm)
+}
+
+type audioRoute uint8
+
+const (
+	audioRouteClear audioRoute = iota
+	audioRoutePending
+	audioRouteUnconfirmed
+	audioRouteEncrypted
+)
+
+// audioRouteLocked deliberately fails closed for confirmed encryption. A
+// short pending state lets the receiver retain the beginning of a clear call
+// while MAC signalling catches up, without exposing it to the speaker.
+func (d *Decoder) audioRouteLocked(slot int) audioRoute {
+	if slot < 0 || slot >= len(d.slotEncrypted) {
+		return audioRouteEncrypted
+	}
+	switch d.slotEncrypted[slot] {
+	case 0:
+		return audioRouteClear
+	case 1:
+		return audioRouteEncrypted
+	}
+	if d.slotUnknownSince[slot].IsZero() {
+		d.slotUnknownSince[slot] = time.Now()
+	}
+	if time.Since(d.slotUnknownSince[slot]) < unknownAudioGrace {
+		return audioRoutePending
+	}
+	if !d.clearAudioOnly || d.allowUnconfirmedAudio {
+		return audioRouteUnconfirmed
+	}
+	return audioRoutePending
+}
+
+func (d *Decoder) rejectEncryptedAudioLocked(slot int) bool {
+	if d.audioRouteLocked(slot) != audioRouteEncrypted {
+		return false
+	}
+	d.pendingAudio[slot] = nil
+	d.audioRejectedEncrypted++
+	d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.a77e9dacae7f"), slot+1)
+	return true
+}
+
+func (d *Decoder) appendPendingAudioLocked(slot int, pcm []float32) {
+	if len(pcm) == 0 {
+		return
+	}
+	d.pendingAudio[slot] = append(d.pendingAudio[slot], pcm...)
+	if excess := len(d.pendingAudio[slot]) - maxPendingAudioSamples; excess > 0 {
+		copy(d.pendingAudio[slot], d.pendingAudio[slot][excess:])
+		d.pendingAudio[slot] = d.pendingAudio[slot][:maxPendingAudioSamples]
+	}
+}
+
+func (d *Decoder) emitAudioLocked(slot int, pcm []float32) {
+	switch d.audioRouteLocked(slot) {
+	case audioRouteEncrypted:
+		d.rejectEncryptedAudioLocked(slot)
+	case audioRoutePending:
+		d.appendPendingAudioLocked(slot, pcm)
+		d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.tetraAudioAwaitingConfirmation"), slot+1)
+	case audioRouteClear, audioRouteUnconfirmed:
+		if pending := d.pendingAudio[slot]; len(pending) > 0 {
+			d.onAudio(pending)
+			d.pendingAudio[slot] = nil
+		}
+		d.audioFrames++
+		d.lastAudio = time.Now()
+		if d.audioRouteLocked(slot) == audioRouteUnconfirmed {
+			d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.tetraAudioPlayingUnconfirmed"), slot+1)
+		} else {
+			d.lastAudioDecision = fmt.Sprintf(i18n.Source("text.tetraAudioPlayingClear"), slot+1)
+		}
+		d.onAudio(pcm)
+	}
 }
 
 func (d *Decoder) recordChannelResultLocked(ok bool, errors, bits int) {

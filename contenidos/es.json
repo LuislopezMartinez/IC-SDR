@@ -1779,6 +1779,11 @@
     "text.tetraDestinationInvalid": "LISTA DE DESTINOS NO VÁLIDA · AUDIO BLOQUEADO",
     "text.tetraDestinationEmpty": "FILTRO ACTIVO SIN DESTINOS · AUDIO BLOQUEADO",
     "text.tetraAudioRejections": "Rechazo E/U/I/D/F   %d / %d / %d / %d / %d",
-    "text.tetraMACFragments": "MAC frag I/P/C/D %d/%d/%d/%d · D-NWRK %d · ERR %d"
+    "text.tetraMACFragments": "MAC frag I/P/C/D %d/%d/%d/%d · D-NWRK %d · ERR %d",
+    "text.tetraAllowUnconfirmed": "ESCUCHAR VOZ NO CONFIRMADA",
+    "text.tetraUnknownAfterGrace": " · VOZ NO CONFIRMADA TRAS ESPERA",
+    "text.tetraAudioAwaitingConfirmation": "TS%d ESPERANDO CONFIRMACIÓN",
+    "text.tetraAudioPlayingUnconfirmed": "REPRODUCIENDO TS%d · NO CONFIRMADO",
+    "text.tetraAudioPlayingClear": "REPRODUCIENDO TS%d · ABIERTO"
   }
 }

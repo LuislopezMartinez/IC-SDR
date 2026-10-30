@@ -1778,7 +1778,12 @@
     "text.tetraDestinationInvalid": "UNGÜLTIGE ZIELLISTE · AUDIO GESPERRT",
     "text.tetraDestinationEmpty": "FILTER OHNE ZIELE AKTIV · AUDIO GESPERRT",
     "text.tetraAudioRejections": "Abgelehnt E/U/I/D/F   %d / %d / %d / %d / %d",
-    "text.tetraMACFragments": "MAC-Frag S/T/F/V %d/%d/%d/%d · D-NWRK %d · FEHLER %d"
+    "text.tetraMACFragments": "MAC-Frag S/T/F/V %d/%d/%d/%d · D-NWRK %d · FEHLER %d",
+    "text.tetraAllowUnconfirmed": "UNBESTÄTIGTE SPRACHE HÖREN",
+    "text.tetraUnknownAfterGrace": " · UNBESTÄTIGTE SPRACHE NACH WARTEZEIT",
+    "text.tetraAudioAwaitingConfirmation": "TS%d WARTET AUF BESTÄTIGUNG",
+    "text.tetraAudioPlayingUnconfirmed": "TS%d WIRD UNBESTÄTIGT WIEDERGEGEBEN",
+    "text.tetraAudioPlayingClear": "TS%d WIRD KLAR WIEDERGEGEBEN"
   },
   "name": "Deutsch"
 }
