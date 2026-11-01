@@ -28,6 +28,23 @@ func TestCaptureStallDetection(t *testing.T) {
 	}
 }
 
+func TestWaitForShutdownChannelIsBounded(t *testing.T) {
+	ready := make(chan struct{})
+	close(ready)
+	if !waitForShutdownChannel(ready, time.Now().Add(time.Second)) {
+		t.Fatal("closed shutdown channel was not observed")
+	}
+
+	blocked := make(chan struct{})
+	started := time.Now()
+	if waitForShutdownChannel(blocked, started.Add(20*time.Millisecond)) {
+		t.Fatal("blocked shutdown channel reported completion")
+	}
+	if elapsed := time.Since(started); elapsed > 250*time.Millisecond {
+		t.Fatalf("shutdown wait was not bounded: %s", elapsed)
+	}
+}
+
 func TestCanTuneWithinCaptureKeepsGuardAtIQEdges(t *testing.T) {
 	receiver := NewReceiver(Config{FrequencyHz: 393_925_000, SampleRate: 2_048_000, FFTSize: 4096})
 	if !receiver.CanTuneWithinCapture(394_425_000, 12_500) {

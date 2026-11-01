@@ -232,7 +232,16 @@ func (r *AudioRecorder) DeleteFile(path string) error {
 	return nil
 }
 
-func (r *AudioRecorder) Close() { r.Stop(); close(r.queue); <-r.done }
+func (r *AudioRecorder) Close() {
+	r.Stop()
+	close(r.queue)
+	select {
+	case <-r.done:
+	case <-time.After(4 * time.Second):
+		// A slow or stuck LAME process must not keep IC-SDR and the updater alive.
+		// The intermediate WAV remains recoverable in the recordings directory.
+	}
+}
 
 func (r *AudioRecorder) enqueueLocked(samples []int16) {
 	copySamples := append([]int16(nil), samples...)

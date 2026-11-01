@@ -1,6 +1,7 @@
 package pocsag
 
 import (
+	"bytes"
 	"encoding/json"
 	"math"
 	"os"
@@ -20,6 +21,21 @@ func TestParseFLEXEvent(t *testing.T) {
 	e, ok := ParseEvent([]byte(`{"demod_name":"flex_alphanumeric","capcode":1120103,"sync_baud":1600,"sync_level":2,"phase_number":"A","cycle_number":9,"frame_number":49,"message":"PRUEBA FLEX"}`))
 	if !ok || e.Protocol != ProtocolFLEX || e.Address != 1120103 || e.Baud != 1600 || e.Kind != "ALFA" || e.Message != "PRUEBA FLEX" || e.Phase != "A" || e.Cycle != 9 || e.Frame != 49 {
 		t.Fatalf("unexpected FLEX event: %+v, %v", e, ok)
+	}
+}
+
+func TestParseFLEXNextEvent(t *testing.T) {
+	e, ok := ParseEvent([]byte(`{"baud":1600,"level":2,"phase":"B","cycle":10,"frame":51,"capcode":1120103,"msg_type":"alphanumeric","type_tag":"ALN","addr_type":"S","message":"PRUEBA FLEX_NEXT"}`))
+	if !ok || e.Protocol != ProtocolFLEX || e.Address != 1120103 || e.Baud != 1600 || e.SyncLevel != 2 || e.Kind != "ALFA" || e.Message != "PRUEBA FLEX_NEXT" || e.Phase != "B" || e.Cycle != 10 || e.Frame != 51 {
+		t.Fatalf("unexpected FLEX_NEXT event: %+v, %v", e, ok)
+	}
+}
+
+func TestParseFLEXNextRejectsTelemetry(t *testing.T) {
+	for _, kind := range []string{"biw_sysid", "instruction", "binary", "bch_stats"} {
+		if event, ok := ParseEvent([]byte(`{"baud":1600,"msg_type":"` + kind + `","message":"diagnostic"}`)); ok {
+			t.Fatalf("accepted FLEX_NEXT telemetry %q: %+v", kind, event)
+		}
 	}
 }
 
@@ -90,5 +106,17 @@ func TestResamplerMaintainsRateAcrossChunks(t *testing.T) {
 	}
 	if total < 22045 || total > 22055 {
 		t.Fatalf("unexpected output sample count: %d", total)
+	}
+}
+
+func TestWritePCMUsesSignedLittleEndian(t *testing.T) {
+	d := New("")
+	var output bytes.Buffer
+	if !d.writePCM(&output, []int16{-32768, 0, 32767}) {
+		t.Fatal("writePCM rejected a valid writer")
+	}
+	want := []byte{0x00, 0x80, 0x00, 0x00, 0xff, 0x7f}
+	if !bytes.Equal(output.Bytes(), want) {
+		t.Fatalf("unexpected PCM payload: %x", output.Bytes())
 	}
 }

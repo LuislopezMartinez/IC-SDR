@@ -88,6 +88,10 @@ func main() {
 		screens.RunDistanceMap()
 		return
 	}
+	if len(os.Args) == 3 && os.Args[1] == "--world-clock-map" {
+		screens.RunWorldClockMap(os.Args[2])
+		return
+	}
 	if len(os.Args) == 3 && os.Args[1] == "--qrz-distance-map" {
 		screens.RunQRZDistanceMap(os.Args[2])
 		return
@@ -192,12 +196,24 @@ func main() {
 	} else {
 		startupStep("%s", i18n.Source("text.fc31cbf5a67f"))
 	}
-	defer receiver.Close()
-
 	startupStep("%s", i18n.Source("text.f0d082de2f44"))
-	mainScreen := screens.NewMainScreen(receiver)
+	var mainScreen *screens.MainScreen
+	var closeApplicationOnce sync.Once
+	closeApplication := func() {
+		closeApplicationOnce.Do(func() {
+			stopForcedExit := startShutdownWatchdog(12*time.Second, func() { os.Exit(0) })
+			defer stopForcedExit()
+			if mainScreen != nil {
+				mainScreen.Close()
+			}
+			receiver.Close()
+		})
+	}
+	defer closeApplication()
+
+	mainScreen = screens.NewMainScreen(receiver)
+	mainScreen.SetShutdownLogger(startupStep)
 	startupStep("%s", i18n.Source("text.37c3e3da83c9"))
-	defer mainScreen.Close()
 	startupStep("%s", i18n.Source("text.5f0bca1a6790"))
 	mainScreen.CreateControls()
 	auditScreenshot := strings.TrimSpace(os.Getenv("IC_SDR_AUDIT_SCREENSHOT"))
@@ -235,6 +251,7 @@ func main() {
 			}
 		}
 	})
+	closeApplication()
 	startupStep("%s", i18n.Source("text.b7ad813982af"))
 }
 
@@ -292,6 +309,26 @@ func startStartupWatchdog() func() {
 		}
 	}()
 	return func() { once.Do(func() { close(done) }) }
+}
+
+func startShutdownWatchdog(timeout time.Duration, forceExit func()) func() {
+	var once sync.Once
+	var cancelled atomic.Bool
+	timer := time.AfterFunc(timeout, func() {
+		if cancelled.Load() {
+			return
+		}
+		startupStep("CIERRE: tiempo agotado después de %s; Windows finalizará IC-SDR para liberar el SDR", timeout)
+		if forceExit != nil && !cancelled.Load() {
+			forceExit()
+		}
+	})
+	return func() {
+		once.Do(func() {
+			cancelled.Store(true)
+			timer.Stop()
+		})
+	}
 }
 
 func logPortableResources() {

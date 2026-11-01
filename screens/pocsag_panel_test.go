@@ -2,6 +2,7 @@ package screens
 
 import (
 	"testing"
+	"time"
 
 	"go-zero/internal/pocsag"
 )
@@ -18,6 +19,20 @@ func TestPOCSAGPresetRecentersAndUsesNarrowFM(t *testing.T) {
 	}
 	if screen.spanHz < 500_000 {
 		t.Fatalf("preset did not expose enough spectrum: %d", screen.spanHz)
+	}
+}
+
+func TestPagingSelectionSurvivesNewMessages(t *testing.T) {
+	selectedAt := time.Unix(100, 1)
+	panel := &POCSAGPanel{
+		selected:   0,
+		selectedAt: selectedAt,
+		status:     pocsag.Status{Events: []pocsag.Event{{Received: selectedAt, Address: 1}}},
+	}
+	panel.status.Events = append([]pocsag.Event{{Received: time.Unix(101, 1), Address: 2}}, panel.status.Events...)
+	panel.reconcileSelection()
+	if panel.selected != 1 || panel.status.Events[panel.selected].Address != 1 {
+		t.Fatalf("selection moved to a new message: index=%d events=%+v", panel.selected, panel.status.Events)
 	}
 }
 

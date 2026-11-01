@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"go-zero/internal/sdr"
@@ -240,6 +241,7 @@ type MainScreen struct {
 	datvPanel              *DATVPanel
 	digitalVoicePanel      *DigitalVoicePanel
 	voacapPanel            *VOACAPPanel
+	worldClockPanel        *WorldClockPanel
 	contestLogPanel        *ContestLogPanel
 	aprsPanel              *APRSPanel
 	aprsView               string
@@ -292,6 +294,8 @@ type MainScreen struct {
 	settingsDirty          bool
 	nextSettingsSave       time.Time
 	savedHardware          *sdr.HardwareSettings
+	shutdownLog            func(string, ...any)
+	closeOnce              sync.Once
 }
 
 func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
@@ -545,6 +549,7 @@ func (screen *MainScreen) CreateControls() {
 	screen.utilitiesSidebar = NewUtilitiesSidebar(screen)
 	screen.digitalVoicePanel = NewDigitalVoicePanel(screen)
 	screen.voacapPanel = NewVOACAPPanel(screen)
+	screen.worldClockPanel = NewWorldClockPanel(screen)
 	screen.contestLogPanel = NewContestLogPanel(screen)
 	screen.audioPlayer.SetVolume(volumePercentToGain(screen.volume))
 	screen.audioPlayer.SetMuted(screen.muted)
@@ -604,6 +609,9 @@ func (screen *MainScreen) CreateControls() {
 		simpleui.Add(element)
 	}
 	for _, element := range screen.voacapPanel.controls {
+		simpleui.Add(element)
+	}
+	for _, element := range screen.worldClockPanel.controls {
 		simpleui.Add(element)
 	}
 	for _, element := range screen.contestLogPanel.controls {
@@ -805,6 +813,9 @@ func (screen *MainScreen) Draw() {
 	if screen.voacapPanel != nil {
 		screen.voacapPanel.Tick()
 	}
+	if screen.worldClockPanel != nil {
+		screen.worldClockPanel.Tick()
+	}
 	if screen.contestLogPanel != nil {
 		screen.contestLogPanel.Tick()
 	}
@@ -848,7 +859,32 @@ func (screen *MainScreen) shouldDrawWaterfall() bool {
 	return screen.activeTool != i18n.Source("text.a8cbb160caa6") && screen.activeTool != i18n.Source("text.820d4685bc9d")
 }
 
+func (screen *MainScreen) SetShutdownLogger(logger func(string, ...any)) {
+	screen.shutdownLog = logger
+}
+
+func (screen *MainScreen) shutdownStep(format string, args ...any) {
+	if screen.shutdownLog != nil {
+		screen.shutdownLog("CIERRE: "+format, args...)
+	}
+}
+
 func (screen *MainScreen) Close() {
+	screen.closeOnce.Do(screen.close)
+}
+
+func (screen *MainScreen) close() {
+	screen.shutdownStep("guardando configuración")
+	screen.flushSettings(true)
+	// Release the exclusive hardware before viewers, MP3 encoding or network
+	// services. If a secondary component stalls, other SDR applications and the
+	// updater must not remain blocked behind it.
+	if screen.receiver != nil {
+		screen.shutdownStep("deteniendo receptor y liberando dispositivo SDR")
+		screen.receiver.Close()
+		screen.shutdownStep("cierre del receptor finalizado")
+	}
+	screen.shutdownStep("cerrando herramientas y visores")
 	if screen.memoryPanel != nil {
 		screen.memoryPanel.Close()
 	}
@@ -870,8 +906,11 @@ func (screen *MainScreen) Close() {
 	if screen.qrzPanel != nil {
 		screen.qrzPanel.Close()
 	}
-	screen.flushSettings(true)
+	if screen.worldClockPanel != nil {
+		screen.worldClockPanel.Close()
+	}
 	simpleui.SetActivationFeedback(nil)
+	screen.shutdownStep("cerrando audio y grabador")
 	if screen.uiSounds != nil {
 		screen.uiSounds.Close()
 	}
@@ -922,6 +961,7 @@ func (screen *MainScreen) Close() {
 	if screen.satellitePanel != nil {
 		screen.satellitePanel.Close()
 	}
+	screen.shutdownStep("cierre ordenado completado")
 }
 
 func (screen *MainScreen) applySquelch() {
@@ -1384,6 +1424,10 @@ func (screen *MainScreen) drawLowerWorkspaceContent(outerScale float32) {
 		screen.voacapPanel.DrawPanel()
 		return
 	}
+	if screen.activeTool == worldClockToolID {
+		screen.worldClockPanel.DrawPanel()
+		return
+	}
 	if screen.activeTool == contestLogToolID {
 		screen.contestLogPanel.DrawPanel()
 		return
@@ -1475,6 +1519,7 @@ func (screen *MainScreen) toolWorkspaceElements() []simpleui.Element {
 	appendControls(screen.datvPanel.controls)
 	appendControls(screen.digitalVoicePanel.controls)
 	appendControls(screen.voacapPanel.controls)
+	appendControls(screen.worldClockPanel.controls)
 	appendControls(screen.contestLogPanel.controls)
 	appendControls(screen.aprsPanel.controls)
 	appendControls(screen.rtl433Panel.controls)
@@ -1816,6 +1861,9 @@ func (screen *MainScreen) selectTool(tool string) {
 			screen.voacapPanel.Enter()
 		}
 	}
+	if screen.worldClockPanel != nil {
+		screen.worldClockPanel.SetVisible(tool == worldClockToolID)
+	}
 	if screen.contestLogPanel != nil {
 		screen.contestLogPanel.SetVisible(tool == contestLogToolID)
 		if tool == contestLogToolID && previous != contestLogToolID {
@@ -1956,6 +2004,9 @@ func (screen *MainScreen) setViewMode(mode int) {
 	}
 	if screen.voacapPanel != nil {
 		screen.voacapPanel.SetVisible(showTool && screen.activeTool == voacapToolID)
+	}
+	if screen.worldClockPanel != nil {
+		screen.worldClockPanel.SetVisible(showTool && screen.activeTool == worldClockToolID)
 	}
 	if screen.contestLogPanel != nil {
 		screen.contestLogPanel.SetVisible(showTool && screen.activeTool == contestLogToolID)

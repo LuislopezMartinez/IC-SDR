@@ -31,6 +31,7 @@ import (
 const (
 	demodulatedAudioSampleRate = 48_000
 	captureStallThreshold      = 4 * time.Second
+	shutdownCaptureTimeout     = 2 * time.Second
 )
 
 type Config struct {
@@ -457,6 +458,7 @@ func (receiver *Receiver) trace(format string, args ...any) {
 func (receiver *Receiver) Close() {
 	receiver.closed.Store(true)
 	receiver.closeOnce.Do(func() {
+		receiver.trace("CIERRE SDR: deteniendo supervisor")
 		select {
 		case <-receiver.monitorStop:
 		default:
@@ -465,11 +467,15 @@ func (receiver *Receiver) Close() {
 		if receiver.monitorStarted.Load() {
 			select {
 			case <-receiver.monitorDone:
-			case <-time.After(6 * time.Second):
+			case <-time.After(2 * time.Second):
+				receiver.trace("CIERRE SDR: el supervisor no respondió a tiempo")
 			}
 		}
 		receiver.startMu.Lock()
 		defer receiver.startMu.Unlock()
+		receiver.trace("CIERRE SDR: deteniendo captura")
+		receiver.stopCaptureForShutdownLocked(shutdownCaptureTimeout)
+		receiver.trace("CIERRE SDR: deteniendo decodificadores")
 		if receiver.dmr != nil {
 			receiver.dmr.Stop()
 		}
@@ -510,8 +516,57 @@ func (receiver *Receiver) Close() {
 			receiver.tetra.Close()
 		}
 		_ = receiver.StopTETRAPOLRuntime()
-		receiver.stopCaptureLocked()
+		receiver.trace("CIERRE SDR: completado")
 	})
+}
+
+func waitForShutdownChannel(channel <-chan struct{}, deadline time.Time) bool {
+	if channel == nil {
+		return true
+	}
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return false
+	}
+	timer := time.NewTimer(remaining)
+	defer timer.Stop()
+	select {
+	case <-channel:
+		return true
+	case <-timer.C:
+		return false
+	}
+}
+
+func (receiver *Receiver) stopCaptureForShutdownLocked(timeout time.Duration) {
+	captureStopped, tunerStopped := true, true
+	if receiver.running.Swap(false) {
+		close(receiver.stop)
+		if receiver.device != nil {
+			receiver.device.interrupt()
+		}
+		deadline := time.Now().Add(timeout)
+		captureStopped = waitForShutdownChannel(receiver.done, deadline)
+		tunerStopped = waitForShutdownChannel(receiver.tuneDone, deadline)
+		if !captureStopped || !tunerStopped {
+			receiver.trace("CIERRE SDR: timeout esperando captura=%v sintonizador=%v", captureStopped, tunerStopped)
+		}
+	}
+	if receiver.device != nil {
+		if captureStopped && tunerStopped {
+			receiver.device.close()
+		} else {
+			// A native driver call is still active. Do not race it with closeStream;
+			// returning lets the process-level shutdown watchdog unload the driver.
+			receiver.trace("CIERRE SDR: cierre nativo delegado a la terminación del proceso")
+		}
+		receiver.device = nil
+	}
+	receiver.mu.Lock()
+	receiver.hardware.Available = false
+	receiver.stats.Device = ""
+	receiver.stats.Status = i18n.Source("text.b22e84b281cb")
+	receiver.mu.Unlock()
 }
 
 func (receiver *Receiver) Snapshot(destination []float32) Stats {
@@ -1257,9 +1312,10 @@ func (receiver *Receiver) processAudio(iq []float32) {
 	if receiver.ft8 != nil {
 		receiver.ft8.ProcessAudio(samples)
 	}
-	// POCSAG consumes discriminator audio before squelch and speaker filters.
-	if receiver.pocsag != nil {
-		receiver.pocsag.ProcessAudio(samples)
+	// Paging decoders consume the clean NFM discriminator. Speaker high-pass,
+	// de-emphasis, dynamics and squelch would deform the FSK symbols.
+	if receiver.pocsag != nil && mode == "NFM" {
+		receiver.pocsag.ProcessAudio(receiver.nfm.DecoderAudio())
 	}
 	receiver.mu.Lock()
 	if receiver.dabPlaybackEnabled {

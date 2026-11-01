@@ -25,6 +25,7 @@ type toolMenuItem struct {
 
 var toolMenuItems = []toolMenuItem{
 	{id: "DISTANCE_MAP", label: i18n.Source("text.3bd35969d3d1"), art: "menu-card-distance.png", row: 2},
+	{id: worldClockToolID, label: "HORA INTERNACIONAL", row: 2},
 	{id: qrzToolID, label: "QRZ CALLBOOK", art: "menu-card-qrz.png", row: 2},
 	{id: omniRigToolID, label: "OMNIRIG CAT", icon: "menu-omnirig.png", art: "menu-card-omnirig.png", row: 2},
 	{id: contestLogToolID, label: i18n.Source("text.log0037"), art: "menu-card-contest.png", row: 2},
@@ -697,6 +698,48 @@ func (menu *ToolMenu) drawCustomIcon(id string, center rl.Vector2, active bool, 
 		}
 		rl.DrawTriangle(rl.Vector2{X: center.X + 12, Y: center.Y - 10}, rl.Vector2{X: center.X + 12, Y: center.Y + 12}, rl.Vector2{X: center.X + 30, Y: center.Y + 1}, colors.orange)
 		rl.DrawLineEx(rl.Vector2{X: center.X - 18, Y: center.Y + 27}, rl.Vector2{X: center.X + 18, Y: center.Y + 27}, 3, colors.muted)
+	case worldClockToolID:
+		// A cyan world dial with a superimposed ivory clock remains immediately
+		// recognizable in both the large carousel and the small quick-select rail.
+		globeCenter := rl.Vector2{X: center.X - 12, Y: center.Y - 3}
+		globeRadius := float32(31)
+		globeFill := rl.Color{R: 4, G: 28, B: 42, A: 255}
+		rl.DrawCircleV(rl.Vector2{X: globeCenter.X + 2, Y: globeCenter.Y + 3}, globeRadius+3, rl.Color{A: 105})
+		rl.DrawCircleV(globeCenter, globeRadius, globeFill)
+		rl.DrawCircleLines(int32(globeCenter.X), int32(globeCenter.Y), globeRadius, accent)
+		rl.DrawCircleLines(int32(globeCenter.X), int32(globeCenter.Y), globeRadius-3, rl.Color{R: accent.R, G: accent.G, B: accent.B, A: 105})
+		rl.DrawEllipseLines(int32(globeCenter.X), int32(globeCenter.Y), 13, globeRadius-3, accent)
+		rl.DrawEllipseLines(int32(globeCenter.X), int32(globeCenter.Y), globeRadius-3, 11, colors.muted)
+		rl.DrawLineEx(rl.Vector2{X: globeCenter.X - globeRadius + 4, Y: globeCenter.Y}, rl.Vector2{X: globeCenter.X + globeRadius - 4, Y: globeCenter.Y}, 1.5, accent)
+		// Abstract land shapes add enough asymmetry to read as a globe without
+		// becoming noisy at thumbnail size.
+		land := rl.Color{R: 73, G: 190, B: 177, A: 215}
+		rl.DrawTriangle(rl.Vector2{X: globeCenter.X - 19, Y: globeCenter.Y - 16}, rl.Vector2{X: globeCenter.X - 4, Y: globeCenter.Y - 20}, rl.Vector2{X: globeCenter.X - 11, Y: globeCenter.Y - 4}, land)
+		rl.DrawTriangle(rl.Vector2{X: globeCenter.X - 12, Y: globeCenter.Y - 4}, rl.Vector2{X: globeCenter.X - 2, Y: globeCenter.Y + 2}, rl.Vector2{X: globeCenter.X - 7, Y: globeCenter.Y + 15}, land)
+		rl.DrawTriangle(rl.Vector2{X: globeCenter.X + 7, Y: globeCenter.Y - 13}, rl.Vector2{X: globeCenter.X + 22, Y: globeCenter.Y - 5}, rl.Vector2{X: globeCenter.X + 12, Y: globeCenter.Y + 3}, land)
+
+		clockCenter := rl.Vector2{X: center.X + 23, Y: center.Y + 14}
+		clockRadius := float32(24)
+		brass := rl.Color{R: 218, G: 158, B: 61, A: 255}
+		ivory := rl.Color{R: 239, G: 239, B: 224, A: 255}
+		rl.DrawCircleV(rl.Vector2{X: clockCenter.X + 2, Y: clockCenter.Y + 3}, clockRadius+3, rl.Color{A: 130})
+		rl.DrawCircleV(clockCenter, clockRadius+3, brass)
+		rl.DrawCircleV(clockCenter, clockRadius, ivory)
+		for tick := 0; tick < 12; tick++ {
+			angle := float64(tick)*math.Pi/6 - math.Pi/2
+			outer := rl.Vector2{X: clockCenter.X + float32(math.Cos(angle))*20, Y: clockCenter.Y + float32(math.Sin(angle))*20}
+			inner := rl.Vector2{X: clockCenter.X + float32(math.Cos(angle))*16, Y: clockCenter.Y + float32(math.Sin(angle))*16}
+			rl.DrawLineEx(inner, outer, 1.8, rl.Color{R: 28, G: 38, B: 42, A: 255})
+		}
+		hand := rl.Color{R: 25, G: 34, B: 38, A: 255}
+		rl.DrawLineEx(clockCenter, rl.Vector2{X: clockCenter.X, Y: clockCenter.Y - 13}, 3, hand)
+		rl.DrawLineEx(clockCenter, rl.Vector2{X: clockCenter.X + 11, Y: clockCenter.Y + 6}, 3, hand)
+		rl.DrawLineEx(clockCenter, rl.Vector2{X: clockCenter.X - 8, Y: clockCenter.Y + 10}, 1.3, colors.red)
+		rl.DrawCircleV(clockCenter, 3, colors.red)
+		// A short amber orbit suggests the relationship between longitude and
+		// local time without adding text inside the icon.
+		rl.DrawLineEx(rl.Vector2{X: center.X - 42, Y: center.Y + 31}, rl.Vector2{X: center.X + 2, Y: center.Y + 31}, 2, colors.orange)
+		rl.DrawCircleV(rl.Vector2{X: center.X - 42, Y: center.Y + 31}, 3, colors.orange)
 	case qrzToolID:
 		rl.DrawCircleLines(int32(center.X-17), int32(center.Y), 27, accent)
 		rl.DrawEllipseLines(int32(center.X-17), int32(center.Y), 11, 27, colors.muted)

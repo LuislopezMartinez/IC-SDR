@@ -225,8 +225,13 @@ func (service *WebServer) Close() error {
 		}
 		if service.opusStop != nil {
 			close(service.opusStop)
-			<-service.opusDone
-			service.opus.Close()
+			select {
+			case <-service.opusDone:
+				service.opus.Close()
+			case <-time.After(2 * time.Second):
+				// Do not close a native encoder that may still be executing. The
+				// process shutdown watchdog owns the final fallback.
+			}
 		}
 	})
 	return err

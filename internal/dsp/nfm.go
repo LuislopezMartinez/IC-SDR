@@ -16,6 +16,7 @@ type NFMDemodulator struct {
 	wideWrite                           int
 	output                              []float32
 	subaudible                          []float32
+	decoderAudio                        []float32
 }
 
 func NewNFMDemodulator(inputRate, outputRate float64) *NFMDemodulator {
@@ -75,6 +76,7 @@ func (demod *NFMDemodulator) ProcessWide(iq []float32, frequencyOffsetHz float64
 func (demod *NFMDemodulator) process(iq []float32, frequencyOffsetHz float64, bandwidthHz, deemphasisUs int, wide bool) []float32 {
 	demod.output = demod.output[:0]
 	demod.subaudible = demod.subaudible[:0]
+	demod.decoderAudio = demod.decoderAudio[:0]
 	bandwidthHz = max(bandwidthHz, 5000)
 	if deemphasisUs != 75 {
 		deemphasisUs = 50
@@ -127,6 +129,13 @@ func (demod *NFMDemodulator) process(iq []float32, frequencyOffsetHz float64, ba
 		if wide {
 			discriminator = demod.filteredWide()
 		}
+		// Paging decoders need the discriminator before the speaker path applies
+		// its high-pass, de-emphasis, AGC, compressor and limiter. Express the
+		// instantaneous deviation against a stable 5 kHz peak reference so the
+		// decoder input level does not change with the selected NFM bandwidth.
+		if !wide {
+			demod.decoderAudio = append(demod.decoderAudio, discriminator*deviationHz/5000)
+		}
 		demod.highpass = discriminator - demod.previousAudio + highpassR*demod.highpass
 		demod.previousAudio = discriminator
 		demod.subaudible = append(demod.subaudible, discriminator)
@@ -157,6 +166,8 @@ func (demod *NFMDemodulator) processWideDynamics(sample float32) float32 {
 }
 
 func (demod *NFMDemodulator) Subaudible() []float32 { return demod.subaudible }
+
+func (demod *NFMDemodulator) DecoderAudio() []float32 { return demod.decoderAudio }
 
 func (demod *NFMDemodulator) processDynamics(sample float32) float32 {
 	power := sample * sample

@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.26.1](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.26.1)**
+**Versión actual: [v0.27.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.27.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -51,9 +51,21 @@ IC-SDR integra herramientas para recibir y visualizar:
 
 ![Visor completo del registro de concurso, con edición y exportación](docs/images/ic-sdr-contest-log-viewer.png)
 
+![Herramienta Hora internacional: cinco relojes configurables junto al receptor](docs/images/ic-sdr-hora-internacional.png)
+
+![Selector de ubicación de cada reloj: pin sobre el mapa, zona horaria IANA y etiqueta editable](docs/images/ic-sdr-hora-internacional-ubicacion.png)
+
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio en directo de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.27.0
+
+- Nueva herramienta **Hora internacional**, con cinco relojes configurables, hora UTC y local, ajuste automático del horario de verano y selección de cada ubicación desde un mapa.
+- El selector de ubicación muestra coordenadas, zona horaria IANA exacta y una ciudad sugerida; funciona sin servicios externos de geolocalización.
+- POCSAG/FLEX: señal de discriminador NFM dedicada para conservar los símbolos, mayor tolerancia a picos de carga y lectura completa del mensaje seleccionado.
+- Cierre de SDR, grabador y servidor web reforzado para que procesos nativos lentos no bloqueen la salida ni una actualización posterior.
+- Ajustes de legibilidad en SSTV y correcciones de regresión en audio, recepción y controles.
 
 ## Novedades de v0.26.1
 

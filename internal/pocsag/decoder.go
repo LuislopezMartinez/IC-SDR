@@ -17,9 +17,11 @@ import (
 )
 
 const (
-	InputRate  = 48_000
-	OutputRate = 22_050
-	maxEvents  = 2_000
+	InputRate           = 48_000
+	OutputRate          = 22_050
+	maxEvents           = 2_000
+	pagingQueueCapacity = 256
+	pagingWriteSamples  = InputRate / 50 // 20 ms per pipe write.
 )
 
 type Protocol string
@@ -166,7 +168,9 @@ func (d *Decoder) start() {
 	generation := d.generation
 	d.cmd, d.stdin = cmd, stdin
 	d.releaseProcess = releaseProcess
-	d.queue, d.stop, d.done = make(chan []float32, 12), make(chan struct{}), make(chan struct{})
+	// SDR reads arrive roughly every few milliseconds. Keep enough headroom for
+	// normal scheduler and pipe jitter without silently dropping FLEX symbols.
+	d.queue, d.stop, d.done = make(chan []float32, pagingQueueCapacity), make(chan struct{}), make(chan struct{})
 	d.state, d.lastError = "ESCUCHANDO", ""
 	d.mu.Unlock()
 	d.running.Store(true)
@@ -207,6 +211,7 @@ func (d *Decoder) writer(generation uint64) {
 	queue, stop, output := d.queue, d.stop, d.stdin
 	d.mu.RUnlock()
 	resampler := newResampler(InputRate, OutputRate)
+	pending := make([]float32, 0, pagingWriteSamples*2)
 	for {
 		d.mu.RLock()
 		current := d.generation == generation
@@ -216,23 +221,36 @@ func (d *Decoder) writer(generation uint64) {
 		}
 		select {
 		case <-stop:
+			if len(pending) > 0 {
+				d.writePCM(output, resampler.process(pending))
+			}
 			_ = output.Close()
 			return
 		case samples := <-queue:
-			pcm := resampler.process(samples)
-			if len(pcm) == 0 {
-				continue
-			}
-			payload := make([]byte, len(pcm)*2)
-			for i, sample := range pcm {
-				binary.LittleEndian.PutUint16(payload[i*2:], uint16(sample))
-			}
-			if _, err := output.Write(payload); err != nil {
-				d.setError(err)
-				return
+			pending = append(pending, samples...)
+			for len(pending) >= pagingWriteSamples {
+				if !d.writePCM(output, resampler.process(pending[:pagingWriteSamples])) {
+					return
+				}
+				pending = pending[pagingWriteSamples:]
 			}
 		}
 	}
+}
+
+func (d *Decoder) writePCM(output io.Writer, pcm []int16) bool {
+	if len(pcm) == 0 {
+		return true
+	}
+	payload := make([]byte, len(pcm)*2)
+	for i, sample := range pcm {
+		binary.LittleEndian.PutUint16(payload[i*2:], uint16(sample))
+	}
+	if _, err := output.Write(payload); err != nil {
+		d.setError(err)
+		return false
+	}
+	return true
 }
 
 type jsonEvent struct {
@@ -245,13 +263,18 @@ type jsonEvent struct {
 	Capcode   *uint64 `json:"capcode"`
 	SyncBaud  int     `json:"sync_baud"`
 	SyncLevel int     `json:"sync_level"`
-	Phase     string  `json:"phase_number"`
-	Cycle     int     `json:"cycle_number"`
-	Frame     int     `json:"frame_number"`
+	OldPhase  string  `json:"phase_number"`
+	OldCycle  int     `json:"cycle_number"`
+	OldFrame  int     `json:"frame_number"`
+	Phase     string  `json:"phase"`
+	Cycle     int     `json:"cycle"`
+	Frame     int     `json:"frame"`
 	Message   string  `json:"message"`
 	Tone      string  `json:"tone"`
 	ToneLong  string  `json:"tone_long"`
 	Baud      int     `json:"baud"`
+	Level     int     `json:"level"`
+	MsgType   string  `json:"msg_type"`
 }
 
 func ParseEvent(line []byte) (Event, bool) {
@@ -260,27 +283,53 @@ func ParseEvent(line []byte) (Event, bool) {
 		return Event{}, false
 	}
 	name := strings.ToUpper(raw.DemodName)
-	if strings.HasPrefix(name, "FLEX") {
+	if strings.HasPrefix(name, "FLEX") || raw.MsgType != "" {
 		baud := raw.SyncBaud
 		if baud == 0 {
 			baud = raw.Baud
 		}
+		level := raw.SyncLevel
+		if level == 0 {
+			level = raw.Level
+		}
+		phase, cycle, frame := raw.OldPhase, raw.OldCycle, raw.OldFrame
+		if raw.MsgType != "" || raw.Phase != "" {
+			phase, cycle, frame = raw.Phase, raw.Cycle, raw.Frame
+		}
 		e := Event{Received: time.Now(), Function: -1, Raw: string(line), Protocol: ProtocolFLEX,
-			Baud: baud, SyncLevel: raw.SyncLevel, Phase: raw.Phase, Cycle: raw.Cycle, Frame: raw.Frame}
+			Baud: baud, SyncLevel: level, Phase: phase, Cycle: cycle, Frame: frame}
 		if raw.Capcode != nil {
 			e.Address = *raw.Capcode
 		} else if raw.Address != nil {
 			e.Address = *raw.Address
 		}
-		switch {
-		case strings.Contains(name, "ALPHANUMERIC"):
-			e.Kind = "ALFA"
-		case strings.Contains(name, "NUMERIC"):
-			e.Kind = "NUM"
-		case strings.Contains(name, "TONE"):
-			e.Kind = "TONO"
-		default:
-			e.Kind = "FLEX"
+		if raw.MsgType != "" {
+			switch strings.ToLower(raw.MsgType) {
+			case "alphanumeric":
+				e.Kind = "ALFA"
+			case "numeric", "special_numeric", "numbered_numeric", "short_msg":
+				e.Kind = "NUM"
+			case "tone_only":
+				e.Kind = "TONO"
+			case "unknown":
+				e.Kind = "FLEX"
+			default:
+				// FLEX_NEXT also reports BIW telemetry, BCH statistics,
+				// instructions and binary frames. They are diagnostics rather
+				// than displayable pager messages.
+				return Event{}, false
+			}
+		} else {
+			switch {
+			case strings.Contains(name, "ALPHANUMERIC"):
+				e.Kind = "ALFA"
+			case strings.Contains(name, "NUMERIC"):
+				e.Kind = "NUM"
+			case strings.Contains(name, "TONE"):
+				e.Kind = "TONO"
+			default:
+				e.Kind = "FLEX"
+			}
 		}
 		e.Message = cleanMessage(raw.Message)
 		if e.Message == "" {
@@ -295,7 +344,7 @@ func ParseEvent(line []byte) (Event, bool) {
 		if e.Message == "" && e.Kind == "TONO" {
 			e.Message = "TONO"
 		}
-		return e, e.Address > 0 || e.Message != ""
+		return e, (e.Address > 0 || e.Message != "") && (e.Kind == "TONO" || e.Message != "")
 	}
 	if !strings.HasPrefix(name, "POCSAG") || raw.Address == nil {
 		return Event{}, false

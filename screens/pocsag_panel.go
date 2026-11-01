@@ -39,6 +39,7 @@ type POCSAGPanel struct {
 	editorError                      string
 	status                           pocsag.Status
 	selected, scroll                 int
+	selectedAt                       time.Time
 	nextRefresh                      time.Time
 	snapshotPath, lastSnapshot       string
 	viewer                           *exec.Cmd
@@ -264,9 +265,7 @@ func (p *POCSAGPanel) Tick() {
 	}
 	p.stylePresets()
 	p.scroll = min(p.scroll, max(0, len(p.status.Events)-6))
-	if p.selected >= len(p.status.Events) {
-		p.selected = -1
-	}
+	p.reconcileSelection()
 	p.writeSnapshot()
 	if p.viewerDone != nil {
 		select {
@@ -293,6 +292,7 @@ func (p *POCSAGPanel) Update(input simpleui.Input) bool {
 		index := p.scroll + row
 		if row >= 0 && row < 6 && index < len(p.status.Events) {
 			p.selected = index
+			p.selectedAt = p.status.Events[index].Received
 			return true
 		}
 	}
@@ -341,6 +341,7 @@ func (p *POCSAGPanel) DrawPanel() {
 	p.drawPresetDetail()
 
 	simpleui.DrawTextStyled("TERMINAL DE MENSAJES", 952, toolY+17, uiSectionFontSize, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawText("CLIC = TEXTO COMPLETO", 1380, toolY+23, 10, colors.muted)
 	headers := []struct {
 		x    float32
 		text string
@@ -379,7 +380,7 @@ func (p *POCSAGPanel) selectProtocol(protocol pocsag.Protocol) {
 		return
 	}
 	p.protocol = protocol
-	p.selected, p.scroll = -1, 0
+	p.selected, p.scroll, p.selectedAt = -1, 0, time.Time{}
 	p.applyProtocolPresets()
 	if p.screen.settingsPath != "" {
 		savePagingProtocol(protocol)
@@ -471,6 +472,18 @@ func (p *POCSAGPanel) drawPresetDetail() {
 	rl.DrawLineEx(rl.Vector2{X: cx, Y: cy - 15}, rl.Vector2{X: cx + 11, Y: cy + 19}, 2, colors.cyan)
 	rl.DrawLineEx(rl.Vector2{X: cx - 7, Y: cy + 7}, rl.Vector2{X: cx + 7, Y: cy + 7}, 2, colors.cyan)
 	rl.DrawCircle(int32(cx), int32(cy-16), 3, colors.cyan)
+	if p.selected >= 0 && p.selected < len(p.status.Events) {
+		event := p.status.Events[p.selected]
+		title := fmt.Sprintf("MENSAJE COMPLETO · CAPCODE %07d", event.Address)
+		if event.Protocol == pocsag.ProtocolFLEX {
+			title += fmt.Sprintf(" · FASE %s · %d BAUD", event.Phase, event.Baud)
+		}
+		simpleui.DrawTextStyled(title, 112, toolY+153, 12, simpleui.FontSemiBold, colors.cyan)
+		for index, line := range pagingMessageLines(event.Message, 760, 9, 4) {
+			simpleui.DrawText(line, 112, toolY+169+float32(index)*10, 9, colors.text)
+		}
+		return
+	}
 	if p.activePreset < 0 || p.activePreset >= len(p.presetDefinitions) {
 		simpleui.DrawTextStyled("SELECCIONE UN PRESET", 112, toolY+157, uiSectionFontSize, simpleui.FontSemiBold, colors.text)
 		simpleui.DrawTextStyled("La descripción y frecuencia aparecerán aquí.", 112, toolY+183, uiMinimumFontSize, simpleui.FontRegular, colors.muted)
@@ -483,6 +496,55 @@ func (p *POCSAGPanel) drawPresetDetail() {
 	}
 	simpleui.DrawTextStyled(preset.Label+"  ·  "+frequency, 112, toolY+156, uiSectionFontSize, simpleui.FontSemiBold, colors.cyan)
 	simpleui.DrawTextStyled(preset.Description, 112, toolY+183, uiMinimumFontSize, simpleui.FontRegular, colors.text)
+}
+
+func (p *POCSAGPanel) reconcileSelection() {
+	if p.selectedAt.IsZero() {
+		if p.selected >= len(p.status.Events) {
+			p.selected = -1
+		}
+		return
+	}
+	for index, event := range p.status.Events {
+		if event.Received.Equal(p.selectedAt) {
+			p.selected = index
+			return
+		}
+	}
+	p.selected, p.selectedAt = -1, time.Time{}
+}
+
+func pagingMessageLines(message string, width float32, size int32, maximum int) []string {
+	runes := []rune(strings.Join(strings.Fields(i18n.Display(message)), " "))
+	lines := make([]string, 0, maximum)
+	for len(runes) > 0 && len(lines) < maximum {
+		cut, lastSpace := len(runes), -1
+		for index := 1; index <= len(runes); index++ {
+			if runes[index-1] == ' ' || runes[index-1] == '\t' {
+				lastSpace = index - 1
+			}
+			if simpleui.MeasureText(string(runes[:index]), size).X > width {
+				cut = index - 1
+				if lastSpace > 0 {
+					cut = lastSpace
+				}
+				break
+			}
+		}
+		if cut <= 0 {
+			cut = 1
+		}
+		lines = append(lines, strings.TrimSpace(string(runes[:cut])))
+		runes = []rune(strings.TrimLeft(string(runes[cut:]), " \t"))
+	}
+	if len(runes) > 0 && len(lines) > 0 {
+		last := []rune(lines[len(lines)-1])
+		for len(last) > 0 && simpleui.MeasureText(string(last)+"…", size).X > width {
+			last = last[:len(last)-1]
+		}
+		lines[len(lines)-1] = string(last) + "…"
+	}
+	return lines
 }
 
 func (p *POCSAGPanel) openPresetEditor() {
@@ -623,7 +685,7 @@ func (p *POCSAGPanel) clearEvents() {
 	if p.screen.receiver != nil {
 		p.screen.receiver.ClearPOCSAGProtocol(p.protocol)
 	}
-	p.selected, p.scroll = -1, 0
+	p.selected, p.scroll, p.selectedAt = -1, 0, time.Time{}
 }
 
 func (p *POCSAGPanel) writeSnapshot() {

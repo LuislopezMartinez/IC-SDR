@@ -74,7 +74,7 @@ func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
 		})
 	}
 	p.auto = p.button("sstvAuto", 56, 803, 128, 38, i18n.Source("text.80e4cf374a8a"), colors.blue)
-	p.force = p.button("sstvForce", 194, 803, 150, 38, "FORZAR SIN VIS", colors.orange)
+	p.force = p.button("sstvForce", 194, 803, 150, 38, "SIN VIS", colors.orange)
 	p.force.SetColors(colors.orange, colors.cyan, colors.background)
 	p.stop = p.button("sstvStop", 354, 803, 128, 38, "CANCELAR", colors.red)
 	p.restart = p.button("sstvRestart", 1364, 803, 176, 38, i18n.Source("text.d3eb9ea922cf"), colors.panelAlt)
@@ -82,7 +82,7 @@ func NewSSTVPanel(screen *MainScreen) *SSTVPanel {
 	p.save.SetColors(colors.green, colors.cyan, colors.background)
 	p.gallery = p.button("sstvGallery", 718, 803, 190, 38, "ABRIR GALERÍA", colors.panelAlt)
 	p.reconstruct = simpleui.NewSwitch("sstvReconstruct", 970, 803, 180, 38, "RECONSTRUIR", screen.sstvReconstructLines, uiMinimumFontSize)
-	p.reduceNoise = simpleui.NewSwitch("sstvReduceNoise", 1160, 803, 180, 38, "REDUCIR RUIDO", screen.sstvReduceNoise, uiMinimumFontSize)
+	p.reduceNoise = simpleui.NewSwitch("sstvReduceNoise", 1160, 803, 180, 38, "NR", screen.sstvReduceNoise, uiMinimumFontSize)
 	p.auto.OnClick(func() {
 		screen.sstvAutomatic = true
 		if screen.receiver != nil {

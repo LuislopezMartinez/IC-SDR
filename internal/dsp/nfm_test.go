@@ -16,8 +16,12 @@ func TestNFMDemodulatorRecoversTone(t *testing.T) {
 	}
 	demod := NewNFMDemodulator(inputRate, outputRate)
 	audio := demod.Process(iq, carrier, 12500, 50)
+	decoderAudio := demod.DecoderAudio()
 	if len(audio) < 23000 || len(audio) > 25000 {
 		t.Fatalf("unexpected output length: %d", len(audio))
+	}
+	if len(decoderAudio) != len(audio) {
+		t.Fatalf("decoder discriminator length %d does not match audio %d", len(decoderAudio), len(audio))
 	}
 	start := len(audio) / 2
 	var sine, cosine float64
@@ -29,6 +33,16 @@ func TestNFMDemodulatorRecoversTone(t *testing.T) {
 	amplitude := 2 * math.Hypot(sine, cosine) / float64(len(audio)-start)
 	if amplitude < .02 {
 		t.Fatalf("NFM tone was not recovered: amplitude %.4f", amplitude)
+	}
+	sine, cosine = 0, 0
+	for index, sample := range decoderAudio[start:] {
+		phase := 2 * math.Pi * tone * float64(index) / outputRate
+		sine += float64(sample) * math.Sin(phase)
+		cosine += float64(sample) * math.Cos(phase)
+	}
+	decoderAmplitude := 2 * math.Hypot(sine, cosine) / float64(len(decoderAudio)-start)
+	if decoderAmplitude < .25 || decoderAmplitude > .65 {
+		t.Fatalf("unexpected raw discriminator amplitude %.4f", decoderAmplitude)
 	}
 }
 
