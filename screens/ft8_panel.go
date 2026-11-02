@@ -128,6 +128,31 @@ func (p *FT8Panel) Leave() {
 	}
 }
 
+// ResetForBandChange discards the entire FT8 session rather than merely
+// stopping its input.  A decode is meaningful only for the band on which it
+// was received, so retaining table rows, map stations or a selected QSO after
+// a retune would present stale activity as if it belonged to the new band.
+func (p *FT8Panel) ResetForBandChange() {
+	p.mapOpen = false
+	p.closeExternalViewer()
+	p.status = ft8.Status{State: "DETENIDO", Depth: p.screen.ft8Depth}
+	p.tableOffset, p.tableSelected = 0, -1
+	p.lastClickKey, p.lastClickAt = "", time.Time{}
+	p.mapDecodes = nil
+	p.mapSelected = -1
+	p.mapDragging = false
+	p.mapRegionOffset = 0
+	p.mapRegionFilter = ""
+	p.mapRegionOrder = nil
+	p.mapNextRegionRank = time.Time{}
+	p.viewerSelectedKey = ""
+	p.lastSnapshot = ""
+	p.nextStatusRefresh = time.Time{}
+	if p.screen.receiver != nil {
+		p.screen.receiver.ClearFT8()
+	}
+}
+
 func (p *FT8Panel) Close() {
 	p.Leave()
 	p.closeExternalViewer()
@@ -288,11 +313,13 @@ func (p *FT8Panel) DrawPanel() {
 		}
 		rl.DrawRectangleRounded(thumb, 1, 4, colors.cyan)
 	}
-	simpleui.DrawText("Rueda para desplazarte · doble clic para abrir el mapa", 610, toolY+224, uiCaptionFontSize, colors.muted)
+	// Keep the interaction hint in its own footer band.  The sixth table row
+	// ends at toolY+240, so drawing it at +224 made the two texts overlap.
+	simpleui.DrawText("Rueda para desplazarte · doble clic para abrir el mapa", 610, toolY+242, uiCaptionFontSize, colors.muted)
 	if status.Dropped > 0 {
-		simpleui.DrawText(fmt.Sprintf("Ciclos omitidos: %d", status.Dropped), 1390, toolY+224, uiCaptionFontSize, colors.orange)
+		simpleui.DrawText(fmt.Sprintf("Ciclos omitidos: %d", status.Dropped), 1390, toolY+242, uiCaptionFontSize, colors.orange)
 	} else if status.ResyncCount > 0 {
-		simpleui.DrawText(fmt.Sprintf("Resincronizaciones: %d", status.ResyncCount), 1375, toolY+224, uiCaptionFontSize, colors.orange)
+		simpleui.DrawText(fmt.Sprintf("Resincronizaciones: %d", status.ResyncCount), 1375, toolY+242, uiCaptionFontSize, colors.orange)
 	}
 }
 

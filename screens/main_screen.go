@@ -256,6 +256,7 @@ type MainScreen struct {
 	ft8Panel               *FT8Panel
 	pocsagPanel            *POCSAGPanel
 	ft8Depth               string
+	ft8MapStyle            string
 	tetraPanel             *TETRAPanel
 	tetrapolPanel          *TETRAPOLPanel
 	omniRigPanel           *OmniRigPanel
@@ -349,6 +350,7 @@ func NewMainScreen(receiver *sdr.Receiver) *MainScreen {
 		sstvAutomatic:          true,
 		sstvMode:               "R36",
 		ft8Depth:               ft8.DepthBalanced,
+		ft8MapStyle:            ft8MapStyleRadar,
 		sstvCandidateModes:     [4]string{"R36", "R72", "M1", "S1"},
 		sstvReconstructLines:   true,
 		sstvReduceNoise:        true,
@@ -2134,6 +2136,9 @@ func (screen *MainScreen) stopAllDecodersForBandChange() {
 	}
 	if screen.receiver != nil {
 		screen.receiver.StopAllDecoders()
+	}
+	if screen.ft8Panel != nil {
+		screen.ft8Panel.ResetForBandChange()
 	}
 	if screen.audioPlayer != nil {
 		screen.audioPlayer.ResetPlayback()

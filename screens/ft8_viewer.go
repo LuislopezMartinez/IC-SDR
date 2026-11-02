@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"go-zero/internal/ft8"
@@ -20,6 +21,7 @@ type ft8ViewerSnapshot struct {
 	HomeLat     float64    `json:"homeLat"`
 	HomeLon     float64    `json:"homeLon"`
 	Theme       string     `json:"theme"`
+	MapStyle    string     `json:"mapStyle,omitempty"`
 }
 
 type ft8ViewerProcess struct {
@@ -40,7 +42,7 @@ func (p *FT8Panel) writeViewerSnapshot() {
 	// The map does not render the 15-second capture progress. Excluding this
 	// rapidly changing value avoids rewriting a large session snapshot at 10 Hz.
 	status.Progress = 0
-	snapshot := ft8ViewerSnapshot{Status: status, SelectedKey: p.viewerSelectedKey, HomeLat: homeLat, HomeLon: homeLon, Theme: p.screen.themeName}
+	snapshot := ft8ViewerSnapshot{Status: status, SelectedKey: p.viewerSelectedKey, HomeLat: homeLat, HomeLon: homeLon, Theme: p.screen.themeName, MapStyle: p.screen.ft8MapStyle}
 	data, err := json.Marshal(snapshot)
 	if err != nil || string(data) == p.lastSnapshot {
 		return
@@ -61,6 +63,7 @@ func (p *FT8Panel) openExternalViewer(preferred int) {
 		p.status = p.screen.receiver.FT8Status()
 	}
 	p.writeViewerSnapshot()
+	_ = os.Remove(ft8ViewerStyleCommandPath(p.snapshotPath))
 	if p.viewer != nil && p.viewer.cmd != nil && p.viewer.cmd.Process != nil {
 		focusRTL433Viewer(p.viewer.cmd.Process.Pid)
 		return
@@ -80,6 +83,7 @@ func (p *FT8Panel) openExternalViewer(preferred int) {
 }
 
 func (p *FT8Panel) updateExternalViewer() {
+	p.consumeViewerStyleCommand()
 	if p.viewer == nil {
 		return
 	}
@@ -90,6 +94,38 @@ func (p *FT8Panel) updateExternalViewer() {
 	default:
 		p.writeViewerSnapshot()
 	}
+}
+
+func ft8ViewerStyleCommandPath(snapshotPath string) string {
+	return snapshotPath + ".style"
+}
+
+func (p *FT8Panel) writeViewerStyleCommand(style string) {
+	if p.snapshotPath == "" || !validFT8MapStyle(style) {
+		return
+	}
+	path := ft8ViewerStyleCommandPath(p.snapshotPath)
+	_ = os.MkdirAll(filepath.Dir(path), 0755)
+	_ = replaceLiveSnapshot(path, []byte(style))
+}
+
+func (p *FT8Panel) consumeViewerStyleCommand() {
+	if p.snapshotPath == "" || p.screen == nil {
+		return
+	}
+	path := ft8ViewerStyleCommandPath(p.snapshotPath)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	_ = os.Remove(path)
+	style := strings.TrimSpace(string(data))
+	if !validFT8MapStyle(style) || style == p.screen.ft8MapStyle {
+		return
+	}
+	p.screen.ft8MapStyle = style
+	p.screen.markSettingsDirty()
+	p.lastSnapshot = ""
 }
 
 func (p *FT8Panel) closeExternalViewer() {
@@ -120,9 +156,10 @@ func RunFT8Viewer(path string) {
 	simpleui.SetMaximizeKey(0)
 	colors = lightPalette
 	simpleui.SetTheme(simpleUITheme(colors, true))
-	screen := &MainScreen{themeName: themeLight, ft8Depth: ft8.DepthBalanced}
+	screen := &MainScreen{themeName: themeLight, ft8Depth: ft8.DepthBalanced, ft8MapStyle: ft8MapStyleRadar}
 	panel := NewFT8Panel(screen)
 	panel.mapOpen, panel.viewerMode = true, true
+	panel.snapshotPath = path
 	panel.mapWindow, panel.mapLat, panel.mapLon, panel.mapSpan = time.Hour, 10, 0, 360
 	viewer := &ft8ActivityViewer{path: path, panel: panel}
 	simpleui.Run(viewer.draw)
@@ -161,6 +198,13 @@ func (v *ft8ActivityViewer) read() {
 		v.panel.screen.themeName = snapshot.Theme
 		colors = paletteForTheme(snapshot.Theme)
 		simpleui.SetTheme(simpleUITheme(colors, snapshot.Theme == themeLight))
+	}
+	mapStyle := snapshot.MapStyle
+	if auditStyle := strings.TrimSpace(os.Getenv("IC_SDR_AUDIT_FT8_STYLE")); validFT8MapStyle(auditStyle) {
+		mapStyle = auditStyle
+	}
+	if validFT8MapStyle(mapStyle) {
+		v.panel.screen.ft8MapStyle = mapStyle
 	}
 	v.panel.status = snapshot.Status
 	v.panel.mapDecodes = append(v.panel.mapDecodes[:0], snapshot.Status.Decodes...)

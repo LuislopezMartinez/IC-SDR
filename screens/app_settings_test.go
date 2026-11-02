@@ -24,6 +24,7 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 		MemoryViewEnabled: boolSetting(false),
 		AudioNotchEnabled: boolSetting(true), AudioNotchFrequencyHz: 1250, AudioNotchWidthHz: 180, AudioNotchDepthDB: -40,
 		AudioNREnabled: boolSetting(true), AudioNRStrength: float32Setting(65), AudioNRSpeed: "fast",
+		FT8MapStyle:        ft8MapStyleQSL,
 		TETRAPOLGSSIFilter: boolSetting(true), TETRAPOLAllowedGSSIs: []int{3470, 1201, 1201, -1},
 	}
 	if err := writeAppSettings(path, want); err != nil {
@@ -71,6 +72,9 @@ func TestAppSettingsRoundTrip(t *testing.T) {
 	if !screen.audioNREnabled || screen.audioNRStrength != 65 || screen.audioNRSpeed != "fast" {
 		t.Fatalf("restored audio NR = %v/%.0f/%s", screen.audioNREnabled, screen.audioNRStrength, screen.audioNRSpeed)
 	}
+	if screen.ft8MapStyle != ft8MapStyleQSL {
+		t.Fatalf("restored FT8 map style = %q", screen.ft8MapStyle)
+	}
 	if !screen.tetrapolGSSIFilter || len(screen.tetrapolAllowedGSSIs) != 2 || screen.tetrapolAllowedGSSIs[0] != 1201 || screen.tetrapolAllowedGSSIs[1] != 3470 {
 		t.Fatalf("restored TETRAPOL GSSI filter = %v/%v", screen.tetrapolGSSIFilter, screen.tetrapolAllowedGSSIs)
 	}
@@ -81,11 +85,13 @@ func TestInvalidAppSettingsKeepDefaults(t *testing.T) {
 	invalid := persistedAppSettings{
 		Version: appSettingsVersion, BandCategory: "BAD", BandName: "BAD", Mode: "BAD",
 		FrequencyHz: -1, CenterFrequencyHz: -1, SpanHz: 123, TuningStepHz: 3,
+		FT8MapStyle: "unknown",
 	}
 	if err := writeAppSettings(path, invalid); err != nil {
 		t.Fatal(err)
 	}
 	screen := NewMainScreen(nil)
+	screen.ft8MapStyle = ft8MapStyleRadar
 	beforeBand, beforeMode, beforeFrequency, beforeNR := screen.bandName, screen.savedMode, screen.frequencyHz, screen.audioNRStrength
 	loadAppSettings(path, screen)
 	if screen.bandName != beforeBand || screen.savedMode != beforeMode || screen.frequencyHz != beforeFrequency {
@@ -93,6 +99,9 @@ func TestInvalidAppSettingsKeepDefaults(t *testing.T) {
 	}
 	if screen.audioNRStrength != beforeNR {
 		t.Fatalf("missing NR setting replaced default: %.0f", screen.audioNRStrength)
+	}
+	if screen.ft8MapStyle != ft8MapStyleRadar {
+		t.Fatalf("invalid FT8 map style replaced default: %q", screen.ft8MapStyle)
 	}
 }
 

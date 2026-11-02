@@ -57,6 +57,7 @@ type ft8MapStation struct {
 	latest       ft8.Decode
 	messageCount int
 	selected     bool
+	provisional  bool
 }
 
 type ft8ActivityEvent struct {
@@ -81,7 +82,13 @@ const (
 	ft8QSORogerReport = "roger_report"
 	ft8QSOConfirmed   = "confirmed"
 	ft8QSOComplete    = "complete"
+	ft8MapStyleRadar  = "radar"
+	ft8MapStyleQSL    = "qsl"
 )
+
+func validFT8MapStyle(style string) bool {
+	return style == ft8MapStyleRadar || style == ft8MapStyleQSL
+}
 
 func (p *FT8Panel) openMap(index int) {
 	if index < 0 || index >= len(p.status.Decodes) {
@@ -189,6 +196,10 @@ func (p *FT8Panel) UpdateOverlay(input simpleui.Input) bool {
 			p.mapFilter = "calls"
 		case input.Pointer.X >= 718 && input.Pointer.X <= 916:
 			p.mapOnlyPosition = !p.mapOnlyPosition
+		case input.Pointer.X >= 932 && input.Pointer.X <= 1012:
+			p.setFT8MapStyle(ft8MapStyleRadar)
+		case input.Pointer.X >= 1020 && input.Pointer.X <= 1112:
+			p.setFT8MapStyle(ft8MapStyleQSL)
 		}
 		p.mapNextRegionRank = time.Time{}
 		return true
@@ -215,8 +226,31 @@ func (p *FT8Panel) UpdateOverlay(input simpleui.Input) bool {
 }
 
 func (p *FT8Panel) selectFT8MapMarker(pointer rl.Vector2) {
-	best, bestDistance := -1, float32(18)
-	for _, station := range p.visibleFT8MapStations() {
+	stations := p.visibleFT8MapStations()
+	// A grouped contact first behaves as a geographic drill-down. At regional
+	// zoom, a second click selects its newest member; coincident locators can
+	// therefore still be inspected instead of forming a dead visual element.
+	contacts := p.ft8RadarContacts(stations, true, false)
+	for _, cluster := range clusterFT8RadarContacts(contacts, 27) {
+		if len(cluster.contacts) < 3 || rl.Vector2Distance(pointer, cluster.center) > 22 {
+			continue
+		}
+		if p.mapSpan > 70 {
+			lat, lon := ft8RadarClusterLocation(cluster)
+			p.mapLat, p.mapLon, p.mapSpan = clampMapView(lat, lon, min(float64(70), p.mapSpan*.35), ft8MapBounds)
+			p.mapSelected = -1
+			return
+		}
+		representative := ft8RadarClusterRepresentative(cluster)
+		p.selectFT8StationCall(representative.call)
+		return
+	}
+
+	// Radar Vivo groups very close stations into a single visual contact.  A
+	// slightly larger hit radius keeps every member of that contact selectable
+	// without making the individual beacons visually oversized.
+	best, bestDistance := -1, float32(28)
+	for _, station := range stations {
 		if !station.hasPosition {
 			continue
 		}
@@ -234,6 +268,16 @@ func (p *FT8Panel) selectFT8MapMarker(pointer rl.Vector2) {
 	if best >= 0 {
 		p.mapSelected = best
 	}
+}
+
+func (p *FT8Panel) selectFT8StationCall(call string) bool {
+	for index, decode := range p.mapDecodes {
+		if ft8MessageCall(decode.Message) == call {
+			p.mapSelected = index
+			return true
+		}
+	}
+	return false
 }
 
 func (p *FT8Panel) DrawOverlay() {
@@ -263,8 +307,21 @@ func (p *FT8Panel) DrawOverlay() {
 	drawGeoMap(p.mapLat, p.mapLon, p.mapSpan, ft8MapBounds)
 	drawMapGrid(p.mapLat, p.mapLon, p.mapSpan, ft8MapBounds)
 	rl.DrawRectangleLinesEx(ft8MapBounds, 1, colors.border)
-	p.drawFT8MapStations()
+	if p.ft8MapStyle() == ft8MapStyleQSL {
+		p.drawFT8QSLStations()
+		drawFT8QSLLegend()
+	} else {
+		p.drawFT8RadarStations()
+		drawFT8RadarLegend()
+	}
 	p.drawFT8Dashboard()
+}
+
+func (p *FT8Panel) ft8MapStyle() string {
+	if p.screen != nil && validFT8MapStyle(p.screen.ft8MapStyle) {
+		return p.screen.ft8MapStyle
+	}
+	return ft8MapStyleRadar
 }
 
 func drawFT8WindowButton(bounds rl.Rectangle, kind string, restored bool) {
@@ -312,11 +369,39 @@ func (p *FT8Panel) drawFT8MapFilters() {
 	for _, item := range filters {
 		drawModalAction(item.bounds, item.label, map[bool]rl.Color{true: colors.cyan, false: colors.border}[item.active], item.active)
 	}
+	style := ft8MapStyleRadar
+	if p.screen != nil && validFT8MapStyle(p.screen.ft8MapStyle) {
+		style = p.screen.ft8MapStyle
+	}
+	for _, item := range []struct {
+		bounds rl.Rectangle
+		label  string
+		style  string
+	}{
+		{rl.Rectangle{X: 932, Y: 91, Width: 80, Height: 34}, "RADAR", ft8MapStyleRadar},
+		{rl.Rectangle{X: 1020, Y: 91, Width: 92, Height: 34}, "QSL", ft8MapStyleQSL},
+	} {
+		active := style == item.style
+		drawModalAction(item.bounds, item.label, map[bool]rl.Color{true: colors.orange, false: colors.border}[active], active)
+	}
 }
 
-func (p *FT8Panel) drawFT8MapStations() {
+func (p *FT8Panel) setFT8MapStyle(style string) {
+	if p.screen == nil || !validFT8MapStyle(style) || p.screen.ft8MapStyle == style {
+		return
+	}
+	p.screen.ft8MapStyle = style
+	if p.viewerMode {
+		p.writeViewerStyleCommand(style)
+		return
+	}
+	p.screen.markSettingsDirty()
+}
+
+func (p *FT8Panel) drawFT8RadarStations() {
 	stations := p.visibleFT8MapStations()
 	p.drawFT8LiveEvents()
+	now := time.Now()
 	selected := ft8MapStation{}
 	for _, station := range stations {
 		if station.selected {
@@ -329,19 +414,24 @@ func (p *FT8Panel) drawFT8MapStations() {
 		drawFT8Route(homeLat, homeLon, selected.lat, selected.lon, p.mapLat, p.mapLon, p.mapSpan, ft8MapBounds, rl.Color{R: colors.cyan.R, G: colors.cyan.G, B: colors.cyan.B, A: 210})
 	}
 
-	// Draw context first with subdued markers, then the selected station on top.
-	for _, station := range stations {
-		if station.selected {
+	// Draw context first. Radar Vivo collapses dense areas into compact radar
+	// contacts so Europe remains readable at the global zoom level.
+	contacts := p.ft8RadarContacts(stations, false, false)
+	for _, cluster := range clusterFT8RadarContacts(contacts, 27) {
+		if len(cluster.contacts) >= 3 {
+			drawFT8RadarCluster(cluster, now)
 			continue
 		}
-		if !station.hasPosition {
-			continue
+		for _, contact := range cluster.contacts {
+			drawFT8StationMarker(contact.position, contact.station.latest, now, false)
 		}
-		position := projectMercator(p.mapLat, p.mapLon, p.mapSpan, station.lat, station.lon, ft8MapBounds)
-		if !rl.CheckCollisionPointRec(position, ft8MapBounds) {
-			continue
+	}
+	// One-off extreme-weak decodes remain visible, but as hollow provisional
+	// contacts. They do not join clusters or influence the regional ranking.
+	for _, contact := range p.ft8RadarContacts(stations, false, true) {
+		if contact.station.provisional {
+			drawFT8ProvisionalMarker(contact.position, contact.station.latest)
 		}
-		drawFT8StationMarker(position, ft8MarkerColor(station.latest), false)
 	}
 	home := projectMercator(p.mapLat, p.mapLon, p.mapSpan, homeLat, homeLon, ft8MapBounds)
 	if rl.CheckCollisionPointRec(home, ft8MapBounds) {
@@ -352,41 +442,443 @@ func (p *FT8Panel) drawFT8MapStations() {
 	if selected.hasPosition {
 		position := projectMercator(p.mapLat, p.mapLon, p.mapSpan, selected.lat, selected.lon, ft8MapBounds)
 		if rl.CheckCollisionPointRec(position, ft8MapBounds) {
-			color := ft8MarkerColor(selected.latest)
-			drawFT8StationMarker(position, color, true)
+			drawFT8StationMarker(position, selected.latest, now, true)
 			drawMapCallout(selected.call+" · "+selected.grid, position.X+17, position.Y-8)
 		}
 	}
 }
 
+var (
+	ft8QSLGold   = rl.Color{R: 202, G: 151, B: 55, A: 255}
+	ft8QSLCream  = rl.Color{R: 238, G: 225, B: 190, A: 255}
+	ft8QSLShadow = rl.Color{R: 4, G: 8, B: 12, A: 180}
+)
+
+func (p *FT8Panel) drawFT8QSLStations() {
+	stations := p.visibleFT8MapStations()
+	p.drawFT8LiveEvents()
+	selected := ft8MapStation{}
+	for _, station := range stations {
+		if station.selected {
+			selected = station
+			break
+		}
+	}
+	homeLat, homeLon := p.ft8HomePosition()
+	if selected.hasPosition {
+		drawFT8Route(homeLat, homeLon, selected.lat, selected.lon, p.mapLat, p.mapLon, p.mapSpan, ft8MapBounds, withAlpha(ft8QSLGold, 190))
+	}
+
+	contacts := p.ft8RadarContacts(stations, false, false)
+	for _, cluster := range clusterFT8RadarContacts(contacts, 29) {
+		if len(cluster.contacts) >= 3 {
+			drawFT8QSLCluster(cluster)
+			continue
+		}
+		for _, contact := range cluster.contacts {
+			drawFT8QSLBadge(contact.position, contact.station, false)
+		}
+	}
+	for _, contact := range p.ft8RadarContacts(stations, false, true) {
+		if contact.station.provisional {
+			drawFT8QSLBadge(contact.position, contact.station, false)
+		}
+	}
+
+	home := projectMercator(p.mapLat, p.mapLon, p.mapSpan, homeLat, homeLon, ft8MapBounds)
+	if rl.CheckCollisionPointRec(home, ft8MapBounds) {
+		rl.DrawCircleV(home, 8, withAlpha(colors.cyan, 45))
+		rl.DrawCircleLines(int32(home.X), int32(home.Y), 9, ft8QSLGold)
+		rl.DrawCircleV(home, 3, colors.cyan)
+	}
+	if selected.hasPosition {
+		position := projectMercator(p.mapLat, p.mapLon, p.mapSpan, selected.lat, selected.lon, ft8MapBounds)
+		if rl.CheckCollisionPointRec(position, ft8MapBounds) {
+			drawFT8QSLBadge(position, selected, true)
+			drawFT8QSLCallout(position, selected)
+		}
+	}
+}
+
+func drawFT8QSLBadge(position rl.Vector2, station ft8MapStation, selected bool) {
+	width, height := float32(28), float32(20)
+	if selected {
+		width, height = 36, 26
+		rl.DrawCircleV(position, 25, withAlpha(ft8QSLGold, 42))
+	}
+	border := ft8QSLGold
+	if station.provisional {
+		border = withAlpha(colors.orange, 155)
+	}
+	card := rl.Rectangle{X: position.X - width/2, Y: position.Y - height/2 - 2, Width: width, Height: height}
+	shadow := card
+	shadow.X, shadow.Y = shadow.X+2, shadow.Y+3
+	rl.DrawRectangleRounded(shadow, .18, 5, ft8QSLShadow)
+	// The small lower pennant keeps the marker anchored to an exact map point,
+	// while the rectangular face gives the flag enough pixels to stay legible.
+	left := rl.Vector2{X: position.X - 5, Y: card.Y + card.Height - 1}
+	right := rl.Vector2{X: position.X + 5, Y: card.Y + card.Height - 1}
+	tip := rl.Vector2{X: position.X, Y: card.Y + card.Height + 8}
+	rl.DrawTriangle(left, tip, right, border)
+	rl.DrawTriangle(rl.Vector2{X: left.X + 2, Y: left.Y}, rl.Vector2{X: tip.X, Y: tip.Y - 3}, rl.Vector2{X: right.X - 2, Y: right.Y}, colors.panel)
+	rl.DrawRectangleRounded(card, .18, 5, border)
+	inner := rl.Rectangle{X: card.X + 2, Y: card.Y + 2, Width: card.Width - 4, Height: card.Height - 4}
+	rl.DrawRectangleRounded(inner, .12, 4, withAlpha(colors.panel, map[bool]uint8{true: 250, false: 235}[selected]))
+	flag := rl.Rectangle{X: inner.X + 2, Y: inner.Y + 1, Width: inner.Width - 4, Height: inner.Height - 2}
+	drawFT8MiniFlag(ft8CallRegion(station.call), flag)
+	if station.grid != "" {
+		rl.DrawRectangle(int32(position.X-2), int32(tip.Y-3), 4, 2, colors.cyan)
+	}
+	if station.latest.SNR >= -10 {
+		rl.DrawCircleV(rl.Vector2{X: card.X + 2, Y: card.Y + 2}, 2.5, ft8QSLGold)
+		rl.DrawCircleLines(int32(card.X+2), int32(card.Y+2), 3.5, colors.panel)
+	}
+	if ft8DecodeIsCQ(station.latest) {
+		x := card.X + card.Width + 2
+		for offset := float32(-2); offset <= 2; offset += 4 {
+			rl.DrawLineEx(rl.Vector2{X: x, Y: position.Y + offset}, rl.Vector2{X: x + 4, Y: position.Y + offset - 3}, 1.4, colors.orange)
+		}
+	}
+	if event, ok := classifyFT8Activity(station.latest); ok && event.kind == ft8QSOComplete {
+		center := rl.Vector2{X: card.X, Y: card.Y + card.Height}
+		rl.DrawCircleV(center, 5, colors.panel)
+		rl.DrawCircleLines(int32(center.X), int32(center.Y), 5, colors.green)
+		a := rl.Vector2{X: center.X - 2.5, Y: center.Y}
+		rl.DrawLineEx(a, rl.Vector2{X: a.X + 2, Y: a.Y + 2}, 1.5, colors.green)
+		rl.DrawLineEx(rl.Vector2{X: a.X + 2, Y: a.Y + 2}, rl.Vector2{X: a.X + 5, Y: a.Y - 2}, 1.5, colors.green)
+	}
+	if station.provisional {
+		center := rl.Vector2{X: card.X + card.Width, Y: card.Y}
+		rl.DrawCircleV(center, 6, colors.panel)
+		rl.DrawCircleLines(int32(center.X), int32(center.Y), 6, colors.orange)
+		size := simpleui.MeasureTextStyled("?", 9, simpleui.FontSemiBold)
+		simpleui.DrawTextStyled("?", center.X-size.X/2, center.Y-size.Y/2, 9, simpleui.FontSemiBold, colors.orange)
+	}
+}
+
+func drawFT8QSLCluster(cluster ft8RadarCluster) {
+	if len(cluster.contacts) == 0 {
+		return
+	}
+	representative := ft8RadarClusterRepresentative(cluster)
+	for _, offset := range []rl.Vector2{{X: -5, Y: -5}, {X: 5, Y: 2}} {
+		card := rl.Rectangle{X: cluster.center.X - 14 + offset.X, Y: cluster.center.Y - 12 + offset.Y, Width: 28, Height: 20}
+		rl.DrawRectangleRounded(card, .18, 5, withAlpha(ft8QSLGold, 165))
+		card.X, card.Y, card.Width, card.Height = card.X+2, card.Y+2, card.Width-4, card.Height-4
+		rl.DrawRectangleRounded(card, .12, 4, withAlpha(colors.panelAlt, 240))
+	}
+	drawFT8QSLBadge(cluster.center, representative, false)
+	label := fmt.Sprintf("%d", len(cluster.contacts))
+	size := simpleui.MeasureTextStyled(label, 10, simpleui.FontSemiBold)
+	box := rl.Rectangle{X: cluster.center.X - size.X/2 - 4, Y: cluster.center.Y + 7, Width: size.X + 8, Height: 14}
+	rl.DrawRectangleRounded(box, .4, 5, colors.panel)
+	rl.DrawRectangleRoundedLinesEx(box, .4, 5, 1, ft8QSLGold)
+	simpleui.DrawTextStyled(label, cluster.center.X-size.X/2, cluster.center.Y+8, 10, simpleui.FontSemiBold, ft8QSLCream)
+}
+
+func drawFT8QSLCallout(position rl.Vector2, station ft8MapStation) {
+	width := float32(224)
+	height := float32(48)
+	x := position.X + 22
+	if x+width > ft8MapBounds.X+ft8MapBounds.Width-8 {
+		x = position.X - width - 22
+	}
+	y := min(max(position.Y-height/2, ft8MapBounds.Y+8), ft8MapBounds.Y+ft8MapBounds.Height-height-8)
+	box := rl.Rectangle{X: x, Y: y, Width: width, Height: height}
+	anchorX := x
+	if x < position.X {
+		anchorX = x + width
+	}
+	rl.DrawLineEx(position, rl.Vector2{X: anchorX, Y: y + height/2}, 1.5, ft8QSLGold)
+	rl.DrawRectangleRounded(rl.Rectangle{X: x + 3, Y: y + 4, Width: width, Height: height}, .12, 7, ft8QSLShadow)
+	rl.DrawRectangleRounded(box, .12, 7, withAlpha(colors.panel, 248))
+	rl.DrawRectangleRoundedLinesEx(box, .12, 7, 2, ft8QSLGold)
+	drawFT8MiniFlag(ft8CallRegion(station.call), rl.Rectangle{X: x + 10, Y: y + 10, Width: 22, Height: 14})
+	simpleui.DrawTextStyled(station.call, x+40, y+8, 15, simpleui.FontSemiBold, ft8QSLCream)
+	detail := fmt.Sprintf("%s  ·  SNR %+d dB", station.gridOrDash(), station.latest.SNR)
+	simpleui.DrawTextStyled(detail, x+40, y+28, 10, simpleui.FontMono, map[bool]rl.Color{true: colors.orange, false: colors.cyan}[station.provisional])
+}
+
+func drawFT8MiniFlag(region string, bounds rl.Rectangle) {
+	code := ft8RegionCountryCode(region)
+	if code != countries.Unknown {
+		loadFT8FlagAtlas()
+		if index, ok := ft8FlagIndex[code.Alpha2()]; ok && ft8FlagAtlas.ID != 0 {
+			source := rl.Rectangle{X: float32(index%16) * 24, Y: float32(index/16) * 18, Width: 24, Height: 18}
+			rl.DrawTexturePro(ft8FlagAtlas, source, bounds, rl.Vector2{}, 0, rl.White)
+			rl.DrawRectangleLinesEx(bounds, 1, withAlpha(ft8QSLCream, 150))
+			return
+		}
+	}
+	rl.DrawRectangleRec(bounds, colors.cyan)
+	rl.DrawRectangleLinesEx(bounds, 1, ft8QSLCream)
+}
+
+func drawFT8QSLLegend() {
+	bounds := rl.Rectangle{X: 44, Y: 154, Width: 540, Height: 32}
+	rl.DrawRectangleRounded(bounds, .18, 6, withAlpha(colors.panel, 232))
+	rl.DrawRectangleRoundedLinesEx(bounds, .18, 6, 1, withAlpha(ft8QSLGold, 205))
+	simpleui.DrawTextStyled("QSL ATLAS", 55, 165, 9, simpleui.FontSemiBold, ft8QSLGold)
+	demo := ft8MapStation{call: "EA1", grid: "IN80", latest: ft8.Decode{SNR: -8}}
+	drawFT8QSLBadge(rl.Vector2{X: 130, Y: 170}, demo, false)
+	simpleui.DrawText("ESTACIÓN", 145, 165, 9, colors.text)
+	for index := 0; index < 2; index++ {
+		card := rl.Rectangle{X: float32(203 + index*4), Y: float32(162 + index*3), Width: 20, Height: 14}
+		rl.DrawRectangleRounded(card, .18, 4, ft8QSLGold)
+		card.X, card.Y, card.Width, card.Height = card.X+2, card.Y+2, card.Width-4, card.Height-4
+		rl.DrawRectangleRounded(card, .12, 3, colors.panel)
+	}
+	simpleui.DrawText("GRUPO", 232, 165, 9, colors.text)
+	rl.DrawCircleV(rl.Vector2{X: 282, Y: 170}, 2, ft8QSLGold)
+	simpleui.DrawText("FUERTE", 290, 165, 9, colors.text)
+	simpleui.DrawTextStyled("»", 345, 162, 11, simpleui.FontSemiBold, colors.orange)
+	simpleui.DrawText("CQ", 358, 165, 9, colors.text)
+	simpleui.DrawTextStyled("✓", 385, 162, 11, simpleui.FontSemiBold, colors.green)
+	simpleui.DrawText("QSO", 399, 165, 9, colors.text)
+	simpleui.DrawTextStyled("?", 438, 163, 10, simpleui.FontSemiBold, colors.orange)
+	simpleui.DrawText("PROVISIONAL", 449, 165, 9, colors.text)
+}
+
 func ft8MarkerColor(decode ft8.Decode) rl.Color {
 	event, ok := classifyFT8Activity(decode)
 	if ok {
-		if event.kind == "cq" {
-			return colors.orange
-		}
 		if event.kind == "complete" {
 			return colors.green
 		}
 	}
+	if decode.SNR <= -20 {
+		return colors.orange
+	}
 	return colors.cyan
 }
 
-func drawFT8StationMarker(position rl.Vector2, color rl.Color, selected bool) {
-	halo := color
-	halo.A = 48
-	radius := float32(10)
-	if selected {
-		radius = 17
+type ft8RadarContact struct {
+	station  ft8MapStation
+	position rl.Vector2
+}
+
+type ft8RadarCluster struct {
+	contacts []ft8RadarContact
+	center   rl.Vector2
+}
+
+func clusterFT8RadarContacts(contacts []ft8RadarContact, threshold float32) []ft8RadarCluster {
+	clusters := make([]ft8RadarCluster, 0, len(contacts))
+	for _, contact := range contacts {
+		best, bestDistance := -1, threshold
+		for index := range clusters {
+			if distance := rl.Vector2Distance(contact.position, clusters[index].center); distance <= bestDistance {
+				best, bestDistance = index, distance
+			}
+		}
+		if best < 0 {
+			clusters = append(clusters, ft8RadarCluster{contacts: []ft8RadarContact{contact}, center: contact.position})
+			continue
+		}
+		cluster := &clusters[best]
+		count := float32(len(cluster.contacts))
+		cluster.center.X = (cluster.center.X*count + contact.position.X) / (count + 1)
+		cluster.center.Y = (cluster.center.Y*count + contact.position.Y) / (count + 1)
+		cluster.contacts = append(cluster.contacts, contact)
 	}
-	rl.DrawCircleV(position, radius, halo)
-	rl.DrawCircleV(position, 7, colors.panel)
-	rl.DrawCircleV(position, 5, color)
-	rl.DrawCircleLines(int32(position.X), int32(position.Y), 8, colors.text)
-	if selected {
-		rl.DrawCircleLines(int32(position.X), int32(position.Y), 14, color)
-		rl.DrawCircleLines(int32(position.X), int32(position.Y), 19, colors.text)
+	return clusters
+}
+
+func (p *FT8Panel) ft8RadarContacts(stations []ft8MapStation, includeSelected, provisionalOnly bool) []ft8RadarContact {
+	contacts := make([]ft8RadarContact, 0, len(stations))
+	for _, station := range stations {
+		if !station.hasPosition || (!includeSelected && station.selected) {
+			continue
+		}
+		if provisionalOnly != station.provisional {
+			continue
+		}
+		position := projectMercator(p.mapLat, p.mapLon, p.mapSpan, station.lat, station.lon, ft8MapBounds)
+		if rl.CheckCollisionPointRec(position, ft8MapBounds) {
+			contacts = append(contacts, ft8RadarContact{station: station, position: position})
+		}
 	}
+	return contacts
+}
+
+func ft8RadarClusterRepresentative(cluster ft8RadarCluster) ft8MapStation {
+	if len(cluster.contacts) == 0 {
+		return ft8MapStation{}
+	}
+	representative := cluster.contacts[0].station
+	for _, contact := range cluster.contacts[1:] {
+		candidate := contact.station
+		left, right := ft8DecodeTime(candidate.latest), ft8DecodeTime(representative.latest)
+		if left.After(right) || (left.Equal(right) && candidate.latest.SNR > representative.latest.SNR) {
+			representative = candidate
+		}
+	}
+	return representative
+}
+
+func ft8RadarClusterLocation(cluster ft8RadarCluster) (float64, float64) {
+	if len(cluster.contacts) == 0 {
+		return 0, 0
+	}
+	lat := 0.0
+	anchorLon := cluster.contacts[0].station.lon
+	lonOffset := 0.0
+	for _, contact := range cluster.contacts {
+		lat += contact.station.lat
+		lonOffset += wrapLongitude(contact.station.lon - anchorLon)
+	}
+	count := float64(len(cluster.contacts))
+	return lat / count, wrapLongitude(anchorLon + lonOffset/count)
+}
+
+func ft8RadarStrength(snr int) float32 {
+	return min(max(float32(snr+30)/30, 0), 1)
+}
+
+func ft8RadarAge(decode ft8.Decode, now time.Time) time.Duration {
+	stamp := decode.ReceivedAt
+	if stamp.IsZero() {
+		stamp = decode.Slot
+	}
+	if stamp.IsZero() {
+		// Unknown timestamps are historical imports, not live contacts. Treating
+		// them as brand new would leave their pulse animation running forever.
+		return time.Hour
+	}
+	if now.Before(stamp) {
+		return 0
+	}
+	return now.Sub(stamp)
+}
+
+func ft8RadarDisplayColor(decode ft8.Decode, now time.Time, selected bool) rl.Color {
+	color := ft8MarkerColor(decode)
+	if selected {
+		return color
+	}
+	// Contacts lose phosphor intensity gradually but remain identifiable for
+	// the full selected time window.
+	age := ft8RadarAge(decode, now)
+	fade := min(float32(age)/float32(time.Hour), 1) * .58
+	return mixColor(color, colors.border, fade)
+}
+
+func drawFT8StationMarker(position rl.Vector2, decode ft8.Decode, now time.Time, selected bool) {
+	color := ft8RadarDisplayColor(decode, now, selected)
+	strength := ft8RadarStrength(decode.SNR)
+	coreRadius := float32(3.2) + strength*2.8
+	haloRadius := float32(9) + strength*5
+	if selected {
+		haloRadius += 3
+	}
+
+	rl.DrawCircleV(position, haloRadius, withAlpha(color, 30))
+	rl.DrawCircleV(position, coreRadius+2.4, withAlpha(colors.panel, 235))
+	rl.DrawCircleV(position, coreRadius, color)
+	rl.DrawCircleLines(int32(position.X), int32(position.Y), coreRadius+3, withAlpha(colors.text, 205))
+	if ft8DecodeIsCQ(decode) {
+		// CQ is a shape, not a color: weak CQ contacts can remain amber without
+		// becoming indistinguishable from ordinary weak stations.
+		rl.DrawRing(position, coreRadius+5, coreRadius+7, 205, 335, 12, withAlpha(colors.cyan, 230))
+	}
+
+	// A newly received contact emits one expanding, fading sweep. This gives
+	// the map motion without a permanent neon pulse on every station.
+	age := ft8RadarAge(decode, now)
+	if age <= 12*time.Second {
+		progress := float32(math.Mod(age.Seconds(), 3)) / 3
+		pulseRadius := haloRadius + 3 + progress*16
+		alpha := uint8(float32(150) * (1 - progress))
+		rl.DrawCircleLines(int32(position.X), int32(position.Y), pulseRadius, withAlpha(color, alpha))
+	}
+
+	if selected {
+		cross := withAlpha(color, 235)
+		for _, line := range [][2]rl.Vector2{
+			{{X: position.X - 23, Y: position.Y}, {X: position.X - 11, Y: position.Y}},
+			{{X: position.X + 11, Y: position.Y}, {X: position.X + 23, Y: position.Y}},
+			{{X: position.X, Y: position.Y - 23}, {X: position.X, Y: position.Y - 11}},
+			{{X: position.X, Y: position.Y + 11}, {X: position.X, Y: position.Y + 23}},
+		} {
+			rl.DrawLineEx(line[0], line[1], 1.5, cross)
+		}
+		rl.DrawCircleLines(int32(position.X), int32(position.Y), 17, withAlpha(color, 180))
+	}
+}
+
+func drawFT8ProvisionalMarker(position rl.Vector2, decode ft8.Decode) {
+	color := withAlpha(colors.orange, 145)
+	rl.DrawCircleV(position, 9, withAlpha(colors.panel, 75))
+	for index := 0; index < 4; index++ {
+		start := float32(index*90 + 10)
+		rl.DrawRing(position, 6, 7.5, start, start+50, 4, color)
+	}
+	rl.DrawCircleV(position, 2, withAlpha(ft8MarkerColor(decode), 150))
+}
+
+func drawFT8RadarCluster(cluster ft8RadarCluster, now time.Time) {
+	if len(cluster.contacts) == 0 {
+		return
+	}
+	representative := ft8RadarClusterRepresentative(cluster)
+	color := ft8RadarDisplayColor(representative.latest, now, false)
+	center := cluster.center
+	rl.DrawCircleV(center, 18, withAlpha(color, 28))
+	rl.DrawCircleV(center, 12, withAlpha(colors.panel, 242))
+	rl.DrawCircleLines(int32(center.X), int32(center.Y), 12, withAlpha(colors.text, 210))
+
+	segments := min(len(cluster.contacts), 12)
+	for index := 0; index < segments; index++ {
+		start := float32(-90 + index*360/segments)
+		end := start + float32(360/segments) - 5
+		contact := cluster.contacts[index*len(cluster.contacts)/segments]
+		segmentColor := ft8RadarDisplayColor(contact.station.latest, now, false)
+		rl.DrawRing(center, 14, 16, start, end, 3, withAlpha(segmentColor, 225))
+	}
+	if age := ft8RadarAge(representative.latest, now); age <= 12*time.Second {
+		progress := float32(math.Mod(age.Seconds(), 3)) / 3
+		alpha := uint8(float32(125) * (1 - progress))
+		rl.DrawCircleLines(int32(center.X), int32(center.Y), 19+progress*14, withAlpha(color, alpha))
+	}
+	label := fmt.Sprintf("%d", len(cluster.contacts))
+	size := simpleui.MeasureTextStyled(label, 11, simpleui.FontSemiBold)
+	simpleui.DrawTextStyled(label, center.X-size.X/2, center.Y-size.Y/2-1, 11, simpleui.FontSemiBold, colors.text)
+}
+
+func ft8DecodeIsCQ(decode ft8.Decode) bool {
+	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(decode.Message)), "CQ ")
+}
+
+func drawFT8RadarLegend() {
+	bounds := rl.Rectangle{X: 44, Y: 154, Width: 540, Height: 32}
+	rl.DrawRectangleRounded(bounds, .18, 6, withAlpha(colors.panel, 224))
+	rl.DrawRectangleRoundedLinesEx(bounds, .18, 6, 1, withAlpha(colors.border, 220))
+	simpleui.DrawTextStyled("RADAR", 55, 165, 9, simpleui.FontSemiBold, colors.muted)
+
+	drawDot := func(x float32, color rl.Color) {
+		rl.DrawCircleV(rl.Vector2{X: x, Y: 170}, 5, withAlpha(colors.panelAlt, 240))
+		rl.DrawCircleV(rl.Vector2{X: x, Y: 170}, 3, color)
+	}
+	drawDot(105, colors.cyan)
+	simpleui.DrawText("SEÑAL", 114, 165, 9, colors.text)
+	drawDot(166, colors.orange)
+	simpleui.DrawText("DÉBIL", 175, 165, 9, colors.text)
+
+	cq := rl.Vector2{X: 231, Y: 170}
+	rl.DrawCircleV(cq, 3, colors.cyan)
+	rl.DrawRing(cq, 6, 7.5, 205, 335, 8, colors.cyan)
+	simpleui.DrawText("CQ", 241, 165, 9, colors.text)
+
+	drawDot(279, colors.green)
+	simpleui.DrawText("QSO", 288, 165, 9, colors.text)
+
+	provisional := rl.Vector2{X: 339, Y: 170}
+	for index := 0; index < 4; index++ {
+		start := float32(index*90 + 10)
+		rl.DrawRing(provisional, 5.5, 7, start, start+50, 4, withAlpha(colors.orange, 165))
+	}
+	simpleui.DrawText("PROVISIONAL", 349, 165, 9, colors.text)
+	simpleui.DrawText("PULSO = RECIENTE", 438, 165, 8, colors.muted)
 }
 
 func (p *FT8Panel) drawFT8LiveEvents() {
@@ -542,12 +1034,19 @@ func (p *FT8Panel) drawFT8Dashboard() {
 	allStations := p.ft8MapStations()
 	stations := p.filterFT8StationsByRegion(allStations)
 	visibleDecodes := p.filterFT8DecodesByRegion(decodes)
-	positioned, maxDistance := 0, 0.0
+	positioned, verified, provisional, maxDistance := 0, 0, 0, 0.0
 	homeLat, homeLon := p.ft8HomePosition()
 	for _, station := range stations {
+		if station.provisional {
+			provisional++
+		} else {
+			verified++
+		}
 		if station.hasPosition {
 			positioned++
-			maxDistance = math.Max(maxDistance, ft8DistanceKM(homeLat, homeLon, station.lat, station.lon))
+			if !station.provisional {
+				maxDistance = math.Max(maxDistance, ft8DistanceKM(homeLat, homeLon, station.lat, station.lon))
+			}
 		}
 	}
 	regions := p.stableFT8RegionActivity(allStations, time.Now())
@@ -561,7 +1060,7 @@ func (p *FT8Panel) drawFT8Dashboard() {
 		label, value string
 		color        rl.Color
 	}{
-		{"ESTACIONES", fmt.Sprintf("%d", len(stations)), colors.green},
+		{"ESTACIONES", fmt.Sprintf("%d", verified), colors.green},
 		{"MENSAJES", fmt.Sprintf("%d", len(visibleDecodes)), colors.cyan},
 		{"QSO ACTIVOS", fmt.Sprintf("%d / %d", qso.active, qso.total), colors.orange},
 		{"DX MÁXIMO", fmt.Sprintf("%.0f km", maxDistance), colors.blue},
@@ -574,6 +1073,9 @@ func (p *FT8Panel) drawFT8Dashboard() {
 		rl.DrawRectangleRoundedLinesEx(box, .06, 6, 1, mixColor(colors.border, metric.color, .45))
 		simpleui.DrawText(metric.label, x+12, y+9, 10, colors.muted)
 		simpleui.DrawTextStyled(metric.value, x+12, y+27, 20, simpleui.FontSemiBold, metric.color)
+		if index == 0 && provisional > 0 {
+			simpleui.DrawText(fmt.Sprintf("+%d provisionales", provisional), x+65, y+35, 9, colors.orange)
+		}
 	}
 	heading := "PAÍSES Y REGIONES"
 	if p.mapRegionFilter != "" {
@@ -688,10 +1190,14 @@ func (p *FT8Panel) drawFT8SelectedCard(positioned int) {
 	rl.DrawRectangleRounded(panel, .035, 7, mixColor(colors.panelAlt, colors.cyan, .035))
 	rl.DrawRectangleRoundedLinesEx(panel, .035, 7, 1, colors.border)
 	cardTitle := "ESTACIÓN SELECCIONADA"
+	cardTitleColor := colors.cyan
 	if station.call == "" && p.mapRegionFilter != "" {
 		cardTitle = "RESUMEN DE LA REGIÓN"
+	} else if station.provisional {
+		cardTitle = "ESTACIÓN PROVISIONAL · PENDIENTE DE CONFIRMACIÓN"
+		cardTitleColor = colors.orange
 	}
-	simpleui.DrawTextStyled(cardTitle, 1152, 589, uiCaptionFontSize, simpleui.FontSemiBold, colors.cyan)
+	simpleui.DrawTextStyled(cardTitle, 1152, 589, uiCaptionFontSize, simpleui.FontSemiBold, cardTitleColor)
 	if station.call == "" {
 		if p.mapRegionFilter != "" {
 			stations := p.visibleFT8MapStations()
@@ -813,6 +1319,9 @@ func (p *FT8Panel) ft8RegionActivity(stations []ft8MapStation) []ft8RegionActivi
 	byRegion := make(map[string]*ft8RegionActivity)
 	homeLat, homeLon := p.ft8HomePosition()
 	for _, station := range stations {
+		if station.provisional {
+			continue
+		}
 		region := ft8CallRegion(station.call)
 		item := byRegion[region]
 		if item == nil {
@@ -1200,6 +1709,7 @@ func (p *FT8Panel) ft8MapStations() []ft8MapStation {
 		}
 		seen[call] = true
 		station := ft8MapStation{call: call, latest: decode, messageCount: counts[call], selected: call == selectedCall}
+		station.provisional = ft8StationIsProvisional(station.messageCount, station.latest)
 		if value, exists := locations[call]; exists {
 			station.grid, station.lat, station.lon, station.hasPosition = value.grid, value.lat, value.lon, true
 		}
@@ -1223,6 +1733,14 @@ func (p *FT8Panel) ft8MapStations() []ft8MapStation {
 		stations = positioned
 	}
 	return stations
+}
+
+// A single decode at the practical FT8 sensitivity floor is useful evidence,
+// but not enough to promote a callsign into clusters and country rankings.
+// A second reception confirms it regardless of SNR. The raw decode and its
+// hollow map contact are always retained.
+func ft8StationIsProvisional(messageCount int, latest ft8.Decode) bool {
+	return messageCount < 2 && latest.SNR <= -24
 }
 
 func (p *FT8Panel) visibleFT8MapStations() []ft8MapStation {

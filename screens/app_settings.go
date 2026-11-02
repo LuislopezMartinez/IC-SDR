@@ -82,6 +82,7 @@ type persistedAppSettings struct {
 	SSTVReconstructLines  *bool                         `json:"sstvReconstructLines,omitempty"`
 	SSTVReduceNoise       *bool                         `json:"sstvReduceNoise,omitempty"`
 	FT8Depth              string                        `json:"ft8Depth,omitempty"`
+	FT8MapStyle           string                        `json:"ft8MapStyle,omitempty"`
 	TETRAPOLBand          string                        `json:"tetrapolBand,omitempty"`
 	TETRAPOLPlan          string                        `json:"tetrapolPlan,omitempty"`
 	TETRAPOLDirection     string                        `json:"tetrapolDirection,omitempty"`
@@ -302,6 +303,9 @@ func loadAppSettings(path string, screen *MainScreen) {
 	}
 	if settings.FT8Depth == ft8.DepthFast || settings.FT8Depth == ft8.DepthBalanced || settings.FT8Depth == ft8.DepthDeep {
 		screen.ft8Depth = settings.FT8Depth
+	}
+	if validFT8MapStyle(settings.FT8MapStyle) {
+		screen.ft8MapStyle = settings.FT8MapStyle
 	}
 	for i, mode := range settings.SSTVCandidateModes {
 		if validSSTVMode(mode) {
@@ -535,6 +539,7 @@ func (screen *MainScreen) flushSettings(force bool) {
 		SSTVReconstructLines:  boolSetting(screen.sstvReconstructLines),
 		SSTVReduceNoise:       boolSetting(screen.sstvReduceNoise),
 		FT8Depth:              screen.ft8Depth,
+		FT8MapStyle:           screen.ft8MapStyle,
 		TETRAPOLBand:          screen.tetrapolBand,
 		TETRAPOLPlan:          screen.tetrapolPlan,
 		TETRAPOLDirection:     screen.tetrapolDirection,

@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.27.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.27.0)**
+**Versión actual: [v0.28.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.28.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -43,6 +43,8 @@ IC-SDR integra herramientas para recibir y visualizar:
 
 ![Actividad global FT8 de IC-SDR, con mapa, países recibidos y decodificación en directo](docs/images/ic-sdr-ft8-global.png)
 
+![Vista QSL Atlas de la actividad FT8: tarjetas por estación, banderas, agrupación geográfica y detalle del contacto seleccionado](docs/images/ic-sdr-ft8-qsl.png)
+
 ![Decodificador DAB+ de IC-SDR con servicios y texto dinámico DLS/DL+](docs/images/ic-sdr-dab-plus.png)
 
 ![Servidor web de IC-SDR en Windows](docs/images/ic-sdr-servidor-web.png)
@@ -58,6 +60,14 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio en directo de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.28.0
+
+- Nuevo modo de mapa **QSL Atlas** para la actividad FT8: presenta las estaciones como tarjetas con bandera, locator, intensidad y estado de QSO, pensado para explorar contactos de forma visual.
+- El mapa FT8 incorpora conmutación **Radar / QSL**, agrupación de contactos densos, indicadores de CQ, actividad reciente y contactos provisionales de señal muy débil.
+- La vista elegida se sincroniza entre el receptor y el visor de actividad independiente, y queda guardada como preferencia local.
+- Al cambiar de banda, FT8 purga mensajes, estaciones, selecciones, filtros y el visor asociado; al volver a entrar espera un ciclo UTC nuevo para empezar una sesión limpia.
+- Corregido el solape de la ayuda de navegación con la última fila de la tabla FT8 y ampliada la cobertura de regresión de mapa, estilos y purga de sesión.
 
 ## Novedades de v0.27.0
 

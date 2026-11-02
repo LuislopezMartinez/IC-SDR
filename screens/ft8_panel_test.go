@@ -2,12 +2,14 @@ package screens
 
 import (
 	"math"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"go-zero/internal/ft8"
 
 	"github.com/biter777/countries"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 func TestFT8ToolIsAvailableAndUsesReadableWorkspace(t *testing.T) {
@@ -30,6 +32,28 @@ func TestFT8ToolIsAvailableAndUsesReadableWorkspace(t *testing.T) {
 		if bounds.X < toolContentX || bounds.Y < toolY || bounds.Y+bounds.Height > toolY+toolH {
 			t.Fatalf("FT8 control %q is outside tool workspace: %+v", control.ID(), bounds)
 		}
+	}
+}
+
+func TestFT8BandChangePurgesSessionPresentation(t *testing.T) {
+	panel := NewFT8Panel(NewMainScreen(nil))
+	panel.status = ft8.Status{State: "ESCUCHANDO", DecodeCount: 2, Decodes: []ft8.Decode{{Message: "CQ EA8ABC IL18"}}}
+	panel.tableOffset, panel.tableSelected = 3, 0
+	panel.lastClickKey, panel.lastClickAt = "old decode", time.Now()
+	panel.mapOpen, panel.mapDecodes, panel.mapSelected = true, []ft8.Decode{{Message: "CQ EA8ABC IL18"}}, 0
+	panel.mapDragging, panel.mapRegionOffset, panel.mapRegionFilter = true, 4, "Canary Islands"
+	panel.mapRegionOrder, panel.viewerSelectedKey, panel.lastSnapshot = []string{"Canary Islands"}, "old decode", "old snapshot"
+
+	panel.ResetForBandChange()
+
+	if len(panel.status.Decodes) != 0 || panel.status.DecodeCount != 0 || panel.tableOffset != 0 || panel.tableSelected != -1 {
+		t.Fatalf("main FT8 session survived band change: %+v, table=%d/%d", panel.status, panel.tableOffset, panel.tableSelected)
+	}
+	if panel.mapOpen || len(panel.mapDecodes) != 0 || panel.mapSelected != -1 || panel.mapDragging || panel.mapRegionOffset != 0 || panel.mapRegionFilter != "" || len(panel.mapRegionOrder) != 0 {
+		t.Fatalf("FT8 map session survived band change: %+v", panel)
+	}
+	if panel.lastClickKey != "" || !panel.lastClickAt.IsZero() || panel.viewerSelectedKey != "" || panel.lastSnapshot != "" {
+		t.Fatal("FT8 selection or viewer state survived band change")
 	}
 }
 
@@ -89,6 +113,120 @@ func TestFT8MapSessionMemoryEnrichesLaterMessages(t *testing.T) {
 	selected := panel.selectedFT8MapStation()
 	if selected.call != "DL1XYZ" || selected.grid != "JO31" || !selected.hasPosition || selected.messageCount != 2 {
 		t.Fatalf("enriched selected station = %+v", selected)
+	}
+}
+
+func TestFT8RadarUsesSignalStrengthAndProtocolState(t *testing.T) {
+	if got := ft8MarkerColor(ft8.Decode{SNR: -25, Message: "CQX EA1ABC IN80"}); !sameRGB(got, colors.orange) {
+		t.Fatalf("weak radar contact color = %#v; want amber", got)
+	}
+	if got := ft8MarkerColor(ft8.Decode{SNR: -8, Message: "CQX EA1ABC IN80"}); !sameRGB(got, colors.cyan) {
+		t.Fatalf("strong radar contact color = %#v; want cyan", got)
+	}
+	cq := ft8.Decode{SNR: -8, Message: "CQ EA1ABC IN80"}
+	if got := ft8MarkerColor(cq); !sameRGB(got, colors.cyan) || !ft8DecodeIsCQ(cq) {
+		t.Fatalf("CQ did not keep signal color plus its own shape: %#v", got)
+	}
+	if got := ft8MarkerColor(ft8.Decode{SNR: -25, Message: "EA1ABC DL1XYZ RR73"}); !sameRGB(got, colors.green) {
+		t.Fatalf("completed QSO color = %#v; want green", got)
+	}
+	if weak, strong := ft8RadarStrength(-25), ft8RadarStrength(-5); weak >= strong || weak < 0 || strong > 1 {
+		t.Fatalf("radar strength is not normalized: weak %.2f strong %.2f", weak, strong)
+	}
+}
+
+func TestFT8ExtremeWeakOneOffIsProvisionalUntilRepeated(t *testing.T) {
+	weak := ft8.Decode{SNR: -27, Message: "CQ EA1ABC IN80"}
+	if !ft8StationIsProvisional(1, weak) {
+		t.Fatal("extreme-weak one-off was promoted directly into rankings")
+	}
+	if ft8StationIsProvisional(2, weak) {
+		t.Fatal("repeated weak station was not confirmed")
+	}
+	if ft8StationIsProvisional(1, ft8.Decode{SNR: -18}) {
+		t.Fatal("ordinary one-off was marked provisional")
+	}
+
+	panel := NewFT8Panel(NewMainScreen(nil))
+	stations := []ft8MapStation{
+		{call: "EA1ABC", messageCount: 1, latest: weak, provisional: true},
+		{call: "DL1XYZ", messageCount: 2, latest: ft8.Decode{SNR: -12}},
+	}
+	regions := panel.ft8RegionActivity(stations)
+	if len(regions) != 1 || regions[0].name != "Alemania" || regions[0].stations != 1 {
+		t.Fatalf("provisional contact contaminated ranking: %+v", regions)
+	}
+}
+
+func TestFT8RadarClustersDenseStationsButKeepsRemoteContactsSeparate(t *testing.T) {
+	contacts := []ft8RadarContact{
+		{station: ft8MapStation{call: "A"}, position: rl.Vector2{X: 100, Y: 100}},
+		{station: ft8MapStation{call: "B"}, position: rl.Vector2{X: 112, Y: 104}},
+		{station: ft8MapStation{call: "C"}, position: rl.Vector2{X: 120, Y: 108}},
+		{station: ft8MapStation{call: "D"}, position: rl.Vector2{X: 260, Y: 180}},
+	}
+	clusters := clusterFT8RadarContacts(contacts, 27)
+	if len(clusters) != 2 || len(clusters[0].contacts) != 3 || len(clusters[1].contacts) != 1 {
+		t.Fatalf("radar clusters = %+v; want one dense group and one remote contact", clusters)
+	}
+	if math.Abs(float64(clusters[0].center.X-110.6667)) > .01 || math.Abs(float64(clusters[0].center.Y-104)) > .01 {
+		t.Fatalf("dense cluster center = %+v", clusters[0].center)
+	}
+}
+
+func TestFT8RadarClusterClickDrillsDownThenSelectsCoincidentStation(t *testing.T) {
+	panel := NewFT8Panel(NewMainScreen(nil))
+	panel.mapWindow, panel.mapLat, panel.mapLon, panel.mapSpan = 0, 10, 0, 360
+	now := time.Now()
+	panel.mapDecodes = []ft8.Decode{
+		{Slot: now, ReceivedAt: now, SNR: -8, Message: "CQ EA1AAA IN80"},
+		{Slot: now.Add(-time.Second), ReceivedAt: now.Add(-time.Second), SNR: -10, Message: "CQ EA1AAB IN80"},
+		{Slot: now.Add(-2 * time.Second), ReceivedAt: now.Add(-2 * time.Second), SNR: -12, Message: "CQ EA1AAC IN80"},
+	}
+	contacts := panel.ft8RadarContacts(panel.visibleFT8MapStations(), true, false)
+	clusters := clusterFT8RadarContacts(contacts, 27)
+	if len(clusters) != 1 || len(clusters[0].contacts) != 3 {
+		t.Fatalf("coincident stations did not form a cluster: %+v", clusters)
+	}
+	panel.selectFT8MapMarker(clusters[0].center)
+	if panel.mapSpan != 70 || panel.mapSelected != -1 {
+		t.Fatalf("first cluster click did not drill down: span %.1f selected %d", panel.mapSpan, panel.mapSelected)
+	}
+	contacts = panel.ft8RadarContacts(panel.visibleFT8MapStations(), true, false)
+	clusters = clusterFT8RadarContacts(contacts, 27)
+	panel.selectFT8MapMarker(clusters[0].center)
+	if panel.mapSelected != 0 {
+		t.Fatalf("second cluster click selected decode %d; want newest", panel.mapSelected)
+	}
+}
+
+func TestFT8ViewerStyleCommandReturnsSelectionToMainProcess(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ft8-activity.json")
+	viewerScreen := &MainScreen{ft8MapStyle: ft8MapStyleRadar}
+	viewer := &FT8Panel{screen: viewerScreen, viewerMode: true, snapshotPath: path}
+	viewer.setFT8MapStyle(ft8MapStyleQSL)
+	if viewerScreen.ft8MapStyle != ft8MapStyleQSL {
+		t.Fatal("viewer did not switch to QSL Atlas locally")
+	}
+
+	mainScreen := &MainScreen{ft8MapStyle: ft8MapStyleRadar}
+	mainPanel := &FT8Panel{screen: mainScreen, snapshotPath: path}
+	mainPanel.consumeViewerStyleCommand()
+	if mainScreen.ft8MapStyle != ft8MapStyleQSL || !mainScreen.settingsDirty {
+		t.Fatalf("main process did not persist viewer style: %q dirty=%v", mainScreen.ft8MapStyle, mainScreen.settingsDirty)
+	}
+}
+
+func TestFT8RadarAgeUsesReceptionTimeAndNeverGoesNegative(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	if got := ft8RadarAge(ft8.Decode{ReceivedAt: now.Add(-7 * time.Second)}, now); got != 7*time.Second {
+		t.Fatalf("radar age = %v; want 7s", got)
+	}
+	if got := ft8RadarAge(ft8.Decode{ReceivedAt: now.Add(time.Second)}, now); got != 0 {
+		t.Fatalf("future radar age = %v; want zero", got)
+	}
+	if got := ft8RadarAge(ft8.Decode{}, now); got < time.Minute {
+		t.Fatalf("undated imported contact looks live: age %v", got)
 	}
 }
 
