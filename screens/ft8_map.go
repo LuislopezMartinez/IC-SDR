@@ -522,9 +522,7 @@ func drawFT8QSLBadge(position rl.Vector2, station ft8MapStation, selected bool) 
 	rl.DrawTriangle(left, tip, right, border)
 	rl.DrawTriangle(rl.Vector2{X: left.X + 2, Y: left.Y}, rl.Vector2{X: tip.X, Y: tip.Y - 3}, rl.Vector2{X: right.X - 2, Y: right.Y}, colors.panel)
 	rl.DrawRectangleRounded(card, .18, 5, border)
-	inner := rl.Rectangle{X: card.X + 2, Y: card.Y + 2, Width: card.Width - 4, Height: card.Height - 4}
-	rl.DrawRectangleRounded(inner, .12, 4, withAlpha(colors.panel, map[bool]uint8{true: 250, false: 235}[selected]))
-	flag := rl.Rectangle{X: inner.X + 2, Y: inner.Y + 1, Width: inner.Width - 4, Height: inner.Height - 2}
+	flag := ft8QSLFlagBounds(card)
 	drawFT8MiniFlag(ft8CallRegion(station.call), flag)
 	if station.grid != "" {
 		rl.DrawRectangle(int32(position.X-2), int32(tip.Y-3), 4, 2, colors.cyan)
@@ -554,6 +552,13 @@ func drawFT8QSLBadge(position rl.Vector2, station ft8MapStation, selected bool) 
 		size := simpleui.MeasureTextStyled("?", 9, simpleui.FontSemiBold)
 		simpleui.DrawTextStyled("?", center.X-size.X/2, center.Y-size.Y/2, 9, simpleui.FontSemiBold, colors.orange)
 	}
+}
+
+// ft8QSLFlagBounds keeps the marker footprint unchanged while reserving only
+// one pixel for its frame. At the normal 28x20 size the flag therefore gains
+// 26x18 useful pixels instead of the former 20x14.
+func ft8QSLFlagBounds(card rl.Rectangle) rl.Rectangle {
+	return rl.Rectangle{X: card.X + 1, Y: card.Y + 1, Width: card.Width - 2, Height: card.Height - 2}
 }
 
 func drawFT8QSLCluster(cluster ft8RadarCluster) {

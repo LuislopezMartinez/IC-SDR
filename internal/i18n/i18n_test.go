@@ -135,6 +135,49 @@ func TestBundledFrenchFormatsCoverageAndSelection(t *testing.T) {
 		}
 	}
 }
+func TestBundledItalianFormatsCoverageAndSelection(t *testing.T) {
+	isolate(t)
+	italian, ok := languages["it"]
+	if !ok || italian.Name != "Italiano" || italian.Flag != "IT" {
+		t.Fatalf("Italian catalog metadata is invalid: %+v", italian)
+	}
+	for k, source := range spanish {
+		target, ok := italian.Texts[k]
+		if !ok || target == "" {
+			t.Fatalf("Italian is missing %s", k)
+		}
+		if !samePlaceholders(source, target) {
+			t.Fatalf("incompatible Italian format: %q => %q", source, target)
+		}
+	}
+	mu.Lock()
+	selected = "it"
+	rebuild()
+	mu.Unlock()
+	for input, want := range map[string]string{
+		"ABRIR MAPA":                 "APRI MAPPA",
+		"LIMPIAR":                    "CANCELLA",
+		"INDICATIVO":                 "NOMINATIVO",
+		"VISTAS":                     "VISTE",
+		"DECODIFICADORES":            "DECODIFICATORI",
+		"BUSCANDO SINCRONISMO":       "RICERCA SINCRONIZZAZIONE",
+		"ESPERANDO DATOS DE RED":     "IN ATTESA DEI DATI DI RETE",
+		"CONTROL TETRAPOL":           "CONTROLLO TETRAPOL",
+		"SINTONÍA":                   "SINTONIA",
+		"DIRECCIÓN":                  "DIREZIONE",
+		"ACCESOS DE BANDA":           "ACCESSI DI BANDA",
+		"AJUSTE AUTOMÁTICO":          "REGOLAZIONE AUTOMATICA",
+		"CAPTURAR IQ":                "REGISTRA IQ",
+		"LLAMADAS":                   "CHIAMATE",
+		"SIN IDENTIFICAR":            "NON IDENTIFICATO",
+		"DESCONOCIDO · AUDIO ACTIVO": "SCONOSCIUTO · AUDIO ATTIVO",
+	} {
+		if got := Display(input); got != want {
+			t.Fatalf("%q => %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestDiscoveryPersistenceFallbackAndInvalidFiles(t *testing.T) {
 	isolate(t)
 	dir := t.TempDir()

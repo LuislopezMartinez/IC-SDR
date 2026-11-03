@@ -158,6 +158,22 @@ func TestFT8ExtremeWeakOneOffIsProvisionalUntilRepeated(t *testing.T) {
 	}
 }
 
+func TestFT8QSLFlagUsesMarkerFaceWithOnePixelFrame(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		card, want rl.Rectangle
+	}{
+		{name: "normal", card: rl.Rectangle{X: 100, Y: 200, Width: 28, Height: 20}, want: rl.Rectangle{X: 101, Y: 201, Width: 26, Height: 18}},
+		{name: "selected", card: rl.Rectangle{X: 100, Y: 200, Width: 36, Height: 26}, want: rl.Rectangle{X: 101, Y: 201, Width: 34, Height: 24}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := ft8QSLFlagBounds(test.card); got != test.want {
+				t.Fatalf("flag bounds = %+v, want %+v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestFT8RadarClustersDenseStationsButKeepsRemoteContactsSeparate(t *testing.T) {
 	contacts := []ft8RadarContact{
 		{station: ft8MapStation{call: "A"}, position: rl.Vector2{X: 100, Y: 100}},

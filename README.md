@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.29.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.29.0)**
+**Versión actual: [v0.30.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.30.0)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -60,6 +60,12 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio en directo de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.30.0
+
+- Nuevo idioma completo: **italiano**, disponible desde el selector de idioma y con validación automática de cobertura y formatos de texto.
+- Las tarjetas del modo **QSL Atlas** de FT8 aprovechan mejor su superficie: las banderas son más grandes y legibles, conservando un marco fino.
+- Añadidas pruebas de regresión para las proporciones de las tarjetas QSL y del catálogo italiano.
 
 ## Novedades de v0.29.0
 
