@@ -3,6 +3,7 @@ package screens
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -19,13 +20,22 @@ type UpdateDialog struct {
 	installable                        bool
 	release                            update.Release
 	message                            string
+	notesScroll                        int
 	check, later                       *simpleui.Button
 }
 
+const (
+	updateNotesFontSize = int32(14)
+	updateNotesLineGap  = float32(23)
+	updateNotesVisible  = 11
+)
+
+var updateNotesBounds = rl.Rectangle{X: 390, Y: 310, Width: 820, Height: 278}
+
 func NewUpdateDialog() *UpdateDialog {
 	d := &UpdateDialog{BaseElement: simpleui.NewBaseElement("updateDialog", 0, 0, designWidth, designHeight)}
-	d.check = simpleui.NewButton("installUpdate", 545, 545, 245, 45, "ACTUALIZAR", 15)
-	d.later = simpleui.NewButton("laterUpdate", 810, 545, 245, 45, "MÁS TARDE", 15)
+	d.check = simpleui.NewButton("installUpdate", 535, 714, 245, 45, "ACTUALIZAR", 15)
+	d.later = simpleui.NewButton("laterUpdate", 800, 714, 245, 45, "MÁS TARDE", 15)
 	d.check.OnClick(d.install)
 	d.later.OnClick(func() { d.mu.Lock(); d.open = false; d.mu.Unlock() })
 	return d
@@ -37,6 +47,7 @@ func (d *UpdateDialog) Check(manual bool) {
 		return
 	}
 	d.checking, d.installable, d.manual, d.open, d.message = true, false, manual, manual, "Buscando actualizaciones…"
+	d.notesScroll = 0
 	d.mu.Unlock()
 	go func() {
 		release, available, err := update.Check(context.Background())
@@ -115,6 +126,21 @@ func (d *UpdateDialog) UpdateOverlay(input simpleui.Input) bool {
 		d.mu.Unlock()
 		return true
 	}
+	d.mu.Lock()
+	if d.installable && d.release.Notes != "" {
+		lines := wrapUpdateNotes(d.release.Notes, updateNotesBounds.Width-40, updateNotesFontSize)
+		maximum := max(0, len(lines)-updateNotesVisible)
+		if input.Over(updateNotesBounds) && input.Wheel != 0 {
+			d.notesScroll = min(max(d.notesScroll-int(input.Wheel*3), 0), maximum)
+		}
+		if rl.IsKeyPressed(rl.KeyPageUp) {
+			d.notesScroll = max(0, d.notesScroll-updateNotesVisible)
+		}
+		if rl.IsKeyPressed(rl.KeyPageDown) {
+			d.notesScroll = min(maximum, d.notesScroll+updateNotesVisible)
+		}
+	}
+	d.mu.Unlock()
 	if d.check.Update(input) || d.later.Update(input) {
 		return true
 	}
@@ -128,22 +154,92 @@ func (d *UpdateDialog) DrawOverlay() {
 		return
 	}
 	rl.DrawRectangle(0, 0, int32(designWidth), int32(designHeight), rl.Color{A: 205})
-	box := rl.Rectangle{X: 450, Y: 300, Width: 700, Height: 320}
+	box := rl.Rectangle{X: 350, Y: 105, Width: 900, Height: 690}
 	rl.DrawRectangleRounded(box, .03, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(box, .03, 8, 2, colors.border)
-	drawCenteredStyled("ACTUALIZACIONES", rl.Rectangle{X: 480, Y: 332, Width: 640, Height: 35}, 25, simpleui.FontSemiBold, colors.cyan)
-	drawCenteredStyled(d.message, rl.Rectangle{X: 490, Y: 400, Width: 620, Height: 45}, 16, simpleui.FontRegular, colors.text)
-	if d.release.Notes != "" {
-		drawCenteredStyled("Consulta las notas de la versión antes de instalar.", rl.Rectangle{X: 490, Y: 465, Width: 620, Height: 30}, 13, simpleui.FontRegular, colors.muted)
+	drawCenteredStyled("ACTUALIZACIONES", rl.Rectangle{X: 390, Y: 137, Width: 820, Height: 35}, 25, simpleui.FontSemiBold, colors.cyan)
+	drawCenteredStyled(d.message, rl.Rectangle{X: 390, Y: 196, Width: 820, Height: 45}, 16, simpleui.FontRegular, colors.text)
+	if d.installable && d.release.Notes != "" {
+		simpleui.DrawTextStyled("NOVEDADES", updateNotesBounds.X, updateNotesBounds.Y-29, 13, simpleui.FontSemiBold, colors.cyan)
+		d.drawNotes()
 	}
 	if d.checking || d.installing || !d.installable {
 		d.later.SetLabel("CERRAR")
-		d.later.SetBounds(rl.Rectangle{X: 677, Y: 545, Width: 245, Height: 45})
+		d.later.SetBounds(rl.Rectangle{X: 677, Y: 714, Width: 245, Height: 45})
 		d.later.Draw()
 		return
 	}
 	d.later.SetLabel("MÁS TARDE")
-	d.later.SetBounds(rl.Rectangle{X: 810, Y: 545, Width: 245, Height: 45})
+	d.check.SetBounds(rl.Rectangle{X: 535, Y: 714, Width: 245, Height: 45})
+	d.later.SetBounds(rl.Rectangle{X: 800, Y: 714, Width: 245, Height: 45})
 	d.check.Draw()
 	d.later.Draw()
+}
+
+func (d *UpdateDialog) drawNotes() {
+	lines := wrapUpdateNotes(d.release.Notes, updateNotesBounds.Width-40, updateNotesFontSize)
+	maximum := max(0, len(lines)-updateNotesVisible)
+	d.notesScroll = min(max(d.notesScroll, 0), maximum)
+
+	rl.DrawRectangleRounded(updateNotesBounds, .025, 6, colors.panelAlt)
+	rl.DrawRectangleRoundedLinesEx(updateNotesBounds, .025, 6, 1, colors.border)
+	rl.BeginScissorMode(int32(updateNotesBounds.X), int32(updateNotesBounds.Y), int32(updateNotesBounds.Width), int32(updateNotesBounds.Height))
+	for index := d.notesScroll; index < len(lines) && index < d.notesScroll+updateNotesVisible; index++ {
+		y := updateNotesBounds.Y + 13 + float32(index-d.notesScroll)*updateNotesLineGap
+		simpleui.DrawTextStyled(lines[index], updateNotesBounds.X+16, y, updateNotesFontSize, simpleui.FontRegular, colors.text)
+	}
+	rl.EndScissorMode()
+
+	if maximum > 0 {
+		track := rl.Rectangle{X: updateNotesBounds.X + updateNotesBounds.Width - 11, Y: updateNotesBounds.Y + 10, Width: 3, Height: updateNotesBounds.Height - 20}
+		rl.DrawRectangleRounded(track, 1, 4, colors.border)
+		thumbHeight := max(float32(30), track.Height*float32(updateNotesVisible)/float32(len(lines)))
+		thumbY := track.Y + (track.Height-thumbHeight)*float32(d.notesScroll)/float32(maximum)
+		rl.DrawRectangleRounded(rl.Rectangle{X: track.X, Y: thumbY, Width: track.Width, Height: thumbHeight}, 1, 4, colors.cyan)
+		simpleui.DrawTextStyled("Rueda o Re Pág/Av Pág para desplazarte", updateNotesBounds.X, updateNotesBounds.Y+updateNotesBounds.Height+9, 11, simpleui.FontRegular, colors.muted)
+	}
+}
+
+func wrapUpdateNotes(value string, width float32, size int32) []string {
+	value = strings.ReplaceAll(value, "\r\n", "\n")
+	value = strings.ReplaceAll(value, "\r", "\n")
+	result := make([]string, 0)
+	for _, raw := range strings.Split(value, "\n") {
+		line := strings.TrimSpace(raw)
+		line = strings.TrimSpace(strings.TrimLeft(line, "#"))
+		if line == "" {
+			if len(result) > 0 && result[len(result)-1] != "" {
+				result = append(result, "")
+			}
+			continue
+		}
+		prefix := ""
+		if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
+			prefix, line = "• ", strings.TrimSpace(line[2:])
+		}
+		words := strings.Fields(line)
+		current := prefix
+		continuation := strings.Repeat(" ", len([]rune(prefix)))
+		for _, word := range words {
+			candidate := word
+			if strings.TrimSpace(current) != "" {
+				candidate = current + " " + word
+			} else if current != "" {
+				candidate = current + word
+			}
+			if strings.TrimSpace(current) != "" && simpleui.MeasureTextStyled(candidate, size, simpleui.FontRegular).X > width {
+				result = append(result, current)
+				current = continuation + word
+			} else {
+				current = candidate
+			}
+		}
+		if strings.TrimSpace(current) != "" {
+			result = append(result, current)
+		}
+	}
+	for len(result) > 0 && result[len(result)-1] == "" {
+		result = result[:len(result)-1]
+	}
+	return result
 }

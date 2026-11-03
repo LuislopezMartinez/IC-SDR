@@ -164,6 +164,9 @@ func (menu *ToolMenu) UpdateOverlay(input simpleui.Input) bool {
 		return true
 	}
 	if !menu.contactOpen && !menu.aboutOpen && !menu.languageOpen {
+		if menu.moveFocusByWheel(input.Wheel) {
+			return true
+		}
 		if rl.IsKeyPressed(rl.KeyLeft) {
 			menu.moveFocus(-1)
 			return true
@@ -1045,6 +1048,18 @@ func (menu *ToolMenu) moveFocus(direction int) {
 	if menu.onSelectSound != nil {
 		menu.onSelectSound()
 	}
+}
+
+func (menu *ToolMenu) moveFocusByWheel(wheel float32) bool {
+	if wheel == 0 {
+		return false
+	}
+	if wheel > 0 {
+		menu.moveFocus(-1)
+	} else {
+		menu.moveFocus(1)
+	}
+	return true
 }
 
 func (menu *ToolMenu) updateAnimation() {

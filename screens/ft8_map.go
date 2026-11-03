@@ -1190,14 +1190,19 @@ func (p *FT8Panel) drawFT8SelectedCard(positioned int) {
 	rl.DrawRectangleRounded(panel, .035, 7, mixColor(colors.panelAlt, colors.cyan, .035))
 	rl.DrawRectangleRoundedLinesEx(panel, .035, 7, 1, colors.border)
 	cardTitle := "ESTACIÓN SELECCIONADA"
+	cardSubtitle := ""
 	cardTitleColor := colors.cyan
 	if station.call == "" && p.mapRegionFilter != "" {
 		cardTitle = "RESUMEN DE LA REGIÓN"
 	} else if station.provisional {
-		cardTitle = "ESTACIÓN PROVISIONAL · PENDIENTE DE CONFIRMACIÓN"
+		cardTitle = "ESTACIÓN PROVISIONAL"
+		cardSubtitle = "PENDIENTE DE CONFIRMACIÓN"
 		cardTitleColor = colors.orange
 	}
 	simpleui.DrawTextStyled(cardTitle, 1152, 589, uiCaptionFontSize, simpleui.FontSemiBold, cardTitleColor)
+	if cardSubtitle != "" {
+		simpleui.DrawTextStyled(cardSubtitle, 1152, 603, 9, simpleui.FontSemiBold, cardTitleColor)
+	}
 	if station.call == "" {
 		if p.mapRegionFilter != "" {
 			stations := p.visibleFT8MapStations()
