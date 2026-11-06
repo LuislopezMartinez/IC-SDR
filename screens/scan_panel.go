@@ -54,6 +54,22 @@ func (p *ScanPanel) Enter() {
 	}
 }
 
+// FitToBand replaces a scan segment that belongs to another band. A valid
+// segment inside the newly selected band remains untouched so user-defined
+// limits survive reopening the scanner.
+func (p *ScanPanel) FitToBand(centerHz, spanHz int64) {
+	if spanHz <= 0 {
+		return
+	}
+	low, high := centerHz-spanHz/2, centerHz+spanHz/2
+	if p.minimumHz >= low && p.maximumHz <= high {
+		return
+	}
+	margin := spanHz / 10
+	p.minimumHz, p.maximumHz = low+margin, high-margin
+	p.Stop()
+}
+
 func (p *ScanPanel) Stop() {
 	p.running, p.listening = false, false
 	p.consecutiveHits, p.currentMemory, p.activePeakHz = 0, -1, -1
@@ -174,13 +190,8 @@ func (p *ScanPanel) tuneDetected(peak *scanPeak) {
 		if index := p.matchingMemory(peak.frequencyHz); index >= 0 {
 			p.currentMemory = index
 			memory := p.screen.memoryPanel.memories[index]
-			preservedCenter := p.screen.centerFrequencyHz
 			p.screen.centerMode = false
 			p.screen.memoryPanel.recallForScanner(memory)
-			p.screen.centerFrequencyHz = preservedCenter
-			if p.screen.receiver != nil {
-				p.screen.receiver.SetCenterFrequency(preservedCenter)
-			}
 			p.syncModeSwitch()
 			return
 		}

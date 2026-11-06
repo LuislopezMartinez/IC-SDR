@@ -42,6 +42,9 @@ func TestScannerMemoryRecallLeavesOpenBandSelectorUntouched(t *testing.T) {
 	if screen.frequencyHz != 446_100_000 {
 		t.Fatalf("scanner did not tune the detected memory: %d", screen.frequencyHz)
 	}
+	if screen.centerFrequencyHz != 14_200_000 {
+		t.Fatalf("scanner recall moved IQ center to %d", screen.centerFrequencyHz)
+	}
 }
 
 func TestMemoryPassbandsRespectSideband(t *testing.T) {
@@ -96,6 +99,25 @@ func TestScannerKeepsValidSegmentOutsideVisibleFFT(t *testing.T) {
 	panel.Enter()
 	if panel.minimumHz != 433_800_000 || panel.maximumHz != 434_200_000 {
 		t.Fatalf("Enter changed valid off-screen segment to %d..%d", panel.minimumHz, panel.maximumHz)
+	}
+}
+
+func TestScannerReplacesSegmentFromAnotherBand(t *testing.T) {
+	panel := &ScanPanel{minimumHz: 156_369_117, maximumHz: 156_855_724, running: true, listening: true}
+	panel.FitToBand(446_006_250, 500_000)
+	if panel.minimumHz != 445_806_250 || panel.maximumHz != 446_206_250 {
+		t.Fatalf("PMR scan segment = %d..%d", panel.minimumHz, panel.maximumHz)
+	}
+	if panel.running || panel.listening {
+		t.Fatal("band change left the previous scan running")
+	}
+}
+
+func TestScannerPreservesSegmentThatOverlapsSelectedBand(t *testing.T) {
+	panel := &ScanPanel{minimumHz: 446_000_000, maximumHz: 446_200_000}
+	panel.FitToBand(446_006_250, 500_000)
+	if panel.minimumHz != 446_000_000 || panel.maximumHz != 446_200_000 {
+		t.Fatalf("custom PMR segment changed to %d..%d", panel.minimumHz, panel.maximumHz)
 	}
 }
 

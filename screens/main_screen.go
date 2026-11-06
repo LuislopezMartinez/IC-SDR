@@ -2159,6 +2159,9 @@ func (screen *MainScreen) selectBand(band BandDefinition) {
 	screen.spanHz = band.SpanHz
 	screen.tuningStepHz = recommendedStepForBand(band)
 	screen.restoreBandDisplayProfile()
+	if screen.scanPanel != nil {
+		screen.scanPanel.FitToBand(screen.bandProfileFrequency(band.FrequencyHz), band.SpanHz)
+	}
 	if screen.stepSelector != nil {
 		screen.stepSelector.SetSelected(screen.tuningStepHz)
 	}

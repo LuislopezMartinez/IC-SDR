@@ -1306,7 +1306,11 @@ func (p *MemoryPanel) recallWithContext(m MemoryEntry, interactive bool) {
 		p.screen.updateBandForFrequency(m.FrequencyHz)
 	}
 	half := p.screen.spanHz / 2
-	if p.screen.centerMode || m.FrequencyHz < p.screen.centerFrequencyHz-half || m.FrequencyHz > p.screen.centerFrequencyHz+half {
+	// Scanner recalls operate on a peak already present in the current IQ
+	// capture. Moving the hardware center here and immediately restoring it in
+	// the scanner queued two competing asynchronous retunes, leaving the dial
+	// on the memory while audio could still belong to the other center.
+	if interactive && (p.screen.centerMode || m.FrequencyHz < p.screen.centerFrequencyHz-half || m.FrequencyHz > p.screen.centerFrequencyHz+half) {
 		p.screen.centerFrequencyHz = m.FrequencyHz
 		if p.screen.receiver != nil {
 			p.screen.receiver.SetCenterFrequency(m.FrequencyHz)

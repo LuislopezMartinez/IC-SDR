@@ -2,7 +2,7 @@
 
 **SDR multimodo para Windows, programado en Go para ofrecer la máxima eficiencia.**
 
-**Versión actual: [v0.30.0](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.30.0)**
+**Versión actual: [v0.30.1](https://github.com/LuislopezMartinez/IC-SDR/releases/tag/v0.30.1)**
 
 IC-SDR reúne recepción, demodulación, análisis de espectro y decodificación de señales digitales en una interfaz de escritorio diseñada para el uso diario.
 
@@ -60,6 +60,12 @@ IC-SDR integra herramientas para recibir y visualizar:
 | Visor web en el móvil | Grabador y audio en directo |
 | --- | --- |
 | <img src="docs/images/ic-sdr-web-movil-00.jpeg" alt="Frecuencia y espectro de IC-SDR en el móvil" width="320"> | <img src="docs/images/ic-sdr-web-movil-01.jpeg" alt="Grabador y audio en directo de IC-SDR en el móvil" width="320"> |
+
+## Novedades de v0.30.1
+
+- Corregida la recuperación de una memoria detectada por el escáner: ya no compite con el retune del receptor ni puede dejar el dial y el audio en centros IQ distintos.
+- Al cambiar de banda, el escáner reemplaza automáticamente un segmento ajeno a la nueva banda, se detiene de forma segura y conserva los límites personalizados que siguen siendo válidos.
+- Añadidas pruebas de regresión para los cambios de banda y la recuperación de memorias por el escáner.
 
 ## Novedades de v0.30.0
 
