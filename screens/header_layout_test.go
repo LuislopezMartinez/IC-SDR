@@ -13,6 +13,9 @@ func TestSquelchAndHeaderSwitchLayout(t *testing.T) {
 	if got := screen.squelchSwitch.Bounds(); got.Y != 24 || got.Height < 28 {
 		t.Fatalf("squelch switch is not aligned in raised panel: %+v", got)
 	}
+	if got := screen.squelchSlider.Bounds(); got.X != 972 || got.Width != 272 || got.Y != 50 {
+		t.Fatalf("primary squelch slider does not use the panel width: %+v", got)
+	}
 	mem := screen.memViewSwitch.Bounds()
 	vfo := screen.vfoModeSwitch.Bounds()
 	if mem.Y != 159 || vfo.Y != 159 || mem.Height < 28 || vfo.Height < 28 {

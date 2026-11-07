@@ -21,6 +21,22 @@ func TestScanFindPeakAndDCExclusion(t *testing.T) {
 	}
 }
 
+func TestScanNarrowCarrierUsesVisiblePeakLevel(t *testing.T) {
+	screen := &MainScreen{centerFrequencyHz: 100_000_000, spanHz: 1_000_000, stats: sdr.Stats{SampleRate: 1_000_000}}
+	panel := &ScanPanel{screen: screen}
+	spectrum := make([]float32, 100)
+	for index := range spectrum {
+		spectrum[index] = -100
+	}
+	// A one-bin carrier is drawn at -20 dB. Its quiet neighbours must not
+	// dilute the scanner's comparison with the squelch threshold.
+	spectrum[60] = -20
+	peak := panel.findPeak(spectrum, 99_500_000, 100_500_000, 1, 0)
+	if peak == nil || peak.frequencyHz != 100_100_000 || peak.levelDB != -20 {
+		t.Fatalf("peak = %#v, want visible one-bin peak at 100.1 MHz / -20 dB", peak)
+	}
+}
+
 func TestScannerMemoryRecallLeavesOpenBandSelectorUntouched(t *testing.T) {
 	selector := NewBandSelector("HAM", "20 m", nil)
 	selector.Open()

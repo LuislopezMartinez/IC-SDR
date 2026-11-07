@@ -267,10 +267,11 @@ func (p *ScanPanel) findPeak(spectrum []float32, requestedLow, requestedHigh, ex
 		if excludedLow > excludedHigh && !p.listening && absInt64(hz-p.screen.centerFrequencyHz) < 1500 {
 			continue
 		}
+		// Compare the same live FFT-bin level that is presented by the spectrum.
+		// Averaging adjacent bins here used to push narrow carriers below SQL even
+		// while their visible peak was clearly above the threshold. Temporal
+		// confirmation in processCandidate still rejects isolated one-frame spikes.
 		level := spectrum[index]
-		if index > 0 && index+1 < len(spectrum) {
-			level = (spectrum[index-1] + 2*spectrum[index] + spectrum[index+1]) / 4
-		}
 		if level > best.levelDB {
 			best.frequencyHz, best.levelDB = hz, level
 		}

@@ -401,9 +401,11 @@ func (screen *MainScreen) CreateControls() {
 	squelch := simpleui.NewSwitch("squelch", 972, 24, 82, 28, i18n.Source("text.a7056a455639"), screen.squelchEnabled, uiBodyFontSize)
 	screen.squelchSwitch = squelch
 	squelch.OnChange(func(active bool) { screen.squelchEnabled = active; screen.applySquelch(); screen.markSettingsDirty() })
-	screen.squelchLabel = simpleui.NewLabel("squelchLabel", 1059, 24, 103, 22, fmt.Sprintf(i18n.Source("text.95de47dd223a"), screen.squelchThreshold), uiCaptionFontSize)
+	screen.squelchLabel = simpleui.NewLabel("squelchLabel", 1062, 24, 182, 22, fmt.Sprintf(i18n.Source("text.95de47dd223a"), screen.squelchThreshold), uiCaptionFontSize)
 	screen.squelchLabel.SetColor(colors.orange)
-	screen.squelchSlider = simpleui.NewSlider("squelchLevel", 1152, 27, 92, 20, squelchMinimumDB, squelchMaximumDB, float32(screen.squelchThreshold))
+	// The SQL level is the primary control in this panel. Give it the complete
+	// inner width instead of squeezing it into the value-label row.
+	screen.squelchSlider = simpleui.NewSlider("squelchLevel", 972, 50, 272, 20, squelchMinimumDB, squelchMaximumDB, float32(screen.squelchThreshold))
 	screen.squelchSlider.SetStep(1)
 	screen.squelchSlider.OnChange(func(value float32) {
 		screen.squelchThreshold = int(value)
@@ -411,9 +413,9 @@ func (screen *MainScreen) CreateControls() {
 		screen.applySquelch()
 		screen.markSettingsDirty()
 	})
-	holdLabel := simpleui.NewLabel("holdLabel", 972, 83, 108, 20, fmt.Sprintf(i18n.Source("text.4bec5be2178a"), screen.squelchHoldMs), uiCaptionFontSize)
+	holdLabel := simpleui.NewLabel("holdLabel", 972, 99, 108, 20, fmt.Sprintf(i18n.Source("text.4bec5be2178a"), screen.squelchHoldMs), uiCaptionFontSize)
 	holdLabel.SetColor(colors.muted)
-	holdSlider := simpleui.NewSlider("hold", 1082, 85, 162, 18, 0, 300, float32(screen.squelchHoldMs))
+	holdSlider := simpleui.NewSlider("hold", 1082, 101, 162, 18, 0, 300, float32(screen.squelchHoldMs))
 	holdSlider.SetStep(1)
 	holdSlider.OnChange(func(value float32) {
 		screen.squelchHoldMs = int(value)
@@ -421,9 +423,9 @@ func (screen *MainScreen) CreateControls() {
 		screen.applySquelch()
 		screen.markSettingsDirty()
 	})
-	closeLabel := simpleui.NewLabel("closeLabel", 972, 116, 108, 20, fmt.Sprintf(i18n.Source("text.19c469a67b80"), screen.squelchCloseMs), uiCaptionFontSize)
+	closeLabel := simpleui.NewLabel("closeLabel", 972, 122, 108, 20, fmt.Sprintf(i18n.Source("text.19c469a67b80"), screen.squelchCloseMs), uiCaptionFontSize)
 	closeLabel.SetColor(colors.muted)
-	closeSlider := simpleui.NewSlider("close", 1082, 118, 162, 18, 20, 500, float32(screen.squelchCloseMs))
+	closeSlider := simpleui.NewSlider("close", 1082, 124, 162, 18, 20, 500, float32(screen.squelchCloseMs))
 	closeSlider.SetStep(1)
 	closeSlider.OnChange(func(value float32) {
 		screen.squelchCloseMs = int(value)
@@ -1153,7 +1155,9 @@ func (screen *MainScreen) drawSquelchPanel() {
 	rl.DrawRectangleRounded(panel, .06, 8, colors.panel)
 	rl.DrawRectangleRoundedLinesEx(panel, .06, 8, 1.5, colors.border)
 
-	timelineX, timelineY, timelineWidth := float32(972), float32(64), float32(272)
+	// Mixed timing preview: orange is the delay/hold interval and red is the
+	// fade-off interval. It remains full-width directly below the SQL slider.
+	timelineX, timelineY, timelineWidth := float32(972), float32(88), float32(272)
 	total := max(screen.squelchHoldMs+screen.squelchCloseMs, 1)
 	holdWidth := timelineWidth * float32(screen.squelchHoldMs) / float32(total)
 	rl.DrawRectangleRounded(rl.Rectangle{X: timelineX, Y: timelineY, Width: holdWidth, Height: 9}, .4, 6, mixColor(colors.panelAlt, colors.orange, .18))
